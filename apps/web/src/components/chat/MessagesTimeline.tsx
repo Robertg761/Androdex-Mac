@@ -278,6 +278,16 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     () => (canVirtualize ? rows.slice(0, virtualizedRowCount) : []),
     [canVirtualize, rows, virtualizedRowCount],
   );
+
+  const virtualizationWidthKey =
+    timelineWidthPx === null ? "width:unknown" : `width:${Math.round(timelineWidthPx)}`;
+  const [prevVirtualizationWidthKey, setPrevVirtualizationWidthKey] =
+    useState(virtualizationWidthKey);
+  if (virtualizationWidthKey !== prevVirtualizationWidthKey) {
+    setPrevVirtualizationWidthKey(virtualizationWidthKey);
+    setMeasuredRowHeightsById({});
+  }
+
   const virtualizedRowHeightEstimates = useMemo(
     () =>
       virtualizedRows.map((row) => {
@@ -300,12 +310,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     ],
   );
   const nonVirtualizedRows = canVirtualize ? rows.slice(virtualizedRowCount) : rows;
-  const virtualizationWidthKey =
-    timelineWidthPx === null ? "width:unknown" : `width:${Math.round(timelineWidthPx)}`;
   const defaultVirtualizedRowHeight = virtualizedRowHeightEstimates[0];
-  useEffect(() => {
-    setMeasuredRowHeightsById({});
-  }, [virtualizationWidthKey]);
 
   const renderRowContent = (row: TimelineRow) => (
     <div
