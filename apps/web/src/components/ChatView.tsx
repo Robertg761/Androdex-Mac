@@ -2228,12 +2228,15 @@ export default function ChatView(props: ChatViewProps) {
     isGitRepo,
   });
 
+  const prevThreadIdForPendingReset = useRef(activeThread?.id);
   useEffect(() => {
-    if (canOverrideServerThreadEnvMode) {
-      return;
+    const threadChanged = prevThreadIdForPendingReset.current !== activeThread?.id;
+    prevThreadIdForPendingReset.current = activeThread?.id;
+
+    if (threadChanged || !canOverrideServerThreadEnvMode) {
+      setPendingServerThreadEnvMode(null);
+      setPendingServerThreadBranch(undefined);
     }
-    setPendingServerThreadEnvMode(null);
-    setPendingServerThreadBranch(undefined);
   }, [canOverrideServerThreadEnvMode, activeThread?.id]);
 
   useEffect(() => {
