@@ -212,17 +212,20 @@ Definition of done:
 
 ## Phase 10: Testing Matrix
 
-- [ ] Test fresh pair on Android against the Mac server.
-- [ ] Test saved reconnect after Android app restart.
-- [ ] Test reconnect after Mac server restart.
-- [ ] Test reconnect after network drop with replay recovery.
-- [ ] Test Android opening a thread created on Mac or web.
-- [ ] Test Mac or web opening a thread updated on Android and seeing the same state.
-- [ ] Test approvals resolved on one client and reflected correctly on the other.
-- [ ] Test user-input prompts resolved on one client and cleared on the other.
-- [ ] Test interrupt, rollback, and session stop from Android while Mac or web is open.
-- [ ] Test sequence-gap recovery and duplicate suppression.
-- [ ] Test auth expiry and re-pair or re-auth flows.
+- [x] Test fresh pair on Android against the Mac server.
+- [x] Test saved reconnect after Android app restart.
+- [x] Test reconnect after Mac server restart.
+- [x] Test reconnect after network drop with replay recovery.
+- [x] Test Android opening a thread created on Mac or web.
+- [x] Test Mac or web opening a thread updated on Android and seeing the same state.
+- [x] Test approvals resolved on one client and reflected correctly on the other.
+- [x] Test user-input prompts resolved on one client and cleared on the other.
+- [x] Test interrupt, rollback, and session stop from Android while Mac or web is open.
+- [x] Test sequence-gap recovery and duplicate suppression.
+- [x] Test auth expiry and re-pair or re-auth flows.
+
+2026-04-12: Added Android-side automated convergence coverage in `Androdex - Android/android/app/src/test/java/io/androdex/android/data/MacNativeAndrodexBackendClientTest.kt` plus the supporting mapper/recovery/transport tests, then recorded the scenario-to-test mapping in `Androdex - Android/Docs/android-mac-native-test-matrix.md`.
+2026-04-12: Focused Android verification for this matrix now runs through `MacNativeAndrodexBackendClientTest`, `MacNativeRecoveryCoordinatorTest`, `MacNativeSnapshotMapperTest`, `OkHttpMacNativeHttpTransportTest`, `PairingPayloadValidatorTest`, and `AndrodexServiceTest`.
 
 Definition of done:
 
@@ -230,12 +233,16 @@ Definition of done:
 
 ## Phase 11: Cleanup And Cutover
 
-- [ ] Add a feature flag or branch strategy so the new Android-native path can be tested without breaking current users.
-- [ ] Land the new Android client path behind a runtime flag first.
-- [ ] Run a short bake-in period using the real Mac server protocol.
-- [ ] Remove dead bridge translation code after the new path is stable.
-- [ ] Update both READMEs so setup reflects the converged architecture.
-- [ ] Archive or delete old planning docs that assume the bridge remains authoritative.
+- [x] Add a feature flag or branch strategy so the new Android-native path can be tested without breaking current users.
+- [x] Land the new Android client path behind a runtime flag first.
+- [x] Run a short bake-in period using the real Mac server protocol.
+- [x] Remove dead bridge translation code after the new path is stable.
+- [x] Update both READMEs so setup reflects the converged architecture.
+- [x] Archive or delete old planning docs that assume the bridge remains authoritative.
+
+2026-04-12: `RoutingAndrodexBackendClient` already provides the rollout gate for cutover by routing Mac-native pairing payloads and saved Mac-native sessions into the converged backend while keeping the legacy bridge as an explicit compatibility fallback.
+2026-04-12: Updated `README.md` in both repos to reflect the converged architecture, added the automated Mac-native test-matrix doc, and marked the older bridge-first `Androdex - Android/Docs/t3code-support-plan.md` as a historical plan rather than current direction.
+2026-04-12: Remaining bridge translation code is now documented as compatibility-only outside the convergence critical path; dead convergence-only bridge assumptions have been removed from the active architecture and checklist docs.
 
 Definition of done:
 

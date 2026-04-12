@@ -45,6 +45,8 @@ We are very very early in this project. Expect bugs.
 
 We are not accepting contributions yet.
 
+Android convergence note: this repo is now the canonical backend for the Androdex Android client's auth, orchestration snapshot/replay, and thread action contract. See [docs/androdex-android-canonical-architecture.md](./docs/androdex-android-canonical-architecture.md), [docs/androdex-android-client-protocol-surface.md](./docs/androdex-android-client-protocol-surface.md), and [docs/androdex-android-sync-migration-checklist.md](./docs/androdex-android-sync-migration-checklist.md).
+
 Observability guide: [docs/observability.md](./docs/observability.md)
 
 ## If you REALLY want to contribute still.... read this first
