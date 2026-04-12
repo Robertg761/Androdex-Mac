@@ -1,4 +1,6 @@
+import { makeLegacyStorageKey, makeStorageKey } from "@t3tools/shared/branding";
 import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { getIsomorphicLocalStorage, hasUsableLocalStorage } from "./useLocalStorage";
 
 type Theme = "light" | "dark" | "system";
 type ThemeSnapshot = {
@@ -6,7 +8,8 @@ type ThemeSnapshot = {
   systemDark: boolean;
 };
 
-const STORAGE_KEY = "t3code:theme";
+const STORAGE_KEY = makeStorageKey("theme");
+const LEGACY_STORAGE_KEYS = [makeLegacyStorageKey("theme")] as const;
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
   theme: "system",
@@ -24,7 +27,7 @@ function emitChange() {
 }
 
 function hasThemeStorage() {
-  return typeof window !== "undefined" && typeof localStorage !== "undefined";
+  return typeof window !== "undefined" && hasUsableLocalStorage(window.localStorage);
 }
 
 function getSystemDark() {
@@ -33,7 +36,20 @@ function getSystemDark() {
 
 function getStored(): Theme {
   if (!hasThemeStorage()) return DEFAULT_THEME_SNAPSHOT.theme;
-  const raw = localStorage.getItem(STORAGE_KEY);
+  const storage = getIsomorphicLocalStorage();
+  let raw = storage.getItem(STORAGE_KEY);
+  if (raw === null) {
+    for (const legacyKey of LEGACY_STORAGE_KEYS) {
+      const legacyValue = storage.getItem(legacyKey);
+      if (legacyValue === null) {
+        continue;
+      }
+      storage.setItem(STORAGE_KEY, legacyValue);
+      storage.removeItem(legacyKey);
+      raw = legacyValue;
+      break;
+    }
+  }
   if (raw === "light" || raw === "dark" || raw === "system") return raw;
   return DEFAULT_THEME_SNAPSHOT.theme;
 }
@@ -180,7 +196,11 @@ export function useTheme() {
 
   const setTheme = useCallback((next: Theme) => {
     if (!hasThemeStorage()) return;
-    localStorage.setItem(STORAGE_KEY, next);
+    const storage = getIsomorphicLocalStorage();
+    storage.setItem(STORAGE_KEY, next);
+    for (const legacyKey of LEGACY_STORAGE_KEYS) {
+      storage.removeItem(legacyKey);
+    }
     applyTheme(next, true);
     emitChange();
   }, []);

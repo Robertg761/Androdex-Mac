@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { NetService } from "@t3tools/shared/Net";
+import { DEFAULT_BASE_DIR_NAME, LEGACY_BASE_DIR_NAME } from "@t3tools/shared/branding";
 import { Config, Data, Effect, Hash, Layer, Logger, Option, Path, Schema } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { ChildProcess } from "effect/unstable/process";
@@ -16,8 +18,42 @@ const MAX_PORT = 65535;
 const DESKTOP_DEV_LOOPBACK_HOST = "127.0.0.1";
 const DEV_PORT_PROBE_HOSTS = ["127.0.0.1", "0.0.0.0", "::1", "::"] as const;
 
-export const DEFAULT_T3_HOME = Effect.map(Effect.service(Path.Path), (path) =>
-  path.join(homedir(), ".t3"),
+export const DEFAULT_T3_HOME = Effect.map(Effect.service(Path.Path), (path) => {
+  const preferredBaseDir = path.join(homedir(), DEFAULT_BASE_DIR_NAME);
+  const legacyBaseDir = path.join(homedir(), LEGACY_BASE_DIR_NAME);
+  if (existsSync(preferredBaseDir)) {
+    return preferredBaseDir;
+  }
+  if (existsSync(legacyBaseDir)) {
+    return legacyBaseDir;
+  }
+  return preferredBaseDir;
+});
+
+function linkEnvAlias(preferredName: string, legacyName: string): void {
+  const preferredValue = process.env[preferredName]?.trim();
+  const legacyValue = process.env[legacyName]?.trim();
+  const resolved = preferredValue || legacyValue;
+  if (!resolved) {
+    return;
+  }
+  process.env[preferredName] = resolved;
+  process.env[legacyName] = resolved;
+}
+
+const DEV_RUNNER_ENV_ALIASES = [
+  ["ANDRODEX_PORT_OFFSET", "T3CODE_PORT_OFFSET"],
+  ["ANDRODEX_DEV_INSTANCE", "T3CODE_DEV_INSTANCE"],
+  ["ANDRODEX_HOME", "T3CODE_HOME"],
+  ["ANDRODEX_NO_BROWSER", "T3CODE_NO_BROWSER"],
+  ["ANDRODEX_AUTO_BOOTSTRAP_PROJECT_FROM_CWD", "T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD"],
+  ["ANDRODEX_LOG_WS_EVENTS", "T3CODE_LOG_WS_EVENTS"],
+  ["ANDRODEX_HOST", "T3CODE_HOST"],
+  ["ANDRODEX_PORT", "T3CODE_PORT"],
+] as const satisfies ReadonlyArray<readonly [string, string]>;
+
+DEV_RUNNER_ENV_ALIASES.forEach(([preferredName, legacyName]) =>
+  linkEnvAlias(preferredName, legacyName),
 );
 
 const MODE_ARGS = {
@@ -72,8 +108,8 @@ const optionalUrlConfig = (name: string): Config.Config<URL | undefined> =>
   );
 
 const OffsetConfig = Config.all({
-  portOffset: optionalIntegerConfig("T3CODE_PORT_OFFSET"),
-  devInstance: optionalStringConfig("T3CODE_DEV_INSTANCE"),
+  portOffset: optionalIntegerConfig("ANDRODEX_PORT_OFFSET"),
+  devInstance: optionalStringConfig("ANDRODEX_DEV_INSTANCE"),
 });
 
 export function resolveOffset(config: {
@@ -82,11 +118,11 @@ export function resolveOffset(config: {
 }): { readonly offset: number; readonly source: string } {
   if (config.portOffset !== undefined) {
     if (config.portOffset < 0) {
-      throw new Error(`Invalid T3CODE_PORT_OFFSET: ${config.portOffset}`);
+      throw new Error(`Invalid ANDRODEX_PORT_OFFSET: ${config.portOffset}`);
     }
     return {
       offset: config.portOffset,
-      source: `T3CODE_PORT_OFFSET=${config.portOffset}`,
+      source: `ANDRODEX_PORT_OFFSET=${config.portOffset}`,
     };
   }
 
@@ -96,11 +132,11 @@ export function resolveOffset(config: {
   }
 
   if (/^\d+$/.test(seed)) {
-    return { offset: Number(seed), source: `numeric T3CODE_DEV_INSTANCE=${seed}` };
+    return { offset: Number(seed), source: `numeric ANDRODEX_DEV_INSTANCE=${seed}` };
   }
 
   const offset = ((Hash.string(seed) >>> 0) % MAX_HASH_OFFSET) + 1;
-  return { offset, source: `hashed T3CODE_DEV_INSTANCE=${seed}` };
+  return { offset, source: `hashed ANDRODEX_DEV_INSTANCE=${seed}` };
 }
 
 function resolveBaseDir(baseDir: string | undefined): Effect.Effect<string, never, Path.Path> {
@@ -155,50 +191,65 @@ export function createDevRunnerEnv({
       VITE_DEV_SERVER_URL:
         devUrl?.toString() ??
         `http://${isDesktopMode ? DESKTOP_DEV_LOOPBACK_HOST : "localhost"}:${webPort}`,
+      ANDRODEX_HOME: resolvedBaseDir,
       T3CODE_HOME: resolvedBaseDir,
     };
 
     if (!isDesktopMode) {
+      output.ANDRODEX_PORT = String(serverPort);
       output.T3CODE_PORT = String(serverPort);
       output.VITE_HTTP_URL = `http://localhost:${serverPort}`;
       output.VITE_WS_URL = `ws://localhost:${serverPort}`;
     } else {
+      output.ANDRODEX_PORT = String(serverPort);
       output.T3CODE_PORT = String(serverPort);
       output.VITE_HTTP_URL = `http://${DESKTOP_DEV_LOOPBACK_HOST}:${serverPort}`;
       output.VITE_WS_URL = `ws://${DESKTOP_DEV_LOOPBACK_HOST}:${serverPort}`;
+      delete output.ANDRODEX_MODE;
+      delete output.ANDRODEX_NO_BROWSER;
+      delete output.ANDRODEX_HOST;
       delete output.T3CODE_MODE;
       delete output.T3CODE_NO_BROWSER;
       delete output.T3CODE_HOST;
     }
 
     if (!isDesktopMode && host !== undefined) {
+      output.ANDRODEX_HOST = host;
       output.T3CODE_HOST = host;
     }
 
     if (!isDesktopMode && noBrowser !== undefined) {
+      output.ANDRODEX_NO_BROWSER = noBrowser ? "1" : "0";
       output.T3CODE_NO_BROWSER = noBrowser ? "1" : "0";
     } else if (!isDesktopMode) {
+      delete output.ANDRODEX_NO_BROWSER;
       delete output.T3CODE_NO_BROWSER;
     }
 
     if (autoBootstrapProjectFromCwd !== undefined) {
+      output.ANDRODEX_AUTO_BOOTSTRAP_PROJECT_FROM_CWD = autoBootstrapProjectFromCwd ? "1" : "0";
       output.T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD = autoBootstrapProjectFromCwd ? "1" : "0";
     } else {
+      delete output.ANDRODEX_AUTO_BOOTSTRAP_PROJECT_FROM_CWD;
       delete output.T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD;
     }
 
     if (logWebSocketEvents !== undefined) {
+      output.ANDRODEX_LOG_WS_EVENTS = logWebSocketEvents ? "1" : "0";
       output.T3CODE_LOG_WS_EVENTS = logWebSocketEvents ? "1" : "0";
     } else {
+      delete output.ANDRODEX_LOG_WS_EVENTS;
       delete output.T3CODE_LOG_WS_EVENTS;
     }
 
     if (mode === "dev") {
+      output.ANDRODEX_MODE = "web";
       output.T3CODE_MODE = "web";
       delete output.T3CODE_DESKTOP_WS_URL;
     }
 
     if (mode === "dev:server" || mode === "dev:web") {
+      output.ANDRODEX_MODE = "web";
       output.T3CODE_MODE = "web";
       delete output.T3CODE_DESKTOP_WS_URL;
     }
@@ -381,7 +432,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       Effect.mapError(
         (cause) =>
           new DevRunnerError({
-            message: "Failed to read T3CODE_PORT_OFFSET/T3CODE_DEV_INSTANCE configuration.",
+            message: "Failed to read ANDRODEX_PORT_OFFSET/ANDRODEX_DEV_INSTANCE configuration.",
             cause,
           }),
       ),
@@ -423,7 +474,7 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
         : "";
 
     yield* Effect.logInfo(
-      `[dev-runner] mode=${input.mode} source=${source}${selectionSuffix} serverPort=${String(env.T3CODE_PORT)} webPort=${String(env.PORT)} baseDir=${String(env.T3CODE_HOME)}`,
+      `[dev-runner] mode=${input.mode} source=${source}${selectionSuffix} serverPort=${String(env.ANDRODEX_PORT ?? env.T3CODE_PORT)} webPort=${String(env.PORT)} baseDir=${String(env.ANDRODEX_HOME ?? env.T3CODE_HOME)}`,
     );
 
     if (input.dryRun) {
@@ -472,32 +523,40 @@ const devRunnerCli = Command.make("dev-runner", {
     Argument.withDescription("Development mode to run."),
   ),
   t3Home: Flag.string("home-dir").pipe(
-    Flag.withDescription("Base directory for all T3 Code data (equivalent to T3CODE_HOME)."),
-    Flag.withFallbackConfig(optionalStringConfig("T3CODE_HOME")),
+    Flag.withDescription(
+      "Base directory for all Androdex data (equivalent to ANDRODEX_HOME, legacy: T3CODE_HOME).",
+    ),
+    Flag.withFallbackConfig(optionalStringConfig("ANDRODEX_HOME")),
   ),
   noBrowser: Flag.boolean("no-browser").pipe(
-    Flag.withDescription("Browser auto-open toggle (equivalent to T3CODE_NO_BROWSER)."),
-    Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_NO_BROWSER")),
+    Flag.withDescription(
+      "Browser auto-open toggle (equivalent to ANDRODEX_NO_BROWSER, legacy: T3CODE_NO_BROWSER).",
+    ),
+    Flag.withFallbackConfig(optionalBooleanConfig("ANDRODEX_NO_BROWSER")),
   ),
   autoBootstrapProjectFromCwd: Flag.boolean("auto-bootstrap-project-from-cwd").pipe(
     Flag.withDescription(
-      "Auto-bootstrap toggle (equivalent to T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD).",
+      "Auto-bootstrap toggle (equivalent to ANDRODEX_AUTO_BOOTSTRAP_PROJECT_FROM_CWD, legacy: T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD).",
     ),
-    Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD")),
+    Flag.withFallbackConfig(optionalBooleanConfig("ANDRODEX_AUTO_BOOTSTRAP_PROJECT_FROM_CWD")),
   ),
   logWebSocketEvents: Flag.boolean("log-websocket-events").pipe(
-    Flag.withDescription("WebSocket event logging toggle (equivalent to T3CODE_LOG_WS_EVENTS)."),
+    Flag.withDescription(
+      "WebSocket event logging toggle (equivalent to ANDRODEX_LOG_WS_EVENTS, legacy: T3CODE_LOG_WS_EVENTS).",
+    ),
     Flag.withAlias("log-ws-events"),
-    Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_LOG_WS_EVENTS")),
+    Flag.withFallbackConfig(optionalBooleanConfig("ANDRODEX_LOG_WS_EVENTS")),
   ),
   host: Flag.string("host").pipe(
-    Flag.withDescription("Server host/interface override (forwards to T3CODE_HOST)."),
-    Flag.withFallbackConfig(optionalStringConfig("T3CODE_HOST")),
+    Flag.withDescription(
+      "Server host/interface override (forwards to ANDRODEX_HOST, legacy: T3CODE_HOST).",
+    ),
+    Flag.withFallbackConfig(optionalStringConfig("ANDRODEX_HOST")),
   ),
   port: Flag.integer("port").pipe(
     Flag.withSchema(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }))),
-    Flag.withDescription("Server port override (forwards to T3CODE_PORT)."),
-    Flag.withFallbackConfig(optionalPortConfig("T3CODE_PORT")),
+    Flag.withDescription("Server port override (forwards to ANDRODEX_PORT, legacy: T3CODE_PORT)."),
+    Flag.withFallbackConfig(optionalPortConfig("ANDRODEX_PORT")),
   ),
   devUrl: Flag.string("dev-url").pipe(
     Flag.withSchema(Schema.URLFromString),

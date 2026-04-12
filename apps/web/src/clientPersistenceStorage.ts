@@ -5,12 +5,19 @@ import {
   type EnvironmentId as EnvironmentIdValue,
   type PersistedSavedEnvironmentRecord,
 } from "@t3tools/contracts";
+import { makeLegacyStorageKey, makeStorageKey } from "@t3tools/shared/branding";
 import * as Schema from "effect/Schema";
 
 import { getLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
 
-export const CLIENT_SETTINGS_STORAGE_KEY = "t3code:client-settings:v1";
-export const SAVED_ENVIRONMENT_REGISTRY_STORAGE_KEY = "t3code:saved-environment-registry:v1";
+export const CLIENT_SETTINGS_STORAGE_KEY = makeStorageKey("client-settings:v1");
+const LEGACY_CLIENT_SETTINGS_STORAGE_KEYS = [makeLegacyStorageKey("client-settings:v1")] as const;
+export const SAVED_ENVIRONMENT_REGISTRY_STORAGE_KEY = makeStorageKey(
+  "saved-environment-registry:v1",
+);
+const LEGACY_SAVED_ENVIRONMENT_REGISTRY_STORAGE_KEYS = [
+  makeLegacyStorageKey("saved-environment-registry:v1"),
+] as const;
 
 const BrowserSavedEnvironmentRecordSchema = Schema.Struct({
   environmentId: EnvironmentId,
@@ -53,7 +60,11 @@ export function readBrowserClientSettings(): ClientSettings | null {
   }
 
   try {
-    return getLocalStorageItem(CLIENT_SETTINGS_STORAGE_KEY, ClientSettingsSchema);
+    return getLocalStorageItem(
+      CLIENT_SETTINGS_STORAGE_KEY,
+      ClientSettingsSchema,
+      LEGACY_CLIENT_SETTINGS_STORAGE_KEYS,
+    );
   } catch {
     return null;
   }
@@ -64,7 +75,12 @@ export function writeBrowserClientSettings(settings: ClientSettings): void {
     return;
   }
 
-  setLocalStorageItem(CLIENT_SETTINGS_STORAGE_KEY, settings, ClientSettingsSchema);
+  setLocalStorageItem(
+    CLIENT_SETTINGS_STORAGE_KEY,
+    settings,
+    ClientSettingsSchema,
+    LEGACY_CLIENT_SETTINGS_STORAGE_KEYS,
+  );
 }
 
 function readBrowserSavedEnvironmentRegistryDocument(): BrowserSavedEnvironmentRegistryDocument {
@@ -76,6 +92,7 @@ function readBrowserSavedEnvironmentRegistryDocument(): BrowserSavedEnvironmentR
     const parsed = getLocalStorageItem(
       SAVED_ENVIRONMENT_REGISTRY_STORAGE_KEY,
       BrowserSavedEnvironmentRegistryDocumentSchema,
+      LEGACY_SAVED_ENVIRONMENT_REGISTRY_STORAGE_KEYS,
     );
     return parsed ?? {};
   } catch {
@@ -94,6 +111,7 @@ function writeBrowserSavedEnvironmentRegistryDocument(
     SAVED_ENVIRONMENT_REGISTRY_STORAGE_KEY,
     document,
     BrowserSavedEnvironmentRegistryDocumentSchema,
+    LEGACY_SAVED_ENVIRONMENT_REGISTRY_STORAGE_KEYS,
   );
 }
 

@@ -27,8 +27,9 @@ import * as Schema from "effect/Schema";
 import * as Equal from "effect/Equal";
 import { DeepMutable } from "effect/Types";
 import { normalizeModelSlug } from "@t3tools/shared/model";
+import { makeLegacyStorageKey, makeStorageKey } from "@t3tools/shared/branding";
 import { useMemo } from "react";
-import { getLocalStorageItem } from "./hooks/useLocalStorage";
+import { getIsomorphicLocalStorage, getLocalStorageItem } from "./hooks/useLocalStorage";
 import { resolveAppModelSelection } from "./modelSelection";
 import { DEFAULT_INTERACTION_MODE, DEFAULT_RUNTIME_MODE, type ChatImageAttachment } from "./types";
 import {
@@ -39,11 +40,12 @@ import {
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
-import { createDebouncedStorage, createMemoryStorage } from "./lib/storage";
+import { createDebouncedStorage } from "./lib/storage";
 import { getDefaultServerModel } from "./providerModels";
 import { UnifiedSettings } from "@t3tools/contracts/settings";
 
-export const COMPOSER_DRAFT_STORAGE_KEY = "t3code:composer-drafts:v1";
+export const COMPOSER_DRAFT_STORAGE_KEY = makeStorageKey("composer-drafts:v1");
+const LEGACY_COMPOSER_DRAFT_STORAGE_KEYS = [makeLegacyStorageKey("composer-drafts:v1")] as const;
 const COMPOSER_DRAFT_STORAGE_VERSION = 5;
 const DraftThreadEnvModeSchema = Schema.Literals(["local", "worktree"]);
 const isRuntimeMode = Schema.is(RuntimeMode);
@@ -57,11 +59,24 @@ export const DraftId = Object.assign(DraftIdSchema, {
 export type DraftId = typeof DraftId.Type;
 
 const COMPOSER_PERSIST_DEBOUNCE_MS = 300;
+const composerLocalStorage = getIsomorphicLocalStorage();
 
 const composerDebouncedStorage = createDebouncedStorage(
-  typeof localStorage !== "undefined" ? localStorage : createMemoryStorage(),
+  composerLocalStorage,
   COMPOSER_PERSIST_DEBOUNCE_MS,
 );
+
+if (composerLocalStorage.getItem(COMPOSER_DRAFT_STORAGE_KEY) === null) {
+  for (const legacyKey of LEGACY_COMPOSER_DRAFT_STORAGE_KEYS) {
+    const legacyValue = composerLocalStorage.getItem(legacyKey);
+    if (legacyValue === null) {
+      continue;
+    }
+    composerLocalStorage.setItem(COMPOSER_DRAFT_STORAGE_KEY, legacyValue);
+    composerLocalStorage.removeItem(legacyKey);
+    break;
+  }
+}
 
 // Flush pending composer draft writes before page unload to prevent data loss.
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {

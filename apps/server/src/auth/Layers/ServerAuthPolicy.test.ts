@@ -5,6 +5,7 @@ import { Effect, Layer } from "effect";
 import type { ServerConfigShape } from "../../config.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerAuthPolicy } from "../Services/ServerAuthPolicy.ts";
+import { resolveSessionCookieName } from "../utils.ts";
 import { ServerAuthPolicyLive } from "./ServerAuthPolicy.ts";
 
 const makeServerAuthPolicyLayer = (overrides?: Partial<ServerConfigShape>) =>
@@ -33,7 +34,9 @@ it.layer(NodeServices.layer)("ServerAuthPolicyLive", (it) => {
 
       expect(descriptor.policy).toBe("desktop-managed-local");
       expect(descriptor.bootstrapMethods).toEqual(["desktop-bootstrap"]);
-      expect(descriptor.sessionCookieName).toBe("t3_session_3773");
+      expect(descriptor.sessionCookieName).toBe(
+        resolveSessionCookieName({ mode: "desktop", port: 3773 }),
+      );
     }).pipe(
       Effect.provide(
         makeServerAuthPolicyLayer({
@@ -68,7 +71,7 @@ it.layer(NodeServices.layer)("ServerAuthPolicyLive", (it) => {
 
       expect(descriptor.policy).toBe("loopback-browser");
       expect(descriptor.bootstrapMethods).toEqual(["one-time-token"]);
-      expect(descriptor.sessionCookieName).toBe("t3_session");
+      expect(descriptor.sessionCookieName).toBe(resolveSessionCookieName({ mode: "web", port: 0 }));
     }).pipe(
       Effect.provide(
         makeServerAuthPolicyLayer({

@@ -7,6 +7,7 @@ import { join } from "node:path";
 import rootPackageJson from "../package.json" with { type: "json" };
 import desktopPackageJson from "../apps/desktop/package.json" with { type: "json" };
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
+import { APP_BASE_NAME, APP_BUNDLE_ID, PRODUCT_SLUG } from "@t3tools/shared/branding";
 
 import { BRAND_ASSET_PATHS } from "./lib/brand-assets.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
@@ -172,7 +173,7 @@ interface StagePackageJson {
   readonly name: string;
   readonly version: string;
   readonly buildVersion: string;
-  readonly t3codeCommitHash: string;
+  readonly androdexCommitHash: string;
   readonly private: true;
   readonly description: string;
   readonly author: string;
@@ -199,18 +200,50 @@ const AzureTrustedSigningOptionsConfig = Config.all({
   ),
 });
 
+function linkEnvAlias(preferredName: string, legacyName: string): void {
+  const preferredValue = process.env[preferredName]?.trim();
+  const legacyValue = process.env[legacyName]?.trim();
+  const resolved = preferredValue || legacyValue;
+  if (!resolved) {
+    return;
+  }
+  process.env[preferredName] = resolved;
+  process.env[legacyName] = resolved;
+}
+
+const DESKTOP_ENV_ALIASES = [
+  ["ANDRODEX_DESKTOP_PLATFORM", "T3CODE_DESKTOP_PLATFORM"],
+  ["ANDRODEX_DESKTOP_TARGET", "T3CODE_DESKTOP_TARGET"],
+  ["ANDRODEX_DESKTOP_ARCH", "T3CODE_DESKTOP_ARCH"],
+  ["ANDRODEX_DESKTOP_VERSION", "T3CODE_DESKTOP_VERSION"],
+  ["ANDRODEX_DESKTOP_OUTPUT_DIR", "T3CODE_DESKTOP_OUTPUT_DIR"],
+  ["ANDRODEX_DESKTOP_SKIP_BUILD", "T3CODE_DESKTOP_SKIP_BUILD"],
+  ["ANDRODEX_DESKTOP_KEEP_STAGE", "T3CODE_DESKTOP_KEEP_STAGE"],
+  ["ANDRODEX_DESKTOP_SIGNED", "T3CODE_DESKTOP_SIGNED"],
+  ["ANDRODEX_DESKTOP_VERBOSE", "T3CODE_DESKTOP_VERBOSE"],
+  ["ANDRODEX_DESKTOP_MOCK_UPDATES", "T3CODE_DESKTOP_MOCK_UPDATES"],
+  ["ANDRODEX_DESKTOP_MOCK_UPDATE_SERVER_PORT", "T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT"],
+  ["ANDRODEX_DESKTOP_UPDATE_REPOSITORY", "T3CODE_DESKTOP_UPDATE_REPOSITORY"],
+] as const satisfies ReadonlyArray<readonly [string, string]>;
+
+DESKTOP_ENV_ALIASES.forEach(([preferredName, legacyName]) =>
+  linkEnvAlias(preferredName, legacyName),
+);
+
 const BuildEnvConfig = Config.all({
-  platform: Config.schema(BuildPlatform, "T3CODE_DESKTOP_PLATFORM").pipe(Config.option),
-  target: Config.string("T3CODE_DESKTOP_TARGET").pipe(Config.option),
-  arch: Config.schema(BuildArch, "T3CODE_DESKTOP_ARCH").pipe(Config.option),
-  version: Config.string("T3CODE_DESKTOP_VERSION").pipe(Config.option),
-  outputDir: Config.string("T3CODE_DESKTOP_OUTPUT_DIR").pipe(Config.option),
-  skipBuild: Config.boolean("T3CODE_DESKTOP_SKIP_BUILD").pipe(Config.withDefault(false)),
-  keepStage: Config.boolean("T3CODE_DESKTOP_KEEP_STAGE").pipe(Config.withDefault(false)),
-  signed: Config.boolean("T3CODE_DESKTOP_SIGNED").pipe(Config.withDefault(false)),
-  verbose: Config.boolean("T3CODE_DESKTOP_VERBOSE").pipe(Config.withDefault(false)),
-  mockUpdates: Config.boolean("T3CODE_DESKTOP_MOCK_UPDATES").pipe(Config.withDefault(false)),
-  mockUpdateServerPort: Config.string("T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(Config.option),
+  platform: Config.schema(BuildPlatform, "ANDRODEX_DESKTOP_PLATFORM").pipe(Config.option),
+  target: Config.string("ANDRODEX_DESKTOP_TARGET").pipe(Config.option),
+  arch: Config.schema(BuildArch, "ANDRODEX_DESKTOP_ARCH").pipe(Config.option),
+  version: Config.string("ANDRODEX_DESKTOP_VERSION").pipe(Config.option),
+  outputDir: Config.string("ANDRODEX_DESKTOP_OUTPUT_DIR").pipe(Config.option),
+  skipBuild: Config.boolean("ANDRODEX_DESKTOP_SKIP_BUILD").pipe(Config.withDefault(false)),
+  keepStage: Config.boolean("ANDRODEX_DESKTOP_KEEP_STAGE").pipe(Config.withDefault(false)),
+  signed: Config.boolean("ANDRODEX_DESKTOP_SIGNED").pipe(Config.withDefault(false)),
+  verbose: Config.boolean("ANDRODEX_DESKTOP_VERBOSE").pipe(Config.withDefault(false)),
+  mockUpdates: Config.boolean("ANDRODEX_DESKTOP_MOCK_UPDATES").pipe(Config.withDefault(false)),
+  mockUpdateServerPort: Config.string("ANDRODEX_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(
+    Config.option,
+  ),
 });
 
 const resolveBooleanFlag = (flag: Option.Option<boolean>, envValue: boolean) =>
@@ -341,7 +374,7 @@ function stageMacIcons(stageResourcesDir: string, verbose: boolean) {
     }
 
     const tmpRoot = yield* fs.makeTempDirectoryScoped({
-      prefix: "t3code-icon-build-",
+      prefix: "androdex-icon-build-",
     });
 
     const iconPngPath = path.join(stageResourcesDir, "icon.png");
@@ -450,7 +483,7 @@ function resolveGitHubPublishConfig():
     }
   | undefined {
   const rawRepo =
-    process.env.T3CODE_DESKTOP_UPDATE_REPOSITORY?.trim() ||
+    process.env.ANDRODEX_DESKTOP_UPDATE_REPOSITORY?.trim() ||
     process.env.GITHUB_REPOSITORY?.trim() ||
     "";
   if (!rawRepo) return undefined;
@@ -475,9 +508,9 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   mockUpdateServerPort: string | undefined,
 ) {
   const buildConfig: Record<string, unknown> = {
-    appId: "com.t3tools.t3code",
+    appId: APP_BUNDLE_ID,
     productName,
-    artifactName: "T3-Code-${version}-${arch}.${ext}",
+    artifactName: "Androdex-${version}-${arch}.${ext}",
     directories: {
       buildResources: "apps/desktop/resources",
     },
@@ -505,12 +538,12 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "linux") {
     buildConfig.linux = {
       target: [target],
-      executableName: "t3code",
+      executableName: PRODUCT_SLUG,
       icon: "icon.png",
       category: "Development",
       desktop: {
         entry: {
-          StartupWMClass: "t3code",
+          StartupWMClass: PRODUCT_SLUG,
         },
       },
     };
@@ -617,7 +650,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const commitHash = resolveGitCommitHash(repoRoot);
   const mkdir = options.keepStage ? fs.makeTempDirectory : fs.makeTempDirectoryScoped;
   const stageRoot = yield* mkdir({
-    prefix: `t3code-desktop-${options.platform}-stage-`,
+    prefix: `androdex-desktop-${options.platform}-stage-`,
   });
 
   const stageAppDir = path.join(stageRoot, "app");
@@ -671,18 +704,18 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.copy(stageResourcesDir, path.join(stageAppDir, "apps/desktop/prod-resources"));
 
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    name: PRODUCT_SLUG,
     version: appVersion,
     buildVersion: appVersion,
-    t3codeCommitHash: commitHash,
+    androdexCommitHash: commitHash,
     private: true,
-    description: "T3 Code desktop build",
+    description: `${APP_BASE_NAME} desktop build`,
     author: "T3 Tools",
     main: "apps/desktop/dist-electron/main.js",
     build: yield* createBuildConfig(
       options.platform,
       options.target,
-      desktopPackageJson.productName ?? "T3 Code",
+      desktopPackageJson.productName ?? `${APP_BASE_NAME} (Alpha)`,
       options.signed,
       options.mockUpdates,
       options.mockUpdateServerPort,
@@ -784,57 +817,73 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
 const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   platform: Flag.choice("platform", BuildPlatform.literals).pipe(
-    Flag.withDescription("Build platform (env: T3CODE_DESKTOP_PLATFORM)."),
+    Flag.withDescription(
+      "Build platform (env: ANDRODEX_DESKTOP_PLATFORM, legacy: T3CODE_DESKTOP_PLATFORM).",
+    ),
     Flag.optional,
   ),
   target: Flag.string("target").pipe(
     Flag.withDescription(
-      "Artifact target, for example dmg/AppImage/nsis (env: T3CODE_DESKTOP_TARGET).",
+      "Artifact target, for example dmg/AppImage/nsis (env: ANDRODEX_DESKTOP_TARGET, legacy: T3CODE_DESKTOP_TARGET).",
     ),
     Flag.optional,
   ),
   arch: Flag.choice("arch", BuildArch.literals).pipe(
-    Flag.withDescription("Build arch, for example arm64/x64/universal (env: T3CODE_DESKTOP_ARCH)."),
+    Flag.withDescription(
+      "Build arch, for example arm64/x64/universal (env: ANDRODEX_DESKTOP_ARCH, legacy: T3CODE_DESKTOP_ARCH).",
+    ),
     Flag.optional,
   ),
   buildVersion: Flag.string("build-version").pipe(
-    Flag.withDescription("Artifact version metadata (env: T3CODE_DESKTOP_VERSION)."),
+    Flag.withDescription(
+      "Artifact version metadata (env: ANDRODEX_DESKTOP_VERSION, legacy: T3CODE_DESKTOP_VERSION).",
+    ),
     Flag.optional,
   ),
   outputDir: Flag.string("output-dir").pipe(
-    Flag.withDescription("Output directory for artifacts (env: T3CODE_DESKTOP_OUTPUT_DIR)."),
+    Flag.withDescription(
+      "Output directory for artifacts (env: ANDRODEX_DESKTOP_OUTPUT_DIR, legacy: T3CODE_DESKTOP_OUTPUT_DIR).",
+    ),
     Flag.optional,
   ),
   skipBuild: Flag.boolean("skip-build").pipe(
     Flag.withDescription(
-      "Skip `bun run build:desktop` and use existing dist artifacts (env: T3CODE_DESKTOP_SKIP_BUILD).",
+      "Skip `bun run build:desktop` and use existing dist artifacts (env: ANDRODEX_DESKTOP_SKIP_BUILD, legacy: T3CODE_DESKTOP_SKIP_BUILD).",
     ),
     Flag.optional,
   ),
   keepStage: Flag.boolean("keep-stage").pipe(
-    Flag.withDescription("Keep temporary staging files (env: T3CODE_DESKTOP_KEEP_STAGE)."),
+    Flag.withDescription(
+      "Keep temporary staging files (env: ANDRODEX_DESKTOP_KEEP_STAGE, legacy: T3CODE_DESKTOP_KEEP_STAGE).",
+    ),
     Flag.optional,
   ),
   signed: Flag.boolean("signed").pipe(
     Flag.withDescription(
-      "Enable signing/notarization discovery; Windows uses Azure Trusted Signing (env: T3CODE_DESKTOP_SIGNED).",
+      "Enable signing/notarization discovery; Windows uses Azure Trusted Signing (env: ANDRODEX_DESKTOP_SIGNED, legacy: T3CODE_DESKTOP_SIGNED).",
     ),
     Flag.optional,
   ),
   verbose: Flag.boolean("verbose").pipe(
-    Flag.withDescription("Stream subprocess stdout (env: T3CODE_DESKTOP_VERBOSE)."),
+    Flag.withDescription(
+      "Stream subprocess stdout (env: ANDRODEX_DESKTOP_VERBOSE, legacy: T3CODE_DESKTOP_VERBOSE).",
+    ),
     Flag.optional,
   ),
   mockUpdates: Flag.boolean("mock-updates").pipe(
-    Flag.withDescription("Enable mock updates (env: T3CODE_DESKTOP_MOCK_UPDATES)."),
+    Flag.withDescription(
+      "Enable mock updates (env: ANDRODEX_DESKTOP_MOCK_UPDATES, legacy: T3CODE_DESKTOP_MOCK_UPDATES).",
+    ),
     Flag.optional,
   ),
   mockUpdateServerPort: Flag.string("mock-update-server-port").pipe(
-    Flag.withDescription("Mock update server port (env: T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT)."),
+    Flag.withDescription(
+      "Mock update server port (env: ANDRODEX_DESKTOP_MOCK_UPDATE_SERVER_PORT, legacy: T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT).",
+    ),
     Flag.optional,
   ),
 }).pipe(
-  Command.withDescription("Build a desktop artifact for T3 Code."),
+  Command.withDescription(`Build a desktop artifact for ${APP_BASE_NAME}.`),
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );
 

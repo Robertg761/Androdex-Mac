@@ -33,6 +33,17 @@ import { autoUpdater } from "electron-updater";
 import type { ContextMenuItem } from "@t3tools/contracts";
 import { RotatingFileSink } from "@t3tools/shared/logging";
 import { parsePersistedServerObservabilitySettings } from "@t3tools/shared/serverSettings";
+import {
+  APP_BASE_NAME,
+  APP_BUNDLE_ID,
+  DEFAULT_BASE_DIR_NAME,
+  DESKTOP_SCHEME as APP_DESKTOP_SCHEME,
+  LEGACY_BASE_DIR_NAME,
+  LEGACY_USER_DATA_DIR_NAMES,
+  PRODUCT_SLUG,
+  makeAppDisplayName,
+  makeLegacyAppDisplayName,
+} from "@t3tools/shared/branding";
 import { DEFAULT_DESKTOP_BACKEND_PORT, resolveDesktopBackendPort } from "./backendPort";
 import {
   DEFAULT_DESKTOP_SETTINGS,
@@ -91,20 +102,28 @@ const SET_SAVED_ENVIRONMENT_SECRET_CHANNEL = "desktop:set-saved-environment-secr
 const REMOVE_SAVED_ENVIRONMENT_SECRET_CHANNEL = "desktop:remove-saved-environment-secret";
 const GET_SERVER_EXPOSURE_STATE_CHANNEL = "desktop:get-server-exposure-state";
 const SET_SERVER_EXPOSURE_MODE_CHANNEL = "desktop:set-server-exposure-mode";
-const BASE_DIR = process.env.T3CODE_HOME?.trim() || Path.join(OS.homedir(), ".t3");
+const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
+const APP_STAGE = isDevelopment ? "Dev" : "Alpha";
+const APP_DISPLAY_NAME = makeAppDisplayName(APP_STAGE);
+const LEGACY_APP_DISPLAY_NAME = makeLegacyAppDisplayName(APP_STAGE);
+const APP_USER_MODEL_ID = isDevelopment ? `${APP_BUNDLE_ID}.dev` : APP_BUNDLE_ID;
+const BASE_DIR = resolveDesktopBaseDir();
 const STATE_DIR = Path.join(BASE_DIR, "userdata");
 const DESKTOP_SETTINGS_PATH = Path.join(STATE_DIR, "desktop-settings.json");
 const CLIENT_SETTINGS_PATH = Path.join(STATE_DIR, "client-settings.json");
 const SAVED_ENVIRONMENT_REGISTRY_PATH = Path.join(STATE_DIR, "saved-environments.json");
-const DESKTOP_SCHEME = "t3";
+const DESKTOP_SCHEME = APP_DESKTOP_SCHEME;
 const ROOT_DIR = Path.resolve(__dirname, "../../..");
-const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
-const APP_DISPLAY_NAME = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)";
-const APP_USER_MODEL_ID = isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code";
-const LINUX_DESKTOP_ENTRY_NAME = isDevelopment ? "t3code-dev.desktop" : "t3code.desktop";
-const LINUX_WM_CLASS = isDevelopment ? "t3code-dev" : "t3code";
-const USER_DATA_DIR_NAME = isDevelopment ? "t3code-dev" : "t3code";
-const LEGACY_USER_DATA_DIR_NAME = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)";
+const LINUX_DESKTOP_ENTRY_NAME = isDevelopment
+  ? `${PRODUCT_SLUG}-dev.desktop`
+  : `${PRODUCT_SLUG}.desktop`;
+const LINUX_WM_CLASS = isDevelopment ? `${PRODUCT_SLUG}-dev` : PRODUCT_SLUG;
+const USER_DATA_DIR_NAME = isDevelopment ? `${PRODUCT_SLUG}-dev` : PRODUCT_SLUG;
+const LEGACY_USER_DATA_DIR_NAMES_FOR_STAGE = [
+  ...(isDevelopment ? [`t3code-dev`] : [`t3code`]),
+  ...LEGACY_USER_DATA_DIR_NAMES,
+  LEGACY_APP_DISPLAY_NAME,
+] as const;
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
 const COMMIT_HASH_DISPLAY_LENGTH = 12;
 const LOG_DIR = Path.join(STATE_DIR, "logs");
@@ -138,6 +157,37 @@ let restartAttempt = 0;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
 let isQuitting = false;
 let desktopProtocolRegistered = false;
+
+function readLinkedEnv(preferredName: string, legacyName: string): string | undefined {
+  const preferredValue = process.env[preferredName]?.trim();
+  const legacyValue = process.env[legacyName]?.trim();
+  const resolved = preferredValue || legacyValue;
+  if (resolved) {
+    process.env[preferredName] = resolved;
+    process.env[legacyName] = resolved;
+    return resolved;
+  }
+  return undefined;
+}
+
+function resolveDesktopBaseDir(): string {
+  const configured =
+    readLinkedEnv("ANDRODEX_HOME", "T3CODE_HOME") ??
+    readLinkedEnv("ANDRODEX_BASE_DIR", "T3CODE_HOME");
+  if (configured) {
+    return configured;
+  }
+
+  const preferredBaseDir = Path.join(OS.homedir(), DEFAULT_BASE_DIR_NAME);
+  const legacyBaseDir = Path.join(OS.homedir(), LEGACY_BASE_DIR_NAME);
+  if (FS.existsSync(preferredBaseDir)) {
+    return preferredBaseDir;
+  }
+  if (FS.existsSync(legacyBaseDir)) {
+    return legacyBaseDir;
+  }
+  return preferredBaseDir;
+}
 let aboutCommitHashCache: string | null | undefined;
 let desktopLogSink: RotatingFileSink | null = null;
 let backendLogSink: RotatingFileSink | null = null;
@@ -207,6 +257,13 @@ function resolveDesktopDevServerUrl(): string {
 
 function backendChildEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
+  delete env.ANDRODEX_PORT;
+  delete env.ANDRODEX_MODE;
+  delete env.ANDRODEX_NO_BROWSER;
+  delete env.ANDRODEX_HOST;
+  delete env.ANDRODEX_DESKTOP_WS_URL;
+  delete env.ANDRODEX_DESKTOP_LAN_ACCESS;
+  delete env.ANDRODEX_DESKTOP_LAN_HOST;
   delete env.T3CODE_PORT;
   delete env.T3CODE_MODE;
   delete env.T3CODE_NO_BROWSER;
@@ -234,7 +291,7 @@ function getDesktopSecretStorage() {
 }
 
 function resolveAdvertisedHostOverride(): string | undefined {
-  const override = process.env.T3CODE_DESKTOP_LAN_HOST?.trim();
+  const override = readLinkedEnv("ANDRODEX_DESKTOP_LAN_HOST", "T3CODE_DESKTOP_LAN_HOST");
   return override && override.length > 0 ? override : undefined;
 }
 
@@ -563,8 +620,8 @@ function resolveEmbeddedCommitHash(): string | null {
 
   try {
     const raw = FS.readFileSync(packageJsonPath, "utf8");
-    const parsed = JSON.parse(raw) as { t3codeCommitHash?: unknown };
-    return normalizeCommitHash(parsed.t3codeCommitHash);
+    const parsed = JSON.parse(raw) as { androdexCommitHash?: unknown; t3codeCommitHash?: unknown };
+    return normalizeCommitHash(parsed.androdexCommitHash ?? parsed.t3codeCommitHash);
   } catch {
     return null;
   }
@@ -575,7 +632,9 @@ function resolveAboutCommitHash(): string | null {
     return aboutCommitHashCache;
   }
 
-  const envCommitHash = normalizeCommitHash(process.env.T3CODE_COMMIT_HASH);
+  const envCommitHash = normalizeCommitHash(
+    readLinkedEnv("ANDRODEX_COMMIT_HASH", "T3CODE_COMMIT_HASH"),
+  );
   if (envCommitHash) {
     aboutCommitHashCache = envCommitHash;
     return aboutCommitHashCache;
@@ -659,7 +718,7 @@ function handleFatalStartupError(stage: string, error: unknown): void {
   console.error(`[desktop] fatal startup error (${stage})`, error);
   if (!isQuitting) {
     isQuitting = true;
-    dialog.showErrorBox("T3 Code failed to start", `Stage: ${stage}\n${message}${detail}`);
+    dialog.showErrorBox(`${APP_BASE_NAME} failed to start`, `Stage: ${stage}\n${message}${detail}`);
   }
   stopBackend();
   restoreStdIoCapture?.();
@@ -730,13 +789,15 @@ function dispatchMenuAction(action: string): void {
 
 function handleCheckForUpdatesMenuClick(): void {
   const hasUpdateFeedConfig =
-    readAppUpdateYml() !== null || Boolean(process.env.T3CODE_DESKTOP_MOCK_UPDATES);
+    readAppUpdateYml() !== null ||
+    Boolean(readLinkedEnv("ANDRODEX_DESKTOP_MOCK_UPDATES", "T3CODE_DESKTOP_MOCK_UPDATES"));
   const disabledReason = getAutoUpdateDisabledReason({
     isDevelopment,
     isPackaged: app.isPackaged,
     platform: process.platform,
     appImage: process.env.APPIMAGE,
-    disabledByEnv: process.env.T3CODE_DISABLE_AUTO_UPDATE === "1",
+    disabledByEnv:
+      readLinkedEnv("ANDRODEX_DISABLE_AUTO_UPDATE", "T3CODE_DISABLE_AUTO_UPDATE") === "1",
     hasUpdateFeedConfig,
   });
   if (disabledReason) {
@@ -764,7 +825,7 @@ async function checkForUpdatesFromMenu(): Promise<void> {
     void dialog.showMessageBox({
       type: "info",
       title: "You're up to date!",
-      message: `T3 Code ${updateState.currentVersion} is currently the newest version available.`,
+      message: `${APP_BASE_NAME} ${updateState.currentVersion} is currently the newest version available.`,
       buttons: ["OK"],
     });
   } else if (updateState.status === "error") {
@@ -882,10 +943,10 @@ function resolveIconPath(ext: "ico" | "icns" | "png"): string | null {
  *
  * Electron derives the default userData path from `productName` in
  * package.json, which currently produces directories with spaces and
- * parentheses (e.g. `~/.config/T3 Code (Alpha)` on Linux). This is
+ * parentheses (e.g. `~/.config/Androdex (Alpha)` on Linux). This is
  * unfriendly for shell usage and violates Linux naming conventions.
  *
- * We override it to a clean lowercase name (`t3code`). If the legacy
+ * We override it to a clean lowercase name (`androdex`). If the legacy
  * directory already exists we keep using it so existing users don't
  * lose their Chromium profile data (localStorage, cookies, sessions).
  */
@@ -897,9 +958,11 @@ function resolveUserDataPath(): string {
         ? Path.join(OS.homedir(), "Library", "Application Support")
         : process.env.XDG_CONFIG_HOME || Path.join(OS.homedir(), ".config");
 
-  const legacyPath = Path.join(appDataBase, LEGACY_USER_DATA_DIR_NAME);
-  if (FS.existsSync(legacyPath)) {
-    return legacyPath;
+  for (const legacyName of LEGACY_USER_DATA_DIR_NAMES_FOR_STAGE) {
+    const legacyPath = Path.join(appDataBase, legacyName);
+    if (FS.existsSync(legacyPath)) {
+      return legacyPath;
+    }
   }
 
   return Path.join(appDataBase, USER_DATA_DIR_NAME);
@@ -975,14 +1038,16 @@ function setUpdateState(patch: Partial<DesktopUpdateState>): void {
 
 function shouldEnableAutoUpdates(): boolean {
   const hasUpdateFeedConfig =
-    readAppUpdateYml() !== null || Boolean(process.env.T3CODE_DESKTOP_MOCK_UPDATES);
+    readAppUpdateYml() !== null ||
+    Boolean(readLinkedEnv("ANDRODEX_DESKTOP_MOCK_UPDATES", "T3CODE_DESKTOP_MOCK_UPDATES"));
   return (
     getAutoUpdateDisabledReason({
       isDevelopment,
       isPackaged: app.isPackaged,
       platform: process.platform,
       appImage: process.env.APPIMAGE,
-      disabledByEnv: process.env.T3CODE_DISABLE_AUTO_UPDATE === "1",
+      disabledByEnv:
+        readLinkedEnv("ANDRODEX_DISABLE_AUTO_UPDATE", "T3CODE_DISABLE_AUTO_UPDATE") === "1",
       hasUpdateFeedConfig,
     }) === null
   );
@@ -1068,7 +1133,9 @@ async function installDownloadedUpdate(): Promise<{ accepted: boolean; completed
 
 function configureAutoUpdater(): void {
   const githubToken =
-    process.env.T3CODE_DESKTOP_UPDATE_GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || "";
+    readLinkedEnv("ANDRODEX_DESKTOP_UPDATE_GITHUB_TOKEN", "T3CODE_DESKTOP_UPDATE_GITHUB_TOKEN") ||
+    process.env.GH_TOKEN?.trim() ||
+    "";
   if (githubToken) {
     // When a token is provided, re-configure the feed with `private: true` so
     // electron-updater uses the GitHub API (api.github.com) instead of the
@@ -1084,10 +1151,10 @@ function configureAutoUpdater(): void {
     }
   }
 
-  if (process.env.T3CODE_DESKTOP_MOCK_UPDATES) {
+  if (readLinkedEnv("ANDRODEX_DESKTOP_MOCK_UPDATES", "T3CODE_DESKTOP_MOCK_UPDATES")) {
     autoUpdater.setFeedURL({
       provider: "generic",
-      url: `http://localhost:${process.env.T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT ?? 3000}`,
+      url: `http://localhost:${readLinkedEnv("ANDRODEX_DESKTOP_MOCK_UPDATE_SERVER_PORT", "T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT") ?? 3000}`,
     });
   }
 
@@ -1772,9 +1839,11 @@ configureAppIdentity();
 
 async function bootstrap(): Promise<void> {
   writeDesktopLogHeader("bootstrap start");
-  const configuredBackendPort = resolveConfiguredDesktopBackendPort(process.env.T3CODE_PORT);
+  const configuredBackendPort = resolveConfiguredDesktopBackendPort(
+    readLinkedEnv("ANDRODEX_PORT", "T3CODE_PORT"),
+  );
   if (isDevelopment && configuredBackendPort === undefined) {
-    throw new Error("T3CODE_PORT is required in desktop development.");
+    throw new Error("ANDRODEX_PORT is required in desktop development.");
   }
 
   backendPort =

@@ -1,8 +1,11 @@
+import { makeLegacyStorageKey, makeStorageKey } from "@t3tools/shared/branding";
 import { Debouncer } from "@tanstack/react-pacer";
 import { create } from "zustand";
+import { getIsomorphicLocalStorage } from "./hooks/useLocalStorage";
 
-const PERSISTED_STATE_KEY = "t3code:ui-state:v1";
+const PERSISTED_STATE_KEY = makeStorageKey("ui-state:v1");
 const LEGACY_PERSISTED_STATE_KEYS = [
+  makeLegacyStorageKey("ui-state:v1"),
   "t3code:renderer-state:v8",
   "t3code:renderer-state:v7",
   "t3code:renderer-state:v6",
@@ -60,13 +63,16 @@ function readPersistedState(): UiState {
     return initialState;
   }
   try {
-    const raw = window.localStorage.getItem(PERSISTED_STATE_KEY);
+    const localStorage = getIsomorphicLocalStorage();
+    const raw = localStorage.getItem(PERSISTED_STATE_KEY);
     if (!raw) {
       for (const legacyKey of LEGACY_PERSISTED_STATE_KEYS) {
-        const legacyRaw = window.localStorage.getItem(legacyKey);
+        const legacyRaw = localStorage.getItem(legacyKey);
         if (!legacyRaw) {
           continue;
         }
+        localStorage.setItem(PERSISTED_STATE_KEY, legacyRaw);
+        localStorage.removeItem(legacyKey);
         hydratePersistedProjectState(JSON.parse(legacyRaw) as PersistedUiState);
         return initialState;
       }

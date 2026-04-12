@@ -1,18 +1,28 @@
 import type { AuthClientMetadata, AuthClientMetadataDeviceType } from "@t3tools/contracts";
+import { LEGACY_SESSION_COOKIE_BASENAME, SESSION_COOKIE_BASENAME } from "@t3tools/shared/branding";
 import type * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 import * as Crypto from "node:crypto";
-
-const SESSION_COOKIE_NAME = "t3_session";
 
 export function resolveSessionCookieName(input: {
   readonly mode: "web" | "desktop";
   readonly port: number;
 }): string {
   if (input.mode !== "desktop") {
-    return SESSION_COOKIE_NAME;
+    return SESSION_COOKIE_BASENAME;
   }
 
-  return `${SESSION_COOKIE_NAME}_${input.port}`;
+  return `${SESSION_COOKIE_BASENAME}_${input.port}`;
+}
+
+export function resolveLegacySessionCookieNames(input: {
+  readonly mode: "web" | "desktop";
+  readonly port: number;
+}): ReadonlyArray<string> {
+  if (input.mode !== "desktop") {
+    return [LEGACY_SESSION_COOKIE_BASENAME];
+  }
+
+  return [`${LEGACY_SESSION_COOKIE_BASENAME}_${input.port}`, LEGACY_SESSION_COOKIE_BASENAME];
 }
 
 export function base64UrlEncode(input: string | Uint8Array): string {

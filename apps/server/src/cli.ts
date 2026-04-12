@@ -65,6 +65,43 @@ import {
 import { WorkspacePaths } from "./workspace/Services/WorkspacePaths";
 import { WorkspacePathsLive } from "./workspace/Layers/WorkspacePaths";
 
+function linkEnvAlias(preferredName: string, legacyName: string): void {
+  const preferredValue = process.env[preferredName]?.trim();
+  const legacyValue = process.env[legacyName]?.trim();
+  const resolved = preferredValue || legacyValue;
+  if (!resolved) {
+    return;
+  }
+  process.env[preferredName] = resolved;
+  process.env[legacyName] = resolved;
+}
+
+const SERVER_ENV_ALIASES: ReadonlyArray<readonly [string, string]> = [
+  ["ANDRODEX_LOG_LEVEL", "T3CODE_LOG_LEVEL"],
+  ["ANDRODEX_TRACE_MIN_LEVEL", "T3CODE_TRACE_MIN_LEVEL"],
+  ["ANDRODEX_TRACE_TIMING_ENABLED", "T3CODE_TRACE_TIMING_ENABLED"],
+  ["ANDRODEX_TRACE_FILE", "T3CODE_TRACE_FILE"],
+  ["ANDRODEX_TRACE_MAX_BYTES", "T3CODE_TRACE_MAX_BYTES"],
+  ["ANDRODEX_TRACE_MAX_FILES", "T3CODE_TRACE_MAX_FILES"],
+  ["ANDRODEX_TRACE_BATCH_WINDOW_MS", "T3CODE_TRACE_BATCH_WINDOW_MS"],
+  ["ANDRODEX_OTLP_TRACES_URL", "T3CODE_OTLP_TRACES_URL"],
+  ["ANDRODEX_OTLP_METRICS_URL", "T3CODE_OTLP_METRICS_URL"],
+  ["ANDRODEX_OTLP_EXPORT_INTERVAL_MS", "T3CODE_OTLP_EXPORT_INTERVAL_MS"],
+  ["ANDRODEX_OTLP_SERVICE_NAME", "T3CODE_OTLP_SERVICE_NAME"],
+  ["ANDRODEX_MODE", "T3CODE_MODE"],
+  ["ANDRODEX_PORT", "T3CODE_PORT"],
+  ["ANDRODEX_HOST", "T3CODE_HOST"],
+  ["ANDRODEX_HOME", "T3CODE_HOME"],
+  ["ANDRODEX_NO_BROWSER", "T3CODE_NO_BROWSER"],
+  ["ANDRODEX_BOOTSTRAP_FD", "T3CODE_BOOTSTRAP_FD"],
+  ["ANDRODEX_AUTO_BOOTSTRAP_PROJECT_FROM_CWD", "T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD"],
+  ["ANDRODEX_LOG_WS_EVENTS", "T3CODE_LOG_WS_EVENTS"],
+];
+
+SERVER_ENV_ALIASES.forEach(([preferredName, legacyName]) =>
+  linkEnvAlias(preferredName, legacyName),
+);
+
 const PortSchema = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }));
 
 const BootstrapEnvelopeSchema = Schema.Struct({
@@ -95,7 +132,7 @@ const hostFlag = Flag.string("host").pipe(
   Flag.optional,
 );
 const baseDirFlag = Flag.string("base-dir").pipe(
-  Flag.withDescription("Base directory path (equivalent to T3CODE_HOME)."),
+  Flag.withDescription("Base directory path (equivalent to ANDRODEX_HOME, legacy: T3CODE_HOME)."),
   Flag.optional,
 );
 const devUrlFlag = Flag.string("dev-url").pipe(
@@ -120,56 +157,60 @@ const autoBootstrapProjectFromCwdFlag = Flag.boolean("auto-bootstrap-project-fro
 );
 const logWebSocketEventsFlag = Flag.boolean("log-websocket-events").pipe(
   Flag.withDescription(
-    "Emit server-side logs for outbound WebSocket push traffic (equivalent to T3CODE_LOG_WS_EVENTS).",
+    "Emit server-side logs for outbound WebSocket push traffic (equivalent to ANDRODEX_LOG_WS_EVENTS, legacy: T3CODE_LOG_WS_EVENTS).",
   ),
   Flag.withAlias("log-ws-events"),
   Flag.optional,
 );
 
 const EnvServerConfig = Config.all({
-  logLevel: Config.logLevel("T3CODE_LOG_LEVEL").pipe(Config.withDefault("Info")),
-  traceMinLevel: Config.logLevel("T3CODE_TRACE_MIN_LEVEL").pipe(Config.withDefault("Info")),
-  traceTimingEnabled: Config.boolean("T3CODE_TRACE_TIMING_ENABLED").pipe(Config.withDefault(true)),
-  traceFile: Config.string("T3CODE_TRACE_FILE").pipe(
+  logLevel: Config.logLevel("ANDRODEX_LOG_LEVEL").pipe(Config.withDefault("Info")),
+  traceMinLevel: Config.logLevel("ANDRODEX_TRACE_MIN_LEVEL").pipe(Config.withDefault("Info")),
+  traceTimingEnabled: Config.boolean("ANDRODEX_TRACE_TIMING_ENABLED").pipe(
+    Config.withDefault(true),
+  ),
+  traceFile: Config.string("ANDRODEX_TRACE_FILE").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
-  traceMaxBytes: Config.int("T3CODE_TRACE_MAX_BYTES").pipe(Config.withDefault(10 * 1024 * 1024)),
-  traceMaxFiles: Config.int("T3CODE_TRACE_MAX_FILES").pipe(Config.withDefault(10)),
-  traceBatchWindowMs: Config.int("T3CODE_TRACE_BATCH_WINDOW_MS").pipe(Config.withDefault(200)),
-  otlpTracesUrl: Config.string("T3CODE_OTLP_TRACES_URL").pipe(
+  traceMaxBytes: Config.int("ANDRODEX_TRACE_MAX_BYTES").pipe(Config.withDefault(10 * 1024 * 1024)),
+  traceMaxFiles: Config.int("ANDRODEX_TRACE_MAX_FILES").pipe(Config.withDefault(10)),
+  traceBatchWindowMs: Config.int("ANDRODEX_TRACE_BATCH_WINDOW_MS").pipe(Config.withDefault(200)),
+  otlpTracesUrl: Config.string("ANDRODEX_OTLP_TRACES_URL").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
-  otlpMetricsUrl: Config.string("T3CODE_OTLP_METRICS_URL").pipe(
+  otlpMetricsUrl: Config.string("ANDRODEX_OTLP_METRICS_URL").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
-  otlpExportIntervalMs: Config.int("T3CODE_OTLP_EXPORT_INTERVAL_MS").pipe(
+  otlpExportIntervalMs: Config.int("ANDRODEX_OTLP_EXPORT_INTERVAL_MS").pipe(
     Config.withDefault(10_000),
   ),
-  otlpServiceName: Config.string("T3CODE_OTLP_SERVICE_NAME").pipe(Config.withDefault("t3-server")),
-  mode: Config.schema(RuntimeMode, "T3CODE_MODE").pipe(
+  otlpServiceName: Config.string("ANDRODEX_OTLP_SERVICE_NAME").pipe(
+    Config.withDefault("androdex-server"),
+  ),
+  mode: Config.schema(RuntimeMode, "ANDRODEX_MODE").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
-  port: Config.port("T3CODE_PORT").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  host: Config.string("T3CODE_HOST").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  t3Home: Config.string("T3CODE_HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  port: Config.port("ANDRODEX_PORT").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  host: Config.string("ANDRODEX_HOST").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  t3Home: Config.string("ANDRODEX_HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
   devUrl: Config.url("VITE_DEV_SERVER_URL").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  noBrowser: Config.boolean("T3CODE_NO_BROWSER").pipe(
+  noBrowser: Config.boolean("ANDRODEX_NO_BROWSER").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
-  bootstrapFd: Config.int("T3CODE_BOOTSTRAP_FD").pipe(
+  bootstrapFd: Config.int("ANDRODEX_BOOTSTRAP_FD").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
-  autoBootstrapProjectFromCwd: Config.boolean("T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD").pipe(
+  autoBootstrapProjectFromCwd: Config.boolean("ANDRODEX_AUTO_BOOTSTRAP_PROJECT_FROM_CWD").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
-  logWebSocketEvents: Config.boolean("T3CODE_LOG_WS_EVENTS").pipe(
+  logWebSocketEvents: Config.boolean("ANDRODEX_LOG_WS_EVENTS").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
@@ -508,7 +549,7 @@ const withProjectCliSessionToken = <A, E, R>(
   Effect.acquireUseRelease(
     authControlPlane.issueSession({
       role: "owner",
-      label: "t3 project cli",
+      label: "androdex project cli",
     }),
     (issued) => run(issued.token),
     (issued) => authControlPlane.revokeSession(issued.sessionId).pipe(Effect.ignore({ log: true })),
@@ -1109,13 +1150,13 @@ const runServerCommand = (
   });
 
 const startCommand = Command.make("start", { ...sharedServerCommandFlags }).pipe(
-  Command.withDescription("Run the T3 Code server."),
+  Command.withDescription("Run the Androdex server."),
   Command.withHandler((flags) => runServerCommand(flags)),
 );
 
 const serveCommand = Command.make("serve", { ...sharedServerCommandFlags }).pipe(
   Command.withDescription(
-    "Run the T3 Code server without opening a browser and print headless pairing details.",
+    "Run the Androdex server without opening a browser and print headless pairing details.",
   ),
   Command.withHandler((flags) =>
     runServerCommand(flags, {
@@ -1126,7 +1167,7 @@ const serveCommand = Command.make("serve", { ...sharedServerCommandFlags }).pipe
 );
 
 export const cli = Command.make("t3", { ...sharedServerCommandFlags }).pipe(
-  Command.withDescription("Run the T3 Code server."),
+  Command.withDescription("Run the Androdex server."),
   Command.withHandler((flags) => runServerCommand(flags)),
   Command.withSubcommands([startCommand, serveCommand, authCommand, projectCommand]),
 );

@@ -7,6 +7,7 @@ import { type Thread } from "../types";
 import {
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
   buildExpiredTerminalContextToastCopy,
+  buildTemporaryWorktreeBranchName,
   createLocalDispatchSnapshot,
   deriveComposerSendState,
   hasServerAcknowledgedLocalDispatch,
@@ -79,6 +80,14 @@ describe("buildExpiredTerminalContextToastCopy", () => {
       title: "Expired terminal contexts omitted from message",
       description: "Re-add it if you want that terminal output included.",
     });
+  });
+});
+
+describe("buildTemporaryWorktreeBranchName", () => {
+  it("uses the Androdex branch prefix for new temporary worktrees", () => {
+    const branch = buildTemporaryWorktreeBranchName();
+
+    expect(branch).toMatch(/^androdex\/[0-9a-f]{8}$/);
   });
 });
 

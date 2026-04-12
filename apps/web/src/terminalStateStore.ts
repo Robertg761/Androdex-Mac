@@ -7,9 +7,11 @@
 
 import { parseScopedThreadKey, scopedThreadKey } from "@t3tools/client-runtime";
 import { type ScopedThreadRef, type TerminalEvent } from "@t3tools/contracts";
+import { makeLegacyStorageKey, makeStorageKey } from "@t3tools/shared/branding";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { resolveStorage } from "./lib/storage";
+import { getIsomorphicLocalStorage } from "./hooks/useLocalStorage";
 import { terminalRunningSubprocessFromEvent } from "./terminalActivity";
 import {
   DEFAULT_THREAD_TERMINAL_HEIGHT,
@@ -38,7 +40,8 @@ export interface TerminalEventEntry {
   event: TerminalEvent;
 }
 
-const TERMINAL_STATE_STORAGE_KEY = "t3code:terminal-state:v1";
+const TERMINAL_STATE_STORAGE_KEY = makeStorageKey("terminal-state:v1");
+const LEGACY_TERMINAL_STATE_STORAGE_KEYS = [makeLegacyStorageKey("terminal-state:v1")] as const;
 const EMPTY_TERMINAL_EVENT_ENTRIES: ReadonlyArray<TerminalEventEntry> = [];
 const MAX_TERMINAL_EVENT_BUFFER = 200;
 
@@ -63,7 +66,20 @@ export function migratePersistedTerminalStateStoreState(
 }
 
 function createTerminalStateStorage() {
-  return resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined);
+  const localStorage = getIsomorphicLocalStorage();
+  const storage = resolveStorage(localStorage);
+  if (localStorage.getItem(TERMINAL_STATE_STORAGE_KEY) === null) {
+    for (const legacyKey of LEGACY_TERMINAL_STATE_STORAGE_KEYS) {
+      const legacyValue = localStorage.getItem(legacyKey);
+      if (legacyValue === null) {
+        continue;
+      }
+      localStorage.setItem(TERMINAL_STATE_STORAGE_KEY, legacyValue);
+      localStorage.removeItem(legacyKey);
+      break;
+    }
+  }
+  return storage;
 }
 
 function normalizeTerminalIds(terminalIds: string[]): string[] {
