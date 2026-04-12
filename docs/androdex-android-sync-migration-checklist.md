@@ -167,11 +167,14 @@ Definition of done:
 
 ## Phase 7: Preserve Android UX While Removing Shadow Logic
 
-- [ ] Keep Android timeline rendering, drafts, notifications, and local screen state in the Android repo.
-- [ ] Remove bridge-invented compatibility fields where the Mac server already exposes canonical state.
-- [ ] Replace Android-side synthetic thread capability inference with capability data derived from real server state where possible.
-- [ ] Keep Android-friendly labels and gating messages, but base them on canonical server conditions.
-- [ ] Avoid copying web UI architecture; only copy protocol and recovery logic.
+- [x] Keep Android timeline rendering, drafts, notifications, and local screen state in the Android repo.
+- [x] Remove bridge-invented compatibility fields where the Mac server already exposes canonical state.
+- [x] Replace Android-side synthetic thread capability inference with capability data derived from real server state where possible.
+- [x] Keep Android-friendly labels and gating messages, but base them on canonical server conditions.
+- [x] Avoid copying web UI architecture; only copy protocol and recovery logic.
+
+2026-04-12: The Mac-native snapshot mapper now derives Android thread capability flags directly from canonical orchestration state like archived/deleted thread status, active turns, session status, and checkpoint availability instead of assuming bridge-style companion support.
+2026-04-12: Android continues to own its timeline rendering and local screen UX, but the converged path now feeds those surfaces from canonical snapshot/activity data without reintroducing bridge-only compatibility fields.
 
 Definition of done:
 
