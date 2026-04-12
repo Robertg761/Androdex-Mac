@@ -2,9 +2,18 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { ConfigProvider, Effect, Option } from "effect";
 
-import { resolveBuildOptions } from "./build-desktop-artifact.ts";
+import { isLegacyDesktopArtifactEntry, resolveBuildOptions } from "./build-desktop-artifact.ts";
 
 it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
+  it.effect("identifies stale legacy release artifacts for cleanup", () =>
+    Effect.sync(() => {
+      assert.equal(isLegacyDesktopArtifactEntry("T3-Code-0.0.17-arm64.dmg"), true);
+      assert.equal(isLegacyDesktopArtifactEntry("T3-Code-0.0.17-arm64.zip.blockmap"), true);
+      assert.equal(isLegacyDesktopArtifactEntry("Androdex-0.0.17-arm64.dmg"), false);
+      assert.equal(isLegacyDesktopArtifactEntry("builder-debug.yml"), false);
+    }),
+  );
+
   it.effect("preserves explicit false boolean flags over true env defaults", () =>
     Effect.gen(function* () {
       const resolved = yield* resolveBuildOptions({
@@ -24,11 +33,11 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           ConfigProvider.layer(
             ConfigProvider.fromEnv({
               env: {
-                T3CODE_DESKTOP_SKIP_BUILD: "true",
-                T3CODE_DESKTOP_KEEP_STAGE: "true",
-                T3CODE_DESKTOP_SIGNED: "true",
-                T3CODE_DESKTOP_VERBOSE: "true",
-                T3CODE_DESKTOP_MOCK_UPDATES: "true",
+                ANDRODEX_DESKTOP_SKIP_BUILD: "true",
+                ANDRODEX_DESKTOP_KEEP_STAGE: "true",
+                ANDRODEX_DESKTOP_SIGNED: "true",
+                ANDRODEX_DESKTOP_VERBOSE: "true",
+                ANDRODEX_DESKTOP_MOCK_UPDATES: "true",
               },
             }),
           ),

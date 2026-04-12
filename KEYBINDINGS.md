@@ -1,8 +1,10 @@
 # Keybindings
 
-T3 Code reads keybindings from:
+Androdex reads keybindings from:
 
-- `~/.t3/keybindings.json`
+- `~/.androdex/keybindings.json`
+
+Legacy installs may still have `~/.t3/keybindings.json`; migrate that file if you want to keep custom bindings under the new app identity.
 
 The file must be a JSON array of rules:
 

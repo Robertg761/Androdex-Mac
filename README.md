@@ -1,11 +1,11 @@
-# T3 Code
+# Androdex
 
-T3 Code is a minimal web GUI for coding agents (currently Codex and Claude, more coming soon).
+Androdex is a minimal web GUI for coding agents (currently Codex and Claude, more coming soon).
 
 ## Installation
 
 > [!WARNING]
-> T3 Code currently supports Codex and Claude.
+> Androdex currently supports Codex and Claude.
 > Install and authenticate at least one provider before use:
 >
 > - Codex: install [Codex CLI](https://github.com/openai/codex) and run `codex login`
@@ -14,29 +14,31 @@ T3 Code is a minimal web GUI for coding agents (currently Codex and Claude, more
 ### Run without installing
 
 ```bash
-npx t3
+npx androdex
 ```
 
 ### Desktop app
 
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
+Install the latest version of the desktop app from [GitHub Releases](https://github.com/Robertg761/Androdex-Mac/releases), or from your favorite package registry.
+
+Package-registry examples below assume the rebranded `androdex` listings have been published; until then, GitHub Releases is the guaranteed install path.
 
 #### Windows (`winget`)
 
 ```bash
-winget install T3Tools.T3Code
+winget install Androdex.Androdex
 ```
 
 #### macOS (Homebrew)
 
 ```bash
-brew install --cask t3-code
+brew install --cask androdex
 ```
 
 #### Arch Linux (AUR)
 
 ```bash
-yay -S t3code-bin
+yay -S androdex-bin
 ```
 
 ## Some notes

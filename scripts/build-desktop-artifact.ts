@@ -169,6 +169,8 @@ interface ResolvedBuildOptions {
   readonly mockUpdateServerPort: string | undefined;
 }
 
+const LEGACY_DESKTOP_ARTIFACT_PREFIX = "T3-Code-";
+
 interface StagePackageJson {
   readonly name: string;
   readonly version: string;
@@ -563,6 +565,9 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   return buildConfig;
 });
 
+export const isLegacyDesktopArtifactEntry = (entry: string): boolean =>
+  entry.startsWith(LEGACY_DESKTOP_ARTIFACT_PREFIX);
+
 const assertPlatformBuildResources = Effect.fn("assertPlatformBuildResources")(function* (
   platform: typeof BuildPlatform.Type,
   stageResourcesDir: string,
@@ -792,6 +797,19 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
   const stageEntries = yield* fs.readDirectory(stageDistDir);
   yield* fs.makeDirectory(options.outputDir, { recursive: true });
+
+  const existingOutputEntries = yield* fs
+    .readDirectory(options.outputDir)
+    .pipe(Effect.catch(() => Effect.succeed([] as ReadonlyArray<string>)));
+  for (const entry of existingOutputEntries) {
+    if (!isLegacyDesktopArtifactEntry(entry)) continue;
+
+    const legacyArtifactPath = path.join(options.outputDir, entry);
+    const stat = yield* fs.stat(legacyArtifactPath).pipe(Effect.catch(() => Effect.succeed(null)));
+    if (!stat || stat.type !== "File") continue;
+
+    yield* fs.remove(legacyArtifactPath);
+  }
 
   const copiedArtifacts: string[] = [];
   for (const entry of stageEntries) {
