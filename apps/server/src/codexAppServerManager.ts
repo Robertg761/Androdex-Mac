@@ -1,6 +1,7 @@
 import { type ChildProcessWithoutNullStreams, spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
+import { existsSync, statSync } from "node:fs";
 import readline from "node:readline";
 
 import {
@@ -1533,6 +1534,13 @@ function assertSupportedCodexCliVersion(input: {
   readonly cwd: string;
   readonly homePath?: string;
 }): void {
+  if (!existsSync(input.cwd)) {
+    throw new Error(`Codex workspace does not exist: ${input.cwd}`);
+  }
+  if (!statSync(input.cwd).isDirectory()) {
+    throw new Error(`Codex workspace is not a directory: ${input.cwd}`);
+  }
+
   const result = spawnSync(input.binaryPath, ["--version"], {
     cwd: input.cwd,
     env: {

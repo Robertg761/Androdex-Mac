@@ -470,6 +470,41 @@ describe("startSession", () => {
       manager.stopAll();
     }
   });
+
+  it("reports a missing workspace before claiming the codex binary is unavailable", async () => {
+    const manager = new CodexAppServerManager();
+    const events: Array<{ method: string; kind: string; message?: string }> = [];
+    manager.on("event", (event) => {
+      events.push({
+        method: event.method,
+        kind: event.kind,
+        ...(event.message ? { message: event.message } : {}),
+      });
+    });
+
+    const missingWorkspace = `/tmp/t3-missing-workspace-${Date.now()}`;
+
+    try {
+      await expect(
+        manager.startSession({
+          threadId: asThreadId("thread-missing-workspace"),
+          provider: "codex",
+          binaryPath: "codex",
+          cwd: missingWorkspace,
+          runtimeMode: "full-access",
+        }),
+      ).rejects.toThrow(`Codex workspace does not exist: ${missingWorkspace}`);
+      expect(events).toEqual([
+        {
+          method: "session/startFailed",
+          kind: "error",
+          message: `Codex workspace does not exist: ${missingWorkspace}`,
+        },
+      ]);
+    } finally {
+      manager.stopAll();
+    }
+  });
 });
 
 describe("sendTurn", () => {
