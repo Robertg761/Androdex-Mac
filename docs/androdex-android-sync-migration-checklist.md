@@ -80,11 +80,12 @@ Definition of done:
   - orchestration HTTP
   - WS RPC subscription/replay
 - [ ] Make the new Android transport consume Mac-native auth/session/bootstrap instead of the current custom relay pairing payloads in `android/app/src/main/java/io/androdex/android/model/Models.kt`.
-- [ ] Keep `AndrodexService` as the UI coordinator, but make it backend-agnostic.
-- [ ] Add a clean repository interface that can be backed by the new Mac-native transport.
+- [x] Keep `AndrodexService` as the UI coordinator, but make it backend-agnostic.
+- [x] Add a clean repository interface that can be backed by the new Mac-native transport.
 - [ ] Avoid mixing handshake/pairing crypto, relay routing, and app-state reconciliation in one class the way the current client does.
 
 2026-04-12: Added Android-side Mac-native transport scaffolding under `android/app/src/main/java/io/androdex/android/transport/macnative/`, with explicit auth HTTP, orchestration HTTP, and orchestration WS layers plus session persistence and canonical endpoint/method constants.
+2026-04-12: Added `AndrodexBackendClient` under `android/app/src/main/java/io/androdex/android/data/` and refactored `AndrodexRepository` to depend on that backend seam instead of a hard-coded `AndrodexClient`, preserving `AndrodexService` as the UI coordinator while making the repository ready for a Mac-native client implementation.
 
 Definition of done:
 
