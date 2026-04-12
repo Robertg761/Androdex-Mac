@@ -182,11 +182,14 @@ Definition of done:
 
 ## Phase 8: Decide Transport Strategy
 
-- [ ] Decide whether Android connects directly to the Mac server on LAN for the first milestone.
-- [ ] If remote internet access is required, define a transport-only relay or tunnel that forwards HTTP and WebSocket traffic without translating app state.
-- [ ] Do not let the relay own thread state, replay cursors, or pairing/session semantics.
-- [ ] If a helper service is still needed on the host, shrink it to launch, discovery, or tunnel orchestration only.
-- [ ] Remove the requirement that a custom bridge protocol sit between Android and the Mac server.
+- [x] Decide whether Android connects directly to the Mac server on LAN for the first milestone.
+- [x] If remote internet access is required, define a transport-only relay or tunnel that forwards HTTP and WebSocket traffic without translating app state.
+- [x] Do not let the relay own thread state, replay cursors, or pairing/session semantics.
+- [x] If a helper service is still needed on the host, shrink it to launch, discovery, or tunnel orchestration only.
+- [x] Remove the requirement that a custom bridge protocol sit between Android and the Mac server.
+
+2026-04-12: The convergence architecture notes in both repos now explicitly lock the first milestone to direct Mac-server LAN/loopback reachability, with any future remote path limited to transport-only HTTP/WebSocket forwarding.
+2026-04-12: The converged Android pairing payload already reflects that decision by carrying a direct `httpBaseUrl` plus short-lived bootstrap credential instead of a second bridge-owned transport/session protocol.
 
 Definition of done:
 
