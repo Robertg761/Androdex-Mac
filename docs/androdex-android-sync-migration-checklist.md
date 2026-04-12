@@ -197,11 +197,14 @@ Definition of done:
 
 ## Phase 9: Decommission Legacy Bridge Responsibilities
 
-- [ ] Identify every place the old bridge synthesizes `thread/list`, `thread/read`, `thread/resume`, or timeline semantics.
-- [ ] Mark those paths deprecated once the Android client can read real orchestration snapshot and replay.
-- [ ] Remove desktop refresh workaround dependence from the convergence path.
-- [ ] Remove convenience helpers like `androdex-bridge/src/session-state.js` from the critical path unless they remain useful as optional-only helpers.
-- [ ] Keep only host utilities that are still useful outside the old protocol.
+- [x] Identify every place the old bridge synthesizes `thread/list`, `thread/read`, `thread/resume`, or timeline semantics.
+- [x] Mark those paths deprecated once the Android client can read real orchestration snapshot and replay.
+- [x] Remove desktop refresh workaround dependence from the convergence path.
+- [x] Remove convenience helpers like `androdex-bridge/src/session-state.js` from the critical path unless they remain useful as optional-only helpers.
+- [x] Keep only host utilities that are still useful outside the old protocol.
+
+2026-04-12: Added `Androdex - Android/Docs/android-legacy-bridge-deprecation-inventory.md` to inventory the remaining bridge-owned `thread/list`, `thread/read`, `thread/resume`, live-mirror, and desktop-refresh surfaces that still exist for compatibility.
+2026-04-12: The Mac-native Android path now bypasses those bridge translation surfaces entirely for canonical auth, snapshot, replay, and command dispatch, so desktop refresh helpers and legacy bridge adapters are no longer on the convergence critical path.
 
 Definition of done:
 
