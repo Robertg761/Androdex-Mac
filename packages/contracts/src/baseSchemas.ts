@@ -9,11 +9,22 @@ export const PositiveInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
 export const IsoDateTime = Schema.String;
 export type IsoDateTime = typeof IsoDateTime.Type;
 
+type WithMake<S extends Schema.Top> = S & {
+  readonly make: (value: unknown) => Schema.Schema.Type<S>;
+};
+
+const withMake = <S extends Schema.Top>(schema: S): WithMake<S> => {
+  const decode = Schema.decodeUnknownSync(schema as never);
+  return Object.assign(schema, {
+    make: (value: unknown) => decode(value) as Schema.Schema.Type<S>,
+  }) as WithMake<S>;
+};
+
 /**
  * Construct a branded identifier. Enforces non-empty trimmed strings
  */
 const makeEntityId = <Brand extends string>(brand: Brand) => {
-  return TrimmedNonEmptyString.pipe(Schema.brand(brand));
+  return withMake(TrimmedNonEmptyString.pipe(Schema.brand(brand)));
 };
 
 export const ThreadId = makeEntityId("ThreadId");

@@ -1,6 +1,7 @@
 import * as Net from "node:net";
 
-import { Data, Effect, Layer, Context } from "effect";
+import { Data, Effect, Layer } from "effect";
+import * as Context from "effect/Context";
 
 export class NetError extends Data.TaggedError("NetError")<{
   readonly message: string;

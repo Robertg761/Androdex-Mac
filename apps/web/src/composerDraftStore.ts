@@ -49,7 +49,11 @@ const DraftThreadEnvModeSchema = Schema.Literals(["local", "worktree"]);
 const isRuntimeMode = Schema.is(RuntimeMode);
 export type DraftThreadEnvMode = typeof DraftThreadEnvModeSchema.Type;
 
-export const DraftId = Schema.String.pipe(Schema.brand("DraftId"));
+const DraftIdSchema = Schema.String.pipe(Schema.brand("DraftId"));
+const decodeDraftId = Schema.decodeUnknownSync(DraftIdSchema);
+export const DraftId = Object.assign(DraftIdSchema, {
+  make: (value: string): DraftId => decodeDraftId(value) as DraftId,
+}) as typeof DraftIdSchema & { make: (value: string) => DraftId };
 export type DraftId = typeof DraftId.Type;
 
 const COMPOSER_PERSIST_DEBOUNCE_MS = 300;
