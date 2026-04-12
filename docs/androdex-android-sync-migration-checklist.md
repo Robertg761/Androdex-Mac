@@ -120,6 +120,8 @@ Definition of done:
   - host unavailable
 - [ ] Remove any assumption that Android must maintain a custom host session identifier separate from the Mac server's own session model.
 
+2026-04-12: Added concrete OkHttp Mac-native auth/orchestration HTTP transports under `android/app/src/main/java/io/androdex/android/transport/macnative/` with unit coverage for bearer bootstrap, session reads, WS-token issuance, orchestration dispatch, endpoint URL resolution, and server-error propagation. These transports are not wired into the pairing/client flow yet.
+
 Definition of done:
 
 - Android can authenticate against the Mac server without the legacy bridge protocol.
