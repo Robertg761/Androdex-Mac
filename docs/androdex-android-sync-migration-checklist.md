@@ -74,8 +74,8 @@ Definition of done:
 
 ## Phase 2: Design Android Transport Layer
 
-- [ ] Create a new Android-side transport package instead of continuing to grow the current custom bridge protocol in `android/app/src/main/java/io/androdex/android/data/AndrodexClient.kt`.
-- [ ] Split Android networking into three layers:
+- [x] Create a new Android-side transport package instead of continuing to grow the current custom bridge protocol in `android/app/src/main/java/io/androdex/android/data/AndrodexClient.kt`.
+- [x] Split Android networking into three layers:
   - auth HTTP
   - orchestration HTTP
   - WS RPC subscription/replay
@@ -83,6 +83,8 @@ Definition of done:
 - [ ] Keep `AndrodexService` as the UI coordinator, but make it backend-agnostic.
 - [ ] Add a clean repository interface that can be backed by the new Mac-native transport.
 - [ ] Avoid mixing handshake/pairing crypto, relay routing, and app-state reconciliation in one class the way the current client does.
+
+2026-04-12: Added Android-side Mac-native transport scaffolding under `android/app/src/main/java/io/androdex/android/transport/macnative/`, with explicit auth HTTP, orchestration HTTP, and orchestration WS layers plus session persistence and canonical endpoint/method constants.
 
 Definition of done:
 
