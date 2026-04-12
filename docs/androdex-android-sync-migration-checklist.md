@@ -79,13 +79,14 @@ Definition of done:
   - auth HTTP
   - orchestration HTTP
   - WS RPC subscription/replay
-- [ ] Make the new Android transport consume Mac-native auth/session/bootstrap instead of the current custom relay pairing payloads in `android/app/src/main/java/io/androdex/android/model/Models.kt`.
+- [x] Make the new Android transport consume Mac-native auth/session/bootstrap instead of the current custom relay pairing payloads in `android/app/src/main/java/io/androdex/android/model/Models.kt`.
 - [x] Keep `AndrodexService` as the UI coordinator, but make it backend-agnostic.
 - [x] Add a clean repository interface that can be backed by the new Mac-native transport.
-- [ ] Avoid mixing handshake/pairing crypto, relay routing, and app-state reconciliation in one class the way the current client does.
+- [x] Avoid mixing handshake/pairing crypto, relay routing, and app-state reconciliation in one class the way the current client does.
 
 2026-04-12: Added Android-side Mac-native transport scaffolding under `android/app/src/main/java/io/androdex/android/transport/macnative/`, with explicit auth HTTP, orchestration HTTP, and orchestration WS layers plus session persistence and canonical endpoint/method constants.
 2026-04-12: Added `AndrodexBackendClient` under `android/app/src/main/java/io/androdex/android/data/` and refactored `AndrodexRepository` to depend on that backend seam instead of a hard-coded `AndrodexClient`, preserving `AndrodexService` as the UI coordinator while making the repository ready for a Mac-native client implementation.
+2026-04-12: Added `RoutingAndrodexBackendClient` plus `MacNativeAndrodexBackendClient`, so the converged path now has its own persisted bearer-session/bootstrap flow and no longer reuses the bridge client’s secure-handshake / relay state machinery.
 
 Definition of done:
 
@@ -93,16 +94,18 @@ Definition of done:
 
 ## Phase 3: Replace Pairing Model
 
-- [ ] Stop using the current Androdex-specific QR/session payload as the long-term canonical connection model from `android/app/src/main/java/io/androdex/android/ui/pairing/PairingPayloadValidator.kt`.
-- [ ] Design a new pairing payload format for Android that contains only what is needed to reach the Mac server and bootstrap auth safely.
-- [ ] Decide whether that payload contains:
+- [x] Stop using the current Androdex-specific QR/session payload as the long-term canonical connection model from `android/app/src/main/java/io/androdex/android/ui/pairing/PairingPayloadValidator.kt`.
+- [x] Design a new pairing payload format for Android that contains only what is needed to reach the Mac server and bootstrap auth safely.
+- [x] Decide whether that payload contains:
   - a direct base URL
   - a relay URL
   - or a transport descriptor plus a pairing credential
-- [ ] Make the payload versioned and short-lived.
-- [ ] Preserve host label and fingerprint concepts for trust UX, but do not let them become a second protocol layer.
-- [ ] Update Android pairing validation to accept only the new payload format for the converged path.
-- [ ] Keep a temporary compatibility path only if needed to support existing users during migration.
+- [x] Make the payload versioned and short-lived.
+- [x] Preserve host label and fingerprint concepts for trust UX, but do not let them become a second protocol layer.
+- [x] Update Android pairing validation to accept only the new payload format for the converged path.
+- [x] Keep a temporary compatibility path only if needed to support existing users during migration.
+
+2026-04-12: Added a new Mac-native pairing payload descriptor in the Android repo with only `transport`, `httpBaseUrl`, `credential`, expiry, and optional trust-label/fingerprint metadata. Legacy bridge payloads remain accepted as a temporary compatibility path, but the new converged implementation routes only the Mac-native format into the new backend.
 
 Definition of done:
 
@@ -110,18 +113,19 @@ Definition of done:
 
 ## Phase 4: Implement Mac-Native Auth On Android
 
-- [ ] Implement `POST /api/auth/bootstrap/bearer` on Android using the same model as the web remote client.
-- [ ] Implement `GET /api/auth/session` on Android.
-- [ ] Implement `POST /api/auth/ws-token` on Android.
-- [ ] Persist bearer-session identity and expiry on Android in a clean local persistence layer.
-- [ ] Define token refresh and rebootstrap behavior when auth expires.
-- [ ] Surface clear Android UX for:
+- [x] Implement `POST /api/auth/bootstrap/bearer` on Android using the same model as the web remote client.
+- [x] Implement `GET /api/auth/session` on Android.
+- [x] Implement `POST /api/auth/ws-token` on Android.
+- [x] Persist bearer-session identity and expiry on Android in a clean local persistence layer.
+- [x] Define token refresh and rebootstrap behavior when auth expires.
+- [x] Surface clear Android UX for:
   - pairing required
   - session expired
   - host unavailable
-- [ ] Remove any assumption that Android must maintain a custom host session identifier separate from the Mac server's own session model.
+- [x] Remove any assumption that Android must maintain a custom host session identifier separate from the Mac server's own session model.
 
 2026-04-12: Added concrete OkHttp Mac-native auth/orchestration HTTP transports under `android/app/src/main/java/io/androdex/android/transport/macnative/` with unit coverage for bearer bootstrap, session reads, WS-token issuance, orchestration dispatch, endpoint URL resolution, and server-error propagation. These transports are not wired into the pairing/client flow yet.
+2026-04-12: Wired those transports into `MacNativeAndrodexBackendClient` with persisted bearer-session state, reconnect routing, session-expiry recovery, and repository-level backend selection so Android can authenticate against the Mac server without falling back to the legacy bridge auth model.
 
 Definition of done:
 
