@@ -133,13 +133,16 @@ Definition of done:
 
 ## Phase 5: Implement Read-Only Sync First
 
-- [ ] Implement `GET /api/orchestration/snapshot` on Android.
-- [ ] Implement WS subscription to orchestration domain events using the same recovery model as the web client.
-- [ ] Implement replay via `orchestration.replayEvents` after reconnect or sequence gap.
-- [ ] Port the snapshot-sequence bookkeeping model from the web client.
-- [ ] Make Android thread list render directly from the Mac read model instead of synthetic bridge-owned thread summaries.
-- [ ] Make Android thread open and hydration render directly from the Mac snapshot plus replay stream.
-- [ ] Preserve Android-only render and cache optimizations, but not Android-owned truth.
+- [x] Implement `GET /api/orchestration/snapshot` on Android.
+- [x] Implement WS subscription to orchestration domain events using the same recovery model as the web client.
+- [x] Implement replay via `orchestration.replayEvents` after reconnect or sequence gap.
+- [x] Port the snapshot-sequence bookkeeping model from the web client.
+- [x] Make Android thread list render directly from the Mac read model instead of synthetic bridge-owned thread summaries.
+- [x] Make Android thread open and hydration render directly from the Mac snapshot plus replay stream.
+- [x] Preserve Android-only render and cache optimizations, but not Android-owned truth.
+
+2026-04-12: `MacNativeAndrodexBackendClient` now fetches `/api/orchestration/snapshot`, maps the canonical read model directly into Android thread summaries/thread loads, and persists `snapshotSequence` alongside the bearer session.
+2026-04-12: Added Mac-native orchestration WS subscription and replay recovery with a dedicated `MacNativeRecoveryCoordinator`, including deferred-event handling during snapshot refreshes and bounded no-progress replay retries.
 
 Definition of done:
 
@@ -147,13 +150,16 @@ Definition of done:
 
 ## Phase 6: Port Core Mutating Actions
 
-- [ ] Implement Android send-turn using the canonical orchestration dispatch path.
-- [ ] Implement interrupt using the canonical thread interrupt command.
-- [ ] Implement approval responses using the canonical approval response command.
-- [ ] Implement user-input responses using the canonical user-input response command.
-- [ ] Implement checkpoint revert using the canonical checkpoint revert command.
-- [ ] Implement session stop and background terminal cleanup using the canonical session stop command.
-- [ ] Ensure Android stale-action handling matches server truth instead of trying to guess locally.
+- [x] Implement Android send-turn using the canonical orchestration dispatch path.
+- [x] Implement interrupt using the canonical thread interrupt command.
+- [x] Implement approval responses using the canonical approval response command.
+- [x] Implement user-input responses using the canonical user-input response command.
+- [x] Implement checkpoint revert using the canonical checkpoint revert command.
+- [x] Implement session stop and background terminal cleanup using the canonical session stop command.
+- [x] Ensure Android stale-action handling matches server truth instead of trying to guess locally.
+
+2026-04-12: The Mac-native backend now dispatches canonical `thread.turn.start`, `thread.turn.interrupt`, `thread.approval.respond`, `thread.user-input.respond`, `thread.checkpoint.revert`, and `thread.session.stop` commands instead of relying on bridge-only action paths.
+2026-04-12: Android pending approval and user-input state is now derived from canonical orchestration activities, including stale-request clearing when the server reports those requests as already resolved.
 
 Definition of done:
 
@@ -228,16 +234,16 @@ Definition of done:
 
 ## Recommended First 10 Tasks
 
-- [ ] In `Androdex - Android`, create a new package for Mac-native auth and orchestration transport.
-- [ ] Implement Android bearer bootstrap.
-- [ ] Implement Android WS-token issuance.
-- [ ] Implement Android orchestration snapshot fetch.
-- [ ] Implement Android event replay.
-- [ ] Implement Android live WS subscription.
-- [ ] Feed the real snapshot into thread list UI.
-- [ ] Feed the real snapshot into thread-open and hydration UI.
-- [ ] Implement reconnect recovery using `snapshotSequence`.
-- [ ] Prove Android can read the same thread state as Mac and web before any further bridge work.
+- [x] In `Androdex - Android`, create a new package for Mac-native auth and orchestration transport.
+- [x] Implement Android bearer bootstrap.
+- [x] Implement Android WS-token issuance.
+- [x] Implement Android orchestration snapshot fetch.
+- [x] Implement Android event replay.
+- [x] Implement Android live WS subscription.
+- [x] Feed the real snapshot into thread list UI.
+- [x] Feed the real snapshot into thread-open and hydration UI.
+- [x] Implement reconnect recovery using `snapshotSequence`.
+- [x] Prove Android can read the same thread state as Mac and web before any further bridge work.
 
 ## Important Guardrails
 
@@ -252,4 +258,4 @@ Definition of done:
 - [x] Old local WIP branch in `Androdex - Mac` removed.
 - [x] `origin` and `upstream` tracking in `Androdex - Mac` narrowed to `main` only.
 - [x] Cross-repo architecture review completed.
-- [ ] Migration execution not started yet.
+- [x] Migration execution started and Phases 0 through 6 are now tracked as complete in this checklist.
