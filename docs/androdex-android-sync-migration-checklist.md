@@ -34,9 +34,10 @@ The target architecture is:
 - [x] Decide that `Androdex - Android` will stop adding new bridge-only thread/state translation logic.
 - [x] Decide whether internet access is required for v1 of this convergence or whether LAN/loopback-first is acceptable.
 - [x] Decide whether the old bridge remains temporarily as a transport shell or is bypassed entirely for the first integrated milestone.
-- [ ] Record the migration decision in both repos so future work does not continue down the old adapter path.
+- [x] Record the migration decision in both repos so future work does not continue down the old adapter path.
 
 2026-04-12: Documented the Mac-side canonical architecture and first-cut transport stance in `docs/androdex-android-canonical-architecture.md`. Current direction is LAN/loopback-first for the first integrated milestone, with any remaining bridge or relay limited to transport-only responsibilities.
+2026-04-12: Recorded the same convergence direction in `Androdex - Android/Docs/android-sync-convergence.md` and added README/doc-index pointers there so Android-side work no longer defaults to the older bridge-first architecture notes.
 
 Definition of done:
 
