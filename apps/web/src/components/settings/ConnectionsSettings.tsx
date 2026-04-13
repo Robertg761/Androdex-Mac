@@ -46,6 +46,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { setPairingTokenOnUrl } from "../../pairingUrl";
+import { CodexAccountsSettings } from "./CodexAccountsSettings";
 import {
   createServerPairingCredential,
   fetchSessionState,
@@ -1266,6 +1267,8 @@ export function ConnectionsSettings() {
           />
         </SettingsSection>
       )}
+
+      <CodexAccountsSettings />
 
       <SettingsSection
         title="Remote environments"

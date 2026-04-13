@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ApprovalRequestId, ThreadId } from "@t3tools/contracts";
+import { ApprovalRequestId, type ProviderSession, ThreadId, type TurnId } from "@t3tools/contracts";
 
 import {
   buildCodexInitializeParams,
@@ -21,6 +21,7 @@ const asThreadId = (value: string): ThreadId => ThreadId.make(value);
 
 function createSendTurnHarness() {
   const manager = new CodexAppServerManager();
+  const homePath = mkdtempSync(path.join(os.tmpdir(), "t3-codex-home-"));
   const context = {
     session: {
       provider: "codex",
@@ -37,6 +38,9 @@ function createSendTurnHarness() {
       planType: null,
       sparkEnabled: true,
     },
+    binaryPath: "codex",
+    homePath,
+    authSnapshotFingerprint: undefined,
     collabReceiverTurns: new Map(),
   };
 
@@ -65,6 +69,7 @@ function createSendTurnHarness() {
 
 function createThreadControlHarness() {
   const manager = new CodexAppServerManager();
+  const homePath = mkdtempSync(path.join(os.tmpdir(), "t3-codex-home-"));
   const context = {
     session: {
       provider: "codex",
@@ -76,6 +81,14 @@ function createThreadControlHarness() {
       createdAt: "2026-02-10T00:00:00.000Z",
       updatedAt: "2026-02-10T00:00:00.000Z",
     },
+    account: {
+      type: "unknown",
+      planType: null,
+      sparkEnabled: true,
+    },
+    binaryPath: "codex",
+    homePath,
+    authSnapshotFingerprint: undefined,
     collabReceiverTurns: new Map(),
   };
 
@@ -98,6 +111,7 @@ function createThreadControlHarness() {
 
 function createPendingUserInputHarness() {
   const manager = new CodexAppServerManager();
+  const homePath = mkdtempSync(path.join(os.tmpdir(), "t3-codex-home-"));
   const context = {
     session: {
       provider: "codex",
@@ -109,6 +123,14 @@ function createPendingUserInputHarness() {
       createdAt: "2026-02-10T00:00:00.000Z",
       updatedAt: "2026-02-10T00:00:00.000Z",
     },
+    account: {
+      type: "unknown",
+      planType: null,
+      sparkEnabled: true,
+    },
+    binaryPath: "codex",
+    homePath,
+    authSnapshotFingerprint: undefined,
     pendingUserInputs: new Map([
       [
         ApprovalRequestId.make("req-user-input-1"),
@@ -140,6 +162,7 @@ function createPendingUserInputHarness() {
 
 function createCollabNotificationHarness() {
   const manager = new CodexAppServerManager();
+  const homePath = mkdtempSync(path.join(os.tmpdir(), "t3-codex-home-"));
   const context = {
     session: {
       provider: "codex",
@@ -157,6 +180,9 @@ function createCollabNotificationHarness() {
       planType: null,
       sparkEnabled: true,
     },
+    binaryPath: "codex",
+    homePath,
+    authSnapshotFingerprint: undefined,
     pending: new Map(),
     pendingApprovals: new Map(),
     pendingUserInputs: new Map(),
@@ -575,6 +601,60 @@ describe("sendTurn", () => {
         {
           type: "image",
           url: "data:image/png;base64,BBBB",
+        },
+      ],
+      model: "gpt-5.3-codex",
+    });
+  });
+
+  it("recycles the session before turn/start when auth.json changed", async () => {
+    const { manager, context, sendRequest } = createSendTurnHarness();
+    const authPath = path.join(context.homePath, "auth.json");
+    writeFileSync(authPath, JSON.stringify({ tokens: { account_id: "acct-next" } }));
+
+    const restartedSession = {
+      ...context.session,
+      updatedAt: "2026-02-11T00:00:00.000Z",
+    } as ProviderSession;
+    const restartedContext = {
+      ...context,
+      session: restartedSession,
+      authSnapshotFingerprint: "fresh-auth",
+      collabReceiverTurns: new Map<string, TurnId>(),
+    };
+
+    const stopSession = vi.spyOn(manager, "stopSession").mockImplementation((_threadId) => void 0);
+    const startSession = vi.spyOn(manager, "startSession").mockImplementation(async (input) => {
+      expect(input).toMatchObject({
+        threadId: "thread_1",
+        binaryPath: "codex",
+        homePath: context.homePath,
+        resumeCursor: context.session.resumeCursor,
+        runtimeMode: context.session.runtimeMode,
+        model: "gpt-5.3-codex",
+      });
+      (
+        manager as unknown as {
+          sessions: Map<string, typeof restartedContext>;
+        }
+      ).sessions.set("thread_1", restartedContext);
+      return restartedContext.session;
+    });
+
+    await manager.sendTurn({
+      threadId: asThreadId("thread_1"),
+      input: "Continue with the new account",
+    });
+
+    expect(stopSession).toHaveBeenCalledWith("thread_1");
+    expect(startSession).toHaveBeenCalledTimes(1);
+    expect(sendRequest).toHaveBeenCalledWith(restartedContext, "turn/start", {
+      threadId: "thread_1",
+      input: [
+        {
+          type: "text",
+          text: "Continue with the new account",
+          text_elements: [],
         },
       ],
       model: "gpt-5.3-codex",

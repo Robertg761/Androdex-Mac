@@ -1,8 +1,10 @@
 import type { CodexAccountsSnapshot } from "@t3tools/contracts";
-import { startTransition, useEffect, useEffectEvent, useState } from "react";
+import { useEffectEvent, useState } from "react";
+import { useRelativeTimeTick } from "~/hooks/useRelativeTimeTick";
 import { ensureLocalApi } from "~/localApi";
-import { useServerProviders, useServerSettings } from "~/rpc/serverState";
 import { cn } from "~/lib/utils";
+import { useCodexAccountsSnapshot } from "~/hooks/useCodexAccountsSnapshot";
+import { formatCodexResetSummary, formatCodexUsageSummary } from "~/lib/codexAccounts";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -63,34 +65,9 @@ function renderSelectorButton(input: {
 export function SidebarCodexAccountControl({
   initialSnapshot = null,
 }: SidebarCodexAccountControlProps) {
-  const serverSettings = useServerSettings();
-  const codexProvider =
-    useServerProviders().find((provider) => provider.provider === "codex") ?? null;
-  const [snapshot, setSnapshot] = useState<CodexAccountsSnapshot | null>(initialSnapshot);
-  const [isLoading, setIsLoading] = useState(initialSnapshot === null);
+  const { applySnapshot, isLoading, snapshot } = useCodexAccountsSnapshot(initialSnapshot);
+  const nowMs = useRelativeTimeTick(60_000);
   const [switchingAccountKey, setSwitchingAccountKey] = useState<string | null>(null);
-
-  const reloadSnapshot = useEffectEvent(async () => {
-    setIsLoading(true);
-    try {
-      const nextSnapshot = await ensureLocalApi().server.listCodexAccounts();
-      startTransition(() => {
-        setSnapshot(nextSnapshot);
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  });
-
-  useEffect(() => {
-    void reloadSnapshot();
-  }, [
-    codexProvider?.auth.status,
-    codexProvider?.auth.type,
-    codexProvider?.checkedAt,
-    codexProvider?.status,
-    serverSettings.providers.codex.homePath,
-  ]);
 
   const handleAccountChange = useEffectEvent(async (accountKey: string) => {
     const selectedAccount =
@@ -102,9 +79,7 @@ export function SidebarCodexAccountControl({
     setSwitchingAccountKey(accountKey);
     try {
       const result = await ensureLocalApi().server.switchCodexAccount({ accountKey });
-      startTransition(() => {
-        setSnapshot(result.snapshot);
-      });
+      applySnapshot(result.snapshot);
       const activeAccount =
         result.snapshot.accounts.find((account) => account.isActive) ?? selectedAccount;
       toastManager.add({
@@ -181,6 +156,23 @@ export function SidebarCodexAccountControl({
                     </div>
                     <div className="truncate text-[11px] text-muted-foreground">
                       {account.email ?? account.accountKey}
+                    </div>
+                    <div className="truncate pt-0.5 text-[11px] font-medium text-muted-foreground/85">
+                      {formatCodexUsageSummary({
+                        fiveHourUsedPercent: account.usageLimits?.fiveHourUsedPercent,
+                        weeklyUsedPercent: account.usageLimits?.weeklyUsedPercent,
+                      })}
+                    </div>
+                    <div className="truncate pt-0.5 text-[11px] text-muted-foreground/75">
+                      {formatCodexResetSummary(
+                        {
+                          fiveHourResetsAtEpochSeconds:
+                            account.usageLimits?.fiveHourResetsAtEpochSeconds,
+                          weeklyResetsAtEpochSeconds:
+                            account.usageLimits?.weeklyResetsAtEpochSeconds,
+                        },
+                        nowMs,
+                      )}
                     </div>
                   </div>
                   {resolveCodexAccountBadgeLabel(account) ? (

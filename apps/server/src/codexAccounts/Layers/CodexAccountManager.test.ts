@@ -136,6 +136,18 @@ describe("CodexAccountManager", () => {
             auth_mode: "chatgpt",
             email,
             plan: "pro",
+            last_usage: {
+              five_hour_window: {
+                resets_at: 1_777_001_200,
+                used_percent: 35,
+                window_minutes: 300,
+              },
+              weekly_window: {
+                resets_at: 1_777_604_800,
+                used_percent: 72,
+                window_minutes: 10_080,
+              },
+            },
           },
         ],
         active_account_key: accountKey,
@@ -173,8 +185,84 @@ describe("CodexAccountManager", () => {
           hasSnapshot: true,
           isActive: true,
           planType: "pro",
+          usageLimits: {
+            fiveHourUsedPercent: 35,
+            fiveHourResetsAtEpochSeconds: 1_777_001_200,
+            weeklyUsedPercent: 72,
+            weeklyResetsAtEpochSeconds: 1_777_604_800,
+          },
         },
       ]);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("derives 5-hour and weekly usage limits from window durations", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const codexHomePath = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-codex-account-usage-",
+      });
+      const accountKey = "user-window::acct-window";
+      const email = "window@example.com";
+      const authPayload = {
+        tokens: {
+          account_id: "acct-window",
+          id_token: createJwt({
+            email,
+            "https://api.openai.com/auth": {
+              chatgpt_plan_type: "plus",
+              chatgpt_user_id: "user-window",
+            },
+          }),
+        },
+      };
+
+      yield* writeJsonFile(path.join(codexHomePath, "accounts", "registry.json"), {
+        accounts: [
+          {
+            account_key: accountKey,
+            email,
+            last_usage: {
+              some_future_name: {
+                resets_at: 1_777_123_400,
+                used_percent: 12,
+                window_minutes: 300,
+              },
+              some_other_name: {
+                resets_at: 1_777_777_000,
+                used_percent: 63,
+                window_minutes: 10_080,
+              },
+            },
+          },
+        ],
+      });
+      yield* writeJsonFile(
+        path.join(
+          codexHomePath,
+          "accounts",
+          `${Buffer.from(accountKey, "utf8").toString("base64url")}.auth.json`,
+        ),
+        authPayload,
+      );
+
+      const snapshot = yield* Effect.gen(function* () {
+        const manager = yield* CodexAccountManager;
+        return yield* manager.listAccounts;
+      }).pipe(
+        Effect.provide(CodexAccountManagerLive),
+        Effect.provideService(ServerSettingsService, makeServerSettingsService(codexHomePath)),
+        Effect.provideService(ProviderRegistry, makeProviderRegistryService([])),
+        Effect.provideService(ProviderService, makeProviderServiceShape()),
+      );
+
+      assert.deepStrictEqual(snapshot.accounts[0]?.usageLimits, {
+        fiveHourUsedPercent: 12,
+        fiveHourResetsAtEpochSeconds: 1_777_123_400,
+        weeklyUsedPercent: 63,
+        weeklyResetsAtEpochSeconds: 1_777_777_000,
+      });
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 

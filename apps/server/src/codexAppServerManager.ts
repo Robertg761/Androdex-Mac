@@ -1,7 +1,9 @@
 import { type ChildProcessWithoutNullStreams, spawn, spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import * as OS from "node:os";
+import path from "node:path";
 import readline from "node:readline";
 
 import {
@@ -74,6 +76,9 @@ interface CodexUserInputAnswer {
 interface CodexSessionContext {
   session: ProviderSession;
   account: CodexAccountSnapshot;
+  binaryPath: string;
+  homePath?: string;
+  authSnapshotFingerprint?: string;
   child: ChildProcessWithoutNullStreams;
   output: readline.Interface;
   pending: Map<PendingRequestKey, PendingRequest>;
@@ -489,6 +494,8 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
           planType: null,
           sparkEnabled: true,
         },
+        binaryPath: codexBinaryPath,
+        ...(codexHomePath ? { homePath: codexHomePath } : {}),
         child,
         output,
         pending: new Map(),
@@ -524,6 +531,12 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
         });
       } catch (error) {
         console.log("codex account/read failed", error);
+      }
+      const authSnapshotFingerprint = readCodexAuthSnapshotFingerprint(codexHomePath);
+      if (authSnapshotFingerprint !== undefined) {
+        context.authSnapshotFingerprint = authSnapshotFingerprint;
+      } else {
+        delete context.authSnapshotFingerprint;
       }
 
       const normalizedModel = resolveCodexModelForAccount(
@@ -655,7 +668,8 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
   }
 
   async sendTurn(input: CodexAppServerSendTurnInput): Promise<ProviderTurnStartResult> {
-    const context = this.requireSession(input.threadId);
+    let context = this.requireSession(input.threadId);
+    context = await this.refreshSessionForAuthChange(context, input);
     context.collabReceiverTurns.clear();
 
     const turnInput: Array<
@@ -757,6 +771,51 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
         ? { resumeCursor: context.session.resumeCursor }
         : {}),
     };
+  }
+
+  private async refreshSessionForAuthChange(
+    context: CodexSessionContext,
+    input: Pick<CodexAppServerSendTurnInput, "model" | "serviceTier">,
+  ): Promise<CodexSessionContext> {
+    const currentFingerprint = readCodexAuthSnapshotFingerprint(context.homePath);
+    if (currentFingerprint === context.authSnapshotFingerprint) {
+      return context;
+    }
+
+    if (context.session.activeTurnId !== undefined) {
+      return context;
+    }
+
+    const normalizedRestartModel = normalizeCodexModelSlug(input.model ?? context.session.model);
+    const restartInput: CodexAppServerStartSessionInput = {
+      threadId: context.session.threadId,
+      provider: "codex",
+      ...(context.session.cwd ? { cwd: context.session.cwd } : {}),
+      ...(context.session.resumeCursor !== undefined
+        ? { resumeCursor: context.session.resumeCursor }
+        : {}),
+      runtimeMode: context.session.runtimeMode,
+      binaryPath: context.binaryPath,
+      ...(context.homePath ? { homePath: context.homePath } : {}),
+      ...(normalizedRestartModel ? { model: normalizedRestartModel } : {}),
+      ...(typeof input.serviceTier === "string" ? { serviceTier: input.serviceTier } : {}),
+    };
+
+    await Effect.logInfo("codex auth snapshot changed; recycling session before next turn", {
+      threadId: context.session.threadId,
+      hadStoredFingerprint: context.authSnapshotFingerprint !== undefined,
+      hasCurrentFingerprint: currentFingerprint !== undefined,
+    }).pipe(this.runPromise);
+
+    this.stopSession(context.session.threadId);
+    await this.startSession(restartInput);
+
+    const restartedContext = this.sessions.get(context.session.threadId);
+    if (!restartedContext) {
+      throw new Error(`Failed to restart Codex session for thread '${context.session.threadId}'.`);
+    }
+
+    return restartedContext;
   }
 
   async interruptTurn(threadId: ThreadId, turnId?: TurnId): Promise<void> {
@@ -1527,6 +1586,26 @@ function brandIfNonEmpty<T extends string>(
 
 function normalizeProviderThreadId(value: string | undefined): string | undefined {
   return brandIfNonEmpty(value, (normalized) => normalized);
+}
+
+function resolveCodexHomePath(homePath?: string): string {
+  const normalizedHomePath = homePath?.trim();
+  return normalizedHomePath && normalizedHomePath.length > 0
+    ? normalizedHomePath
+    : path.join(OS.homedir(), ".codex");
+}
+
+function readCodexAuthSnapshotFingerprint(homePath?: string): string | undefined {
+  const authPath = path.join(resolveCodexHomePath(homePath), "auth.json");
+  if (!existsSync(authPath)) {
+    return undefined;
+  }
+
+  try {
+    return createHash("sha256").update(readFileSync(authPath, "utf8")).digest("hex");
+  } catch {
+    return undefined;
+  }
 }
 
 function assertSupportedCodexCliVersion(input: {

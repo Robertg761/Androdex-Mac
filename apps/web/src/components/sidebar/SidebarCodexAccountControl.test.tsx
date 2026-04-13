@@ -32,6 +32,12 @@ const activeSnapshot: CodexAccountsSnapshot = {
       email: "work@example.com",
       planType: "pro",
       authMode: "chatgpt",
+      usageLimits: {
+        fiveHourResetsAtEpochSeconds: 1_777_123_400,
+        fiveHourUsedPercent: 30,
+        weeklyResetsAtEpochSeconds: 1_777_777_000,
+        weeklyUsedPercent: 55,
+      },
       hasSnapshot: true,
       isActive: true,
     },

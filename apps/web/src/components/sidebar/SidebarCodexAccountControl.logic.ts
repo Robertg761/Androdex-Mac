@@ -1,52 +1,15 @@
 import type { CodexAccountSummary, CodexAccountsSnapshot } from "@t3tools/contracts";
+import {
+  resolveCodexAccountBadgeLabel,
+  resolveCodexAccountDisplayName,
+  resolveCodexAuthModeLabel,
+} from "~/lib/codexAccounts";
 
-export function resolveCodexAccountDisplayName(
-  account: Pick<CodexAccountSummary, "alias" | "accountName" | "email">,
-): string {
-  return account.alias ?? account.accountName ?? account.email ?? "Codex account";
-}
-
-function titleCasePlan(planType: CodexAccountSummary["planType"]): string | null {
-  switch (planType) {
-    case "business":
-      return "Business";
-    case "edu":
-      return "Edu";
-    case "enterprise":
-      return "Enterprise";
-    case "free":
-      return "Free";
-    case "go":
-      return "Go";
-    case "plus":
-      return "Plus";
-    case "pro":
-      return "Pro";
-    case "team":
-      return "Team";
-    case "unknown":
-      return "Unknown";
-    default:
-      return null;
-  }
-}
-
-export function resolveCodexAccountBadgeLabel(account: CodexAccountSummary): string | null {
-  return titleCasePlan(account.planType) ?? resolveCodexAuthModeLabel(account.authMode);
-}
-
-export function resolveCodexAuthModeLabel(
-  authMode: CodexAccountsSnapshot["currentAuthMode"],
-): string | null {
-  switch (authMode) {
-    case "apikey":
-      return "API key";
-    case "chatgpt":
-      return "ChatGPT";
-    default:
-      return null;
-  }
-}
+export {
+  resolveCodexAccountBadgeLabel,
+  resolveCodexAccountDisplayName,
+  resolveCodexAuthModeLabel,
+} from "~/lib/codexAccounts";
 
 function resolveCodexCurrentAuthDetail(snapshot: CodexAccountsSnapshot): string | null {
   if (snapshot.currentAuthMode === "apikey") {
@@ -65,7 +28,7 @@ export function formatRunningCodexSessionNotice(count: number): string | null {
     return null;
   }
 
-  return `${count} running Codex session${count === 1 ? "" : "s"} will keep using the previous account until restarted.`;
+  return `${count} existing Codex session${count === 1 ? "" : "s"} will pick up the new account on the next turn.`;
 }
 
 export function buildCodexAccountSwitchDescription(input: {

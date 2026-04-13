@@ -30,6 +30,14 @@ type RegistryAccountRecord = {
   readonly alias?: string | undefined;
   readonly accountName?: string | undefined;
   readonly planType?: CodexAccountPlanType | null | undefined;
+  readonly usageLimits?:
+    | {
+        readonly fiveHourUsedPercent?: number | undefined;
+        readonly fiveHourResetsAtEpochSeconds?: number | undefined;
+        readonly weeklyUsedPercent?: number | undefined;
+        readonly weeklyResetsAtEpochSeconds?: number | undefined;
+      }
+    | undefined;
   readonly authMode: CodexAccountAuthMode;
 };
 
@@ -59,9 +67,21 @@ function asString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+function asNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 function nonEmptyTrimmed(value: unknown): string | undefined {
   const candidate = asString(value)?.trim();
   return candidate && candidate.length > 0 ? candidate : undefined;
+}
+
+function asNonNegativeInt(value: unknown): number | undefined {
+  const candidate = asNumber(value);
+  if (candidate === undefined || candidate < 0) {
+    return undefined;
+  }
+  return Math.round(candidate);
 }
 
 function normalizePlanType(value: unknown): CodexAccountPlanType | null | undefined {
@@ -179,6 +199,31 @@ function parseRegistryAccountRecord(value: unknown): RegistryAccountRecord | und
   const lastUsage = asObject(record.last_usage);
   const planType =
     normalizePlanType(record.plan) ?? normalizePlanType(lastUsage?.plan_type) ?? null;
+  const resolveWindowUsage = (windowMinutes: number) => {
+    if (!lastUsage) {
+      return {};
+    }
+
+    for (const entry of Object.values(lastUsage)) {
+      const usageWindow = asObject(entry);
+      if (!usageWindow) {
+        continue;
+      }
+      const resolvedWindowMinutes =
+        asNumber(usageWindow.window_minutes) ?? asNumber(usageWindow.windowMinutes);
+      if (resolvedWindowMinutes !== windowMinutes) {
+        continue;
+      }
+      return {
+        usedPercent: asNonNegativeInt(usageWindow.used_percent ?? usageWindow.usedPercent),
+        resetsAtEpochSeconds: asNonNegativeInt(usageWindow.resets_at ?? usageWindow.resetsAt),
+      };
+    }
+
+    return {};
+  };
+  const fiveHourUsage = resolveWindowUsage(300);
+  const weeklyUsage = resolveWindowUsage(10_080);
   const chatgptAccountId = nonEmptyTrimmed(record.chatgpt_account_id);
   const chatgptUserId = nonEmptyTrimmed(record.chatgpt_user_id);
   const email = nonEmptyTrimmed(record.email);
@@ -193,6 +238,27 @@ function parseRegistryAccountRecord(value: unknown): RegistryAccountRecord | und
     ...(alias ? { alias } : {}),
     ...(accountName ? { accountName } : {}),
     planType,
+    ...(fiveHourUsage.usedPercent !== undefined ||
+    fiveHourUsage.resetsAtEpochSeconds !== undefined ||
+    weeklyUsage.usedPercent !== undefined ||
+    weeklyUsage.resetsAtEpochSeconds !== undefined
+      ? {
+          usageLimits: {
+            ...(fiveHourUsage.usedPercent !== undefined
+              ? { fiveHourUsedPercent: fiveHourUsage.usedPercent }
+              : {}),
+            ...(fiveHourUsage.resetsAtEpochSeconds !== undefined
+              ? { fiveHourResetsAtEpochSeconds: fiveHourUsage.resetsAtEpochSeconds }
+              : {}),
+            ...(weeklyUsage.usedPercent !== undefined
+              ? { weeklyUsedPercent: weeklyUsage.usedPercent }
+              : {}),
+            ...(weeklyUsage.resetsAtEpochSeconds !== undefined
+              ? { weeklyResetsAtEpochSeconds: weeklyUsage.resetsAtEpochSeconds }
+              : {}),
+          },
+        }
+      : {}),
     authMode: normalizeAuthMode(record.auth_mode),
   };
 }
@@ -286,15 +352,13 @@ export const CodexAccountManagerLive = Layer.effect(
           } satisfies RegistryDocument;
         }
 
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(rawText);
-        } catch {
-          return yield* Effect.fail(fail("Codex account registry is malformed JSON."));
-        }
+        const parsed = yield* Effect.try({
+          try: () => JSON.parse(rawText),
+          catch: () => fail("Codex account registry is malformed JSON."),
+        });
         const raw = asObject(parsed);
         if (!raw) {
-          return yield* Effect.fail(fail("Codex account registry must be a JSON object."));
+          return yield* fail("Codex account registry must be a JSON object.");
         }
 
         return {
@@ -343,6 +407,7 @@ export const CodexAccountManagerLive = Layer.effect(
             ...(record.accountName ? { accountName: record.accountName } : {}),
             planType,
             authMode: record.authMode !== "unknown" ? record.authMode : snapshotInfo.authMode,
+            ...(record.usageLimits ? { usageLimits: record.usageLimits } : {}),
             hasSnapshot: snapshotPath !== null,
             isActive: activeAccountKey === record.accountKey,
           } satisfies CodexAccountSummary;
@@ -416,24 +481,20 @@ export const CodexAccountManagerLive = Layer.effect(
           (account) => account.accountKey === input.accountKey,
         );
         if (!target) {
-          return yield* Effect.fail(
-            fail("The selected Codex account does not exist in the registry."),
-          );
+          return yield* fail("The selected Codex account does not exist in the registry.");
         }
         if (!target.hasSnapshot) {
-          return yield* Effect.fail(
-            fail("The selected Codex account is missing its stored auth snapshot."),
-          );
+          return yield* fail("The selected Codex account is missing its stored auth snapshot.");
         }
 
         const registry = yield* readRegistry(snapshotBefore.codexHomePath);
         if (!registry.raw) {
-          return yield* Effect.fail(fail("Codex account registry was not found."));
+          return yield* fail("Codex account registry was not found.");
         }
 
         const record = registry.accounts.find((account) => account.accountKey === input.accountKey);
         if (!record) {
-          return yield* Effect.fail(fail("The selected Codex account could not be resolved."));
+          return yield* fail("The selected Codex account could not be resolved.");
         }
 
         const snapshotPath = yield* resolveAccountSnapshotPath(
@@ -441,14 +502,12 @@ export const CodexAccountManagerLive = Layer.effect(
           record,
         );
         if (!snapshotPath) {
-          return yield* Effect.fail(
-            fail("The selected Codex account is missing its stored auth snapshot."),
-          );
+          return yield* fail("The selected Codex account is missing its stored auth snapshot.");
         }
 
         const snapshotText = yield* readTextFileIfExists(snapshotPath);
         if (!snapshotText) {
-          return yield* Effect.fail(fail("The selected Codex account snapshot could not be read."));
+          return yield* fail("The selected Codex account snapshot could not be read.");
         }
 
         const authPath = path.join(snapshotBefore.codexHomePath, "auth.json");

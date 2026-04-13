@@ -81,7 +81,7 @@ describe("SidebarCodexAccountControl.logic", () => {
   it("formats the running-session notice and success description", () => {
     expect(formatRunningCodexSessionNotice(0)).toBeNull();
     expect(formatRunningCodexSessionNotice(2)).toBe(
-      "2 running Codex sessions will keep using the previous account until restarted.",
+      "2 existing Codex sessions will pick up the new account on the next turn.",
     );
     expect(
       buildCodexAccountSwitchDescription({
@@ -89,7 +89,7 @@ describe("SidebarCodexAccountControl.logic", () => {
         runningCodexSessionCount: 1,
       }),
     ).toBe(
-      "Switched Codex account to Work. 1 running Codex session will keep using the previous account until restarted.",
+      "Switched Codex account to Work. 1 existing Codex session will pick up the new account on the next turn.",
     );
   });
 });
