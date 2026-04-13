@@ -19,7 +19,7 @@ npx androdex
 
 ### Desktop app
 
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/Robertg761/Androdex-Mac/releases), or from your favorite package registry.
+Install the latest version of the desktop app from [GitHub Releases](https://github.com/Robertg761/Androdex-Desktop/releases), or from your favorite package registry.
 
 Package-registry examples below assume the rebranded `androdex` listings have been published; until then, GitHub Releases is the guaranteed install path.
 

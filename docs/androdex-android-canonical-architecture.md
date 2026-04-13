@@ -2,7 +2,7 @@
 
 ## Decision
 
-`Androdex - Mac` is the canonical backend for:
+`Androdex-Desktop` is the canonical backend for:
 
 - auth policy, bootstrap, bearer sessions, and WebSocket auth
 - orchestration snapshot state

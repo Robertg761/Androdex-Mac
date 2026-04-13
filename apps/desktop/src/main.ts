@@ -77,6 +77,7 @@ import {
   reduceDesktopUpdateStateOnNoUpdate,
   reduceDesktopUpdateStateOnUpdateAvailable,
 } from "./updateMachine";
+import { triggerDownloadedUpdateInstall } from "./updateInstall";
 import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runtimeArch";
 
 syncShellEnvironment();
@@ -1112,14 +1113,11 @@ async function installDownloadedUpdate(): Promise<{ accepted: boolean; completed
   clearUpdatePollTimer();
   try {
     await stopBackendAndWaitForExit();
-    // Destroy all windows before launching the NSIS installer to avoid the installer finding live windows it needs to close.
-    for (const win of BrowserWindow.getAllWindows()) {
-      win.destroy();
-    }
-    // `quitAndInstall()` only starts the handoff to the updater. The actual
-    // install may still fail asynchronously, so keep the action incomplete
-    // until we either quit or receive an updater error.
-    autoUpdater.quitAndInstall(true, true);
+    // Let electron-updater own the quit flow. Destroying windows here can leave
+    // the app headless if the updater has not actually started quitting yet.
+    // Keeping install-on-quit enabled also preserves the downloaded payload if
+    // Electron falls back to its normal shutdown path during handoff.
+    triggerDownloadedUpdateInstall(autoUpdater);
     return { accepted: true, completed: false };
   } catch (error: unknown) {
     const message = formatErrorMessage(error);

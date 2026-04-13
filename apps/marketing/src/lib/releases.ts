@@ -1,4 +1,4 @@
-const REPO = "Robertg761/Androdex-Mac";
+const REPO = "Robertg761/Androdex-Desktop";
 
 export const RELEASES_URL = `https://github.com/${REPO}/releases`;
 

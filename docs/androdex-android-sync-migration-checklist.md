@@ -2,14 +2,14 @@
 
 This document is the working checklist for converging:
 
-- `/Users/robert/Documents/Projects/Androdex - Mac`
+- `/Users/robert/Documents/Projects/Androdex-Desktop`
 - `/Users/robert/Documents/Projects/Androdex - Android`
 
 onto a single source of truth.
 
 The target architecture is:
 
-- `Androdex - Mac` is the canonical backend for auth, sessions, orchestration state, replay, and thread actions.
+- `Androdex-Desktop` is the canonical backend for auth, sessions, orchestration state, replay, and thread actions.
 - `Androdex - Android` is a true remote client of that same backend.
 - Any relay or host helper layer is transport-only, not a second stateful protocol.
 
@@ -30,7 +30,7 @@ The target architecture is:
 
 ## Phase 0: Freeze Direction
 
-- [x] Decide and document that `Androdex - Mac` is the only source of truth for auth, sessions, threads, turns, checkpoints, approvals, and replay state.
+- [x] Decide and document that `Androdex-Desktop` is the only source of truth for auth, sessions, threads, turns, checkpoints, approvals, and replay state.
 - [x] Decide that `Androdex - Android` will stop adding new bridge-only thread/state translation logic.
 - [x] Decide whether internet access is required for v1 of this convergence or whether LAN/loopback-first is acceptable.
 - [x] Decide whether the old bridge remains temporarily as a transport shell or is bypassed entirely for the first integrated milestone.
@@ -45,8 +45,8 @@ Definition of done:
 
 ## Phase 1: Define Canonical Client Contract
 
-- [x] Treat `packages/contracts/src/auth.ts` in `Androdex - Mac` as the canonical auth contract.
-- [x] Treat `packages/contracts/src/orchestration.ts` in `Androdex - Mac` as the canonical orchestration/read-model contract.
+- [x] Treat `packages/contracts/src/auth.ts` in `Androdex-Desktop` as the canonical auth contract.
+- [x] Treat `packages/contracts/src/orchestration.ts` in `Androdex-Desktop` as the canonical orchestration/read-model contract.
 - [x] Inventory the exact server endpoints and WS RPC methods Android must support from:
   - `apps/server/src/auth/http.ts`
   - `apps/server/src/orchestration/http.ts`
@@ -271,7 +271,7 @@ Definition of done:
 
 ## Current Status
 
-- [x] Old local WIP branch in `Androdex - Mac` removed.
-- [x] `origin` and `upstream` tracking in `Androdex - Mac` narrowed to `main` only.
+- [x] Old local WIP branch in `Androdex-Desktop` removed.
+- [x] `origin` and `upstream` tracking in `Androdex-Desktop` narrowed to `main` only.
 - [x] Cross-repo architecture review completed.
 - [x] Migration execution started and Phases 0 through 6 are now tracked as complete in this checklist.
