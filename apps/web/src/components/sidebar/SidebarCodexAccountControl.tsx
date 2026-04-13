@@ -1,5 +1,4 @@
 import type { CodexAccountsSnapshot } from "@t3tools/contracts";
-import { ArrowUpDownIcon } from "lucide-react";
 import { startTransition, useEffect, useEffectEvent, useState } from "react";
 import { ensureLocalApi } from "~/localApi";
 import { useServerProviders, useServerSettings } from "~/rpc/serverState";
@@ -31,36 +30,21 @@ interface SidebarCodexAccountControlProps {
 }
 
 function renderSelectorButton(input: {
-  readonly badgeLabel: string | null;
-  readonly detail: string | null;
   readonly disabled: boolean;
   readonly disabledReason: string | null;
-  readonly label: string;
-  readonly pending: boolean;
 }) {
   const button = (
     <Button
-      variant="outline"
+      variant="ghost"
       size="xs"
-      disabled={input.disabled || input.pending}
+      disabled={input.disabled}
       aria-label="Codex account selector"
       className={cn(
-        "h-8 min-w-0 flex-1 justify-start gap-2 rounded-lg px-2 text-left text-muted-foreground",
-        input.pending && "cursor-wait",
+        "h-7 w-auto shrink-0 justify-start rounded-md border-transparent bg-transparent px-1.5 text-left text-xs font-medium text-muted-foreground/70 shadow-none hover:bg-background/80 hover:text-foreground/80 sm:h-7",
+        input.disabled && "hover:bg-transparent hover:text-muted-foreground/60",
       )}
     >
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-xs font-medium text-foreground">{input.label}</div>
-        {input.detail ? (
-          <div className="truncate text-[11px] text-muted-foreground/80">{input.detail}</div>
-        ) : null}
-      </div>
-      {input.badgeLabel ? (
-        <Badge variant="outline" size="sm" className="max-w-20 shrink-0 truncate">
-          {input.badgeLabel}
-        </Badge>
-      ) : null}
-      <ArrowUpDownIcon className="size-3.5 shrink-0 opacity-60" />
+      <span className="truncate">Accounts</span>
     </Button>
   );
 
@@ -70,7 +54,7 @@ function renderSelectorButton(input: {
 
   return (
     <Tooltip>
-      <TooltipTrigger render={<span className="flex min-w-0 flex-1">{button}</span>} />
+      <TooltipTrigger render={<span className="inline-flex w-auto shrink-0">{button}</span>} />
       <TooltipPopup side="top">{input.disabledReason}</TooltipPopup>
     </Tooltip>
   );
@@ -153,17 +137,19 @@ export function SidebarCodexAccountControl({
       <MenuTrigger
         disabled={selectorDisabled || isLoading}
         render={renderSelectorButton({
-          badgeLabel: selectorState.badgeLabel,
-          detail: selectorState.detail,
           disabled: selectorDisabled,
           disabledReason: selectorState.disabledReason,
-          label: selectorState.label,
-          pending: isLoading || switchingAccountKey !== null,
         })}
       />
-      <MenuPopup align="start" side="top" className="min-w-72">
+      <MenuPopup
+        align="start"
+        side="top"
+        className="min-w-80 rounded-xl border-border/70 bg-popover/96 shadow-lg/10 backdrop-blur-md"
+      >
         <MenuGroup>
-          <MenuGroupLabel>Codex accounts</MenuGroupLabel>
+          <MenuGroupLabel className="px-2.5 py-2 font-semibold uppercase tracking-[0.18em] text-[10px] text-muted-foreground/70">
+            Codex accounts
+          </MenuGroupLabel>
           <MenuRadioGroup
             value={snapshot?.activeAccountKey}
             onValueChange={(value) => {
@@ -178,19 +164,31 @@ export function SidebarCodexAccountControl({
                 key={account.accountKey}
                 value={account.accountKey}
                 disabled={!account.hasSnapshot || switchingAccountKey !== null}
-                className="min-h-10 py-1.5"
+                className="min-h-11 rounded-lg py-1.5 data-highlighted:bg-accent/65"
               >
                 <div className="flex min-w-0 items-center gap-2">
+                  <div
+                    className={cn(
+                      "flex size-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-foreground/[0.08] via-foreground/[0.04] to-transparent text-[11px] font-semibold uppercase text-foreground/75 ring-1 ring-inset ring-foreground/[0.06]",
+                      account.isActive && "text-primary ring-primary/20",
+                    )}
+                  >
+                    {resolveCodexAccountDisplayName(account).slice(0, 1)}
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-foreground">
+                    <div className="truncate text-sm font-medium text-foreground">
                       {resolveCodexAccountDisplayName(account)}
                     </div>
-                    <div className="truncate text-xs text-muted-foreground">
+                    <div className="truncate text-[11px] text-muted-foreground">
                       {account.email ?? account.accountKey}
                     </div>
                   </div>
                   {resolveCodexAccountBadgeLabel(account) ? (
-                    <Badge variant="outline" size="sm" className="shrink-0">
+                    <Badge
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 border-border/70 bg-background/80 font-semibold text-[10px] tracking-[0.08em] uppercase"
+                    >
                       {resolveCodexAccountBadgeLabel(account)}
                     </Badge>
                   ) : null}
@@ -199,7 +197,7 @@ export function SidebarCodexAccountControl({
             ))}
           </MenuRadioGroup>
           {snapshot && snapshot.accounts.length === 0 ? (
-            <div className="px-2 py-2 text-xs text-muted-foreground">
+            <div className="px-2.5 py-2 text-xs text-muted-foreground">
               {snapshot.message ?? "No managed Codex accounts were found."}
             </div>
           ) : null}
@@ -207,7 +205,9 @@ export function SidebarCodexAccountControl({
         {menuNote ? (
           <>
             <MenuSeparator />
-            <div className="px-2 py-1.5 text-xs text-muted-foreground">{menuNote}</div>
+            <div className="px-2.5 py-2 text-xs leading-relaxed text-muted-foreground">
+              {menuNote}
+            </div>
           </>
         ) : null}
       </MenuPopup>

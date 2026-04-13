@@ -43,15 +43,22 @@ const activeSnapshot: CodexAccountsSnapshot = {
 };
 
 describe("SidebarCodexAccountControl", () => {
-  it("renders the active account label and badge in the trigger", () => {
+  it("renders a simplified accounts trigger", () => {
     const html = renderToStaticMarkup(
       <SidebarCodexAccountControl initialSnapshot={activeSnapshot} />,
     );
 
-    expect(html).toContain("Work");
-    expect(html).toContain("work@example.com");
-    expect(html).toContain("Pro");
+    expect(html).toContain("Accounts");
     expect(html).toContain("Codex account selector");
+  });
+
+  it("does not render account metadata inside the trigger", () => {
+    const html = renderToStaticMarkup(
+      <SidebarCodexAccountControl initialSnapshot={activeSnapshot} />,
+    );
+
+    expect(html).not.toContain("work@example.com");
+    expect(html).not.toContain("Pro");
   });
 
   it("renders a disabled trigger when no managed accounts are available", () => {

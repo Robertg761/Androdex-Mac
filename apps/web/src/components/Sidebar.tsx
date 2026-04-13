@@ -1981,7 +1981,7 @@ const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter className="p-2">
       <SidebarUpdatePill />
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-2 inline-flex w-fit max-w-full items-center gap-1 rounded-xl border border-border/60 bg-background/40 p-1 shadow-xs/5 backdrop-blur-sm">
         <SidebarCodexAccountControl />
         <Tooltip>
           <TooltipTrigger
@@ -1990,7 +1990,7 @@ const SidebarChromeFooter = memo(function SidebarChromeFooter() {
                 variant="outline"
                 size="icon-sm"
                 aria-label="Settings"
-                className="shrink-0 rounded-lg text-muted-foreground/80"
+                className="shrink-0 rounded-lg border-transparent bg-transparent text-muted-foreground/75 shadow-none hover:border-border/60 hover:bg-background/80 hover:text-foreground"
                 onClick={handleSettingsClick}
               >
                 <SettingsIcon className="size-3.5" />
