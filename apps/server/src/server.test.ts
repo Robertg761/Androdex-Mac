@@ -22,6 +22,7 @@ import {
   WsRpcGroup,
   EditorId,
 } from "@t3tools/contracts";
+import { SESSION_COOKIE_BASENAME } from "@t3tools/shared/branding";
 import { assert, it } from "@effect/vitest";
 import { assertFailure, assertInclude, assertTrue } from "@effect/vitest/utils";
 import {
@@ -789,7 +790,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         "browser-session-cookie",
         "bearer-session-token",
       ]);
-      assert.isTrue(body.auth.sessionCookieName.startsWith("t3_session_"));
+      assert.isTrue(body.auth.sessionCookieName.startsWith(`${SESSION_COOKIE_BASENAME}_`));
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

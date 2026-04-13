@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
+import { SESSION_COOKIE_BASENAME } from "@t3tools/shared/branding";
 
 import type { ServerConfigShape } from "../../config.ts";
 import { ServerConfig } from "../../config.ts";
@@ -34,7 +35,7 @@ const makeCookieRequest = (
 ): Parameters<ServerAuthShape["authenticateHttpRequest"]>[0] =>
   ({
     cookies: {
-      t3_session: sessionToken,
+      [SESSION_COOKIE_BASENAME]: sessionToken,
     },
     headers: {},
   }) as unknown as Parameters<ServerAuthShape["authenticateHttpRequest"]>[0];
