@@ -2,7 +2,12 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { ConfigProvider, Effect, Option } from "effect";
 
-import { isLegacyDesktopArtifactEntry, resolveBuildOptions } from "./build-desktop-artifact.ts";
+import {
+  isLegacyDesktopArtifactEntry,
+  parseGitHubRepositorySlug,
+  resolveBuildOptions,
+  resolveGitHubRepositorySlug,
+} from "./build-desktop-artifact.ts";
 
 it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("identifies stale legacy release artifacts for cleanup", () =>
@@ -49,6 +54,45 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(resolved.signed, false);
       assert.equal(resolved.verbose, false);
       assert.equal(resolved.mockUpdates, false);
+    }),
+  );
+
+  it.effect("prefers explicit update repository configuration over inferred values", () =>
+    Effect.sync(() => {
+      assert.equal(
+        resolveGitHubRepositorySlug({
+          configuredRepo: "pingdotgg/t3code",
+          githubRepository: "wrong/ci",
+          originRepo: "wrong/origin",
+        }),
+        "pingdotgg/t3code",
+      );
+    }),
+  );
+
+  it.effect("falls back to the origin GitHub remote for local builds", () =>
+    Effect.sync(() => {
+      assert.equal(
+        resolveGitHubRepositorySlug({
+          originRepo: "https://github.com/Robertg761/Androdex-Desktop.git",
+        }),
+        "Robertg761/Androdex-Desktop",
+      );
+      assert.deepStrictEqual(
+        parseGitHubRepositorySlug("git@github.com:Robertg761/Androdex-Desktop.git"),
+        {
+          owner: "Robertg761",
+          repo: "Androdex-Desktop",
+        },
+      );
+    }),
+  );
+
+  it.effect("rejects non-GitHub or malformed repository slugs", () =>
+    Effect.sync(() => {
+      assert.equal(parseGitHubRepositorySlug(""), undefined);
+      assert.equal(parseGitHubRepositorySlug("git@gitlab.com:owner/repo.git"), undefined);
+      assert.equal(parseGitHubRepositorySlug("owner/repo/extra"), undefined);
     }),
   );
 });

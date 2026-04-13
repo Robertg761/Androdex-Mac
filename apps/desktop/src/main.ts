@@ -77,6 +77,19 @@ import {
   reduceDesktopUpdateStateOnNoUpdate,
   reduceDesktopUpdateStateOnUpdateAvailable,
 } from "./updateMachine";
+import type {
+  GitHubUpdateFeedConfig,
+  MacAvailableUpdate,
+  MacDownloadedUpdate,
+} from "./macManualUpdate";
+import {
+  fetchMacUpdateManifest,
+  isSemanticVersionNewer,
+  launchMacAppReplacementInstaller,
+  prepareMacDownloadedUpdate,
+  resolveCurrentAppBundlePath,
+  resolveMacAvailableUpdate,
+} from "./macManualUpdate";
 import { triggerDownloadedUpdateInstall } from "./updateInstall";
 import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runtimeArch";
 
@@ -553,6 +566,9 @@ let updateDownloadInFlight = false;
 let updateInstallInFlight = false;
 let updaterConfigured = false;
 let updateState: DesktopUpdateState = initialUpdateState();
+let macManualUpdateConfig: GitHubUpdateFeedConfig | null = null;
+let macAvailableUpdate: MacAvailableUpdate | null = null;
+let macDownloadedUpdate: MacDownloadedUpdate | null = null;
 
 function resolveUpdaterErrorContext(): DesktopUpdateErrorContext {
   if (updateInstallInFlight) return "install";
@@ -1054,6 +1070,27 @@ function shouldEnableAutoUpdates(): boolean {
   );
 }
 
+function shouldUseMacManualUpdater(): boolean {
+  return process.platform === "darwin";
+}
+
+function resolveGitHubUpdateFeedConfig(): GitHubUpdateFeedConfig | null {
+  const config = readAppUpdateYml();
+  if (config?.provider !== "github") {
+    return null;
+  }
+  const owner = config.owner?.trim();
+  const repo = config.repo?.trim();
+  if (!owner || !repo) {
+    return null;
+  }
+  const token =
+    readLinkedEnv("ANDRODEX_DESKTOP_UPDATE_GITHUB_TOKEN", "T3CODE_DESKTOP_UPDATE_GITHUB_TOKEN") ||
+    process.env.GH_TOKEN?.trim() ||
+    undefined;
+  return { owner, repo, ...(token ? { token } : {}) };
+}
+
 async function checkForUpdates(reason: string): Promise<boolean> {
   if (isQuitting || !updaterConfigured || updateCheckInFlight) return false;
   if (updateState.status === "downloading" || updateState.status === "downloaded") {
@@ -1067,6 +1104,29 @@ async function checkForUpdates(reason: string): Promise<boolean> {
   console.info(`[desktop-updater] Checking for updates (${reason})...`);
 
   try {
+    if (shouldUseMacManualUpdater()) {
+      if (!macManualUpdateConfig) {
+        throw new Error("GitHub desktop update feed is not configured.");
+      }
+      const { manifest } = await fetchMacUpdateManifest(macManualUpdateConfig);
+      if (isSemanticVersionNewer(manifest.version, app.getVersion())) {
+        macAvailableUpdate = resolveMacAvailableUpdate(manifest, macManualUpdateConfig);
+        setUpdateState(
+          reduceDesktopUpdateStateOnUpdateAvailable(
+            updateState,
+            macAvailableUpdate.version,
+            new Date().toISOString(),
+          ),
+        );
+        console.info(`[desktop-updater] Update available: ${manifest.version}`);
+      } else {
+        macAvailableUpdate = null;
+        macDownloadedUpdate = null;
+        setUpdateState(reduceDesktopUpdateStateOnNoUpdate(updateState, new Date().toISOString()));
+        console.info("[desktop-updater] No updates available.");
+      }
+      return true;
+    }
     await autoUpdater.checkForUpdates();
     return true;
   } catch (error: unknown) {
@@ -1087,10 +1147,33 @@ async function downloadAvailableUpdate(): Promise<{ accepted: boolean; completed
   }
   updateDownloadInFlight = true;
   setUpdateState(reduceDesktopUpdateStateOnDownloadStart(updateState));
-  autoUpdater.disableDifferentialDownload = isArm64HostRunningIntelBuild(desktopRuntimeInfo);
   console.info("[desktop-updater] Downloading update...");
 
   try {
+    if (shouldUseMacManualUpdater()) {
+      if (!macManualUpdateConfig || !macAvailableUpdate) {
+        throw new Error("No macOS update is ready to download.");
+      }
+      macDownloadedUpdate = await prepareMacDownloadedUpdate({
+        availableUpdate: macAvailableUpdate,
+        cacheDirectory: Path.join(app.getPath("userData"), "mac-updates"),
+        ...(macManualUpdateConfig.token ? { token: macManualUpdateConfig.token } : {}),
+        currentBundlePath: resolveCurrentAppBundlePath(process.execPath),
+        onProgress: (percent) => {
+          if (
+            shouldBroadcastDownloadProgress(updateState, percent) ||
+            updateState.message !== null
+          ) {
+            setUpdateState(reduceDesktopUpdateStateOnDownloadProgress(updateState, percent));
+          }
+        },
+      });
+      setUpdateState(
+        reduceDesktopUpdateStateOnDownloadComplete(updateState, macDownloadedUpdate.version),
+      );
+      return { accepted: true, completed: true };
+    }
+    autoUpdater.disableDifferentialDownload = isArm64HostRunningIntelBuild(desktopRuntimeInfo);
     await autoUpdater.downloadUpdate();
     return { accepted: true, completed: true };
   } catch (error: unknown) {
@@ -1106,6 +1189,29 @@ async function downloadAvailableUpdate(): Promise<{ accepted: boolean; completed
 async function installDownloadedUpdate(): Promise<{ accepted: boolean; completed: boolean }> {
   if (isQuitting || !updaterConfigured || updateState.status !== "downloaded") {
     return { accepted: false, completed: false };
+  }
+
+  if (shouldUseMacManualUpdater()) {
+    if (!macDownloadedUpdate) {
+      return { accepted: false, completed: false };
+    }
+    try {
+      await launchMacAppReplacementInstaller({
+        currentPid: process.pid,
+        downloadedUpdate: macDownloadedUpdate,
+      });
+      setImmediate(() => {
+        isQuitting = true;
+        clearUpdatePollTimer();
+        app.quit();
+      });
+      return { accepted: true, completed: false };
+    } catch (error: unknown) {
+      const message = formatErrorMessage(error);
+      setUpdateState(reduceDesktopUpdateStateOnInstallFailure(updateState, message));
+      console.error(`[desktop-updater] Failed to install update: ${message}`);
+      return { accepted: true, completed: false };
+    }
   }
 
   isQuitting = true;
@@ -1130,6 +1236,9 @@ async function installDownloadedUpdate(): Promise<{ accepted: boolean; completed
 }
 
 function configureAutoUpdater(): void {
+  macManualUpdateConfig = resolveGitHubUpdateFeedConfig();
+  macAvailableUpdate = null;
+  macDownloadedUpdate = null;
   const githubToken =
     readLinkedEnv("ANDRODEX_DESKTOP_UPDATE_GITHUB_TOKEN", "T3CODE_DESKTOP_UPDATE_GITHUB_TOKEN") ||
     process.env.GH_TOKEN?.trim() ||
@@ -1156,7 +1265,8 @@ function configureAutoUpdater(): void {
     });
   }
 
-  const enabled = shouldEnableAutoUpdates();
+  const enabled =
+    shouldEnableAutoUpdates() && (!shouldUseMacManualUpdater() || macManualUpdateConfig !== null);
   setUpdateState({
     ...createInitialDesktopUpdateState(app.getVersion(), desktopRuntimeInfo),
     enabled,
@@ -1166,6 +1276,22 @@ function configureAutoUpdater(): void {
     return;
   }
   updaterConfigured = true;
+
+  if (shouldUseMacManualUpdater()) {
+    clearUpdatePollTimer();
+
+    updateStartupTimer = setTimeout(() => {
+      updateStartupTimer = null;
+      void checkForUpdates("startup");
+    }, AUTO_UPDATE_STARTUP_DELAY_MS);
+    updateStartupTimer.unref();
+
+    updatePollTimer = setInterval(() => {
+      void checkForUpdates("poll");
+    }, AUTO_UPDATE_POLL_INTERVAL_MS);
+    updatePollTimer.unref();
+    return;
+  }
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;

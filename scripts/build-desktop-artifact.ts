@@ -476,6 +476,60 @@ function resolveDesktopRuntimeDependencies(
   return resolveCatalogDependencies(runtimeDependencies, catalog, "apps/desktop");
 }
 
+export function parseGitHubRepositorySlug(
+  rawRepo: string | undefined,
+): { readonly owner: string; readonly repo: string } | undefined {
+  if (!rawRepo) return undefined;
+
+  const trimmed = rawRepo.trim();
+  if (!trimmed) return undefined;
+
+  let normalized = trimmed;
+  if (normalized.startsWith("https://github.com/")) {
+    normalized = normalized.slice("https://github.com/".length);
+  } else if (normalized.startsWith("git@github.com:")) {
+    normalized = normalized.slice("git@github.com:".length);
+  } else if (normalized.includes("://") || normalized.startsWith("git@")) {
+    return undefined;
+  }
+
+  normalized = normalized.replace(/\.git$/, "").replace(/\/+$/, "");
+
+  const [owner, repo, ...rest] = normalized.split("/");
+  if (!owner || !repo || rest.length > 0) return undefined;
+
+  return { owner, repo };
+}
+
+function resolveOriginGitHubRepositorySlug(): string | undefined {
+  const result = spawnSync("git", ["remote", "get-url", "origin"], {
+    encoding: "utf8",
+  });
+  if (result.status !== 0) {
+    return undefined;
+  }
+
+  const parsed = parseGitHubRepositorySlug(result.stdout);
+  if (!parsed) {
+    return undefined;
+  }
+
+  return `${parsed.owner}/${parsed.repo}`;
+}
+
+export function resolveGitHubRepositorySlug(args?: {
+  readonly configuredRepo?: string | undefined;
+  readonly githubRepository?: string | undefined;
+  readonly originRepo?: string | undefined;
+}): string | undefined {
+  const parsed =
+    parseGitHubRepositorySlug(args?.configuredRepo) ??
+    parseGitHubRepositorySlug(args?.githubRepository) ??
+    parseGitHubRepositorySlug(args?.originRepo);
+
+  return parsed ? `${parsed.owner}/${parsed.repo}` : undefined;
+}
+
 function resolveGitHubPublishConfig():
   | {
       readonly provider: "github";
@@ -484,19 +538,20 @@ function resolveGitHubPublishConfig():
       readonly releaseType: "release";
     }
   | undefined {
-  const rawRepo =
-    process.env.ANDRODEX_DESKTOP_UPDATE_REPOSITORY?.trim() ||
-    process.env.GITHUB_REPOSITORY?.trim() ||
-    "";
+  const rawRepo = resolveGitHubRepositorySlug({
+    configuredRepo: process.env.ANDRODEX_DESKTOP_UPDATE_REPOSITORY?.trim(),
+    githubRepository: process.env.GITHUB_REPOSITORY?.trim(),
+    originRepo: resolveOriginGitHubRepositorySlug(),
+  });
   if (!rawRepo) return undefined;
 
-  const [owner, repo, ...rest] = rawRepo.split("/");
-  if (!owner || !repo || rest.length > 0) return undefined;
+  const parsed = parseGitHubRepositorySlug(rawRepo);
+  if (!parsed) return undefined;
 
   return {
     provider: "github",
-    owner,
-    repo,
+    owner: parsed.owner,
+    repo: parsed.repo,
     releaseType: "release",
   };
 }
