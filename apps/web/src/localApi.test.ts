@@ -74,6 +74,8 @@ const rpcClientMock = {
   server: {
     getConfig: vi.fn(),
     refreshProviders: vi.fn(),
+    listCodexAccounts: vi.fn(),
+    switchCodexAccount: vi.fn(),
     upsertKeybinding: vi.fn(),
     getSettings: vi.fn(),
     updateSettings: vi.fn(),
@@ -455,6 +457,49 @@ describe("wsApi", () => {
 
     await expect(api.server.refreshProviders()).resolves.toEqual({ providers: nextProviders });
     expect(rpcClientMock.server.refreshProviders).toHaveBeenCalledWith();
+  });
+
+  it("forwards codex account reads and switches directly to the RPC client", async () => {
+    const snapshot = {
+      codexHomePath: "/Users/test/.codex",
+      accounts: [],
+      currentAuthMode: "unknown" as const,
+      managedCurrentAuth: false,
+      runningCodexSessionCount: 0,
+      message: "No managed Codex accounts were found in the current CODEX_HOME.",
+    };
+    const switchResult = {
+      snapshot: {
+        ...snapshot,
+        accounts: [
+          {
+            accountKey: "acct-1",
+            alias: "Work",
+            authMode: "chatgpt" as const,
+            hasSnapshot: true,
+            isActive: true,
+            planType: "pro" as const,
+          },
+        ],
+        activeAccountKey: "acct-1",
+        currentAuthMode: "chatgpt" as const,
+        managedCurrentAuth: true,
+      },
+    };
+    rpcClientMock.server.listCodexAccounts.mockResolvedValue(snapshot);
+    rpcClientMock.server.switchCodexAccount.mockResolvedValue(switchResult);
+    const { createLocalApi } = await import("./localApi");
+
+    const api = createLocalApi(rpcClientMock as never);
+
+    await expect(api.server.listCodexAccounts()).resolves.toEqual(snapshot);
+    await expect(api.server.switchCodexAccount({ accountKey: "acct-1" })).resolves.toEqual(
+      switchResult,
+    );
+    expect(rpcClientMock.server.listCodexAccounts).toHaveBeenCalledWith();
+    expect(rpcClientMock.server.switchCodexAccount).toHaveBeenCalledWith({
+      accountKey: "acct-1",
+    });
   });
 
   it("forwards server settings updates directly to the RPC client", async () => {

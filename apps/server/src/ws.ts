@@ -45,6 +45,7 @@ import { ServerLifecycleEvents } from "./serverLifecycleEvents";
 import { ServerRuntimeStartup } from "./serverRuntimeStartup";
 import { ServerSettingsService } from "./serverSettings";
 import { TerminalManager } from "./terminal/Services/Manager";
+import { CodexAccountManager } from "./codexAccounts/Services/CodexAccountManager";
 import { WorkspaceEntries } from "./workspace/Services/WorkspaceEntries";
 import { WorkspaceFileSystem } from "./workspace/Services/WorkspaceFileSystem";
 import { WorkspacePathOutsideRootError } from "./workspace/Services/WorkspacePaths";
@@ -118,6 +119,7 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
       const config = yield* ServerConfig;
       const lifecycleEvents = yield* ServerLifecycleEvents;
       const serverSettings = yield* ServerSettingsService;
+      const codexAccountManager = yield* CodexAccountManager;
       const startup = yield* ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem;
@@ -633,6 +635,18 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
             WS_METHODS.serverRefreshProviders,
             providerRegistry.refresh().pipe(Effect.map((providers) => ({ providers }))),
             { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverListCodexAccounts]: (_input) =>
+          observeRpcEffect(WS_METHODS.serverListCodexAccounts, codexAccountManager.listAccounts, {
+            "rpc.aggregate": "server",
+          }),
+        [WS_METHODS.serverSwitchCodexAccount]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverSwitchCodexAccount,
+            codexAccountManager.switchAccount(input),
+            {
+              "rpc.aggregate": "server",
+            },
           ),
         [WS_METHODS.serverUpsertKeybinding]: (rule) =>
           observeRpcEffect(

@@ -5,6 +5,12 @@ import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { OpenError, OpenInEditorInput } from "./editor";
 import { AuthAccessStreamEvent } from "./auth";
 import {
+  CodexAccountsError,
+  CodexAccountsSnapshot,
+  CodexSwitchAccountInput,
+  CodexSwitchAccountResult,
+} from "./codexAccounts";
+import {
   GitActionProgressEvent,
   GitCheckoutInput,
   GitCheckoutResult,
@@ -109,6 +115,8 @@ export const WS_METHODS = {
   // Server meta
   serverGetConfig: "server.getConfig",
   serverRefreshProviders: "server.refreshProviders",
+  serverListCodexAccounts: "server.listCodexAccounts",
+  serverSwitchCodexAccount: "server.switchCodexAccount",
   serverUpsertKeybinding: "server.upsertKeybinding",
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
@@ -137,6 +145,18 @@ export const WsServerGetConfigRpc = Rpc.make(WS_METHODS.serverGetConfig, {
 export const WsServerRefreshProvidersRpc = Rpc.make(WS_METHODS.serverRefreshProviders, {
   payload: Schema.Struct({}),
   success: ServerProviderUpdatedPayload,
+});
+
+export const WsServerListCodexAccountsRpc = Rpc.make(WS_METHODS.serverListCodexAccounts, {
+  payload: Schema.Struct({}),
+  success: CodexAccountsSnapshot,
+  error: CodexAccountsError,
+});
+
+export const WsServerSwitchCodexAccountRpc = Rpc.make(WS_METHODS.serverSwitchCodexAccount, {
+  payload: CodexSwitchAccountInput,
+  success: CodexSwitchAccountResult,
+  error: CodexAccountsError,
 });
 
 export const WsServerGetSettingsRpc = Rpc.make(WS_METHODS.serverGetSettings, {
@@ -345,6 +365,8 @@ export const WsSubscribeAuthAccessRpc = Rpc.make(WS_METHODS.subscribeAuthAccess,
 export const WsRpcGroup = RpcGroup.make(
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
+  WsServerListCodexAccountsRpc,
+  WsServerSwitchCodexAccountRpc,
   WsServerUpsertKeybindingRpc,
   WsServerGetSettingsRpc,
   WsServerUpdateSettingsRpc,

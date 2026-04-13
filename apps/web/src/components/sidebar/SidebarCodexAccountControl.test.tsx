@@ -1,0 +1,75 @@
+import type { CodexAccountsSnapshot } from "@t3tools/contracts";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
+import { SidebarCodexAccountControl } from "./SidebarCodexAccountControl";
+
+vi.mock("~/rpc/serverState", () => ({
+  useServerProviders: () => [],
+  useServerSettings: () => ({
+    providers: {
+      codex: {
+        homePath: "",
+      },
+    },
+  }),
+}));
+
+vi.mock("~/localApi", () => ({
+  ensureLocalApi: () => ({
+    server: {
+      listCodexAccounts: vi.fn(),
+      switchCodexAccount: vi.fn(),
+    },
+  }),
+}));
+
+const activeSnapshot: CodexAccountsSnapshot = {
+  codexHomePath: "/Users/test/.codex",
+  accounts: [
+    {
+      accountKey: "user-1::acct-1",
+      alias: "Work",
+      email: "work@example.com",
+      planType: "pro",
+      authMode: "chatgpt",
+      hasSnapshot: true,
+      isActive: true,
+    },
+  ],
+  activeAccountKey: "user-1::acct-1",
+  currentAuthMode: "chatgpt",
+  managedCurrentAuth: true,
+  runningCodexSessionCount: 0,
+};
+
+describe("SidebarCodexAccountControl", () => {
+  it("renders the active account label and badge in the trigger", () => {
+    const html = renderToStaticMarkup(
+      <SidebarCodexAccountControl initialSnapshot={activeSnapshot} />,
+    );
+
+    expect(html).toContain("Work");
+    expect(html).toContain("work@example.com");
+    expect(html).toContain("Pro");
+    expect(html).toContain("Codex account selector");
+  });
+
+  it("renders a disabled trigger when no managed accounts are available", () => {
+    const html = renderToStaticMarkup(
+      <SidebarCodexAccountControl
+        initialSnapshot={{
+          codexHomePath: "/Users/test/.codex",
+          accounts: [],
+          currentAuthMode: "apikey",
+          managedCurrentAuth: false,
+          runningCodexSessionCount: 0,
+          message:
+            "Codex is currently using an OpenAI API key. No managed Codex accounts were found.",
+        }}
+      />,
+    );
+
+    expect(html).toContain("Codex account");
+    expect(html).toContain("disabled");
+  });
+});

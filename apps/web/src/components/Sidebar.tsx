@@ -138,6 +138,7 @@ import {
 } from "./Sidebar.logic";
 import { sortThreads } from "../lib/threadSort";
 import { SidebarUpdatePill } from "./sidebar/SidebarUpdatePill";
+import { SidebarCodexAccountControl } from "./sidebar/SidebarCodexAccountControl";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { CommandDialogTrigger } from "./ui/command";
 import { readEnvironmentApi } from "../environmentApi";
@@ -1980,18 +1981,25 @@ const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter className="p-2">
       <SidebarUpdatePill />
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            size="sm"
-            className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
-            onClick={handleSettingsClick}
-          >
-            <SettingsIcon className="size-3.5" />
-            <span className="text-xs">Settings</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
+      <div className="mt-2 flex items-center gap-2">
+        <SidebarCodexAccountControl />
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Settings"
+                className="shrink-0 rounded-lg text-muted-foreground/80"
+                onClick={handleSettingsClick}
+              >
+                <SettingsIcon className="size-3.5" />
+              </Button>
+            }
+          />
+          <TooltipPopup side="top">Settings</TooltipPopup>
+        </Tooltip>
+      </div>
     </SidebarFooter>
   );
 });

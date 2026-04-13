@@ -25,6 +25,11 @@ import type {
   ProjectWriteFileResult,
 } from "./project";
 import type {
+  CodexAccountsSnapshot,
+  CodexSwitchAccountResult,
+  CodexSwitchAccountInput,
+} from "./codexAccounts";
+import type {
   ServerConfig,
   ServerProviderUpdatedPayload,
   ServerUpsertKeybindingResult,
@@ -198,6 +203,8 @@ export interface LocalApi {
   server: {
     getConfig: () => Promise<ServerConfig>;
     refreshProviders: () => Promise<ServerProviderUpdatedPayload>;
+    listCodexAccounts: () => Promise<CodexAccountsSnapshot>;
+    switchCodexAccount: (input: CodexSwitchAccountInput) => Promise<CodexSwitchAccountResult>;
     upsertKeybinding: (input: ServerUpsertKeybindingInput) => Promise<ServerUpsertKeybindingResult>;
     getSettings: () => Promise<ServerSettings>;
     updateSettings: (patch: ServerSettingsPatch) => Promise<ServerSettings>;

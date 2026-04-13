@@ -96,6 +96,10 @@ import {
   ServerEnvironment,
   type ServerEnvironmentShape,
 } from "./environment/Services/ServerEnvironment.ts";
+import {
+  CodexAccountManager,
+  type CodexAccountManagerShape,
+} from "./codexAccounts/Services/CodexAccountManager.ts";
 import { WorkspaceEntriesLive } from "./workspace/Layers/WorkspaceEntries.ts";
 import { WorkspaceFileSystemLive } from "./workspace/Layers/WorkspaceFileSystem.ts";
 import { WorkspacePathsLive } from "./workspace/Layers/WorkspacePaths.ts";
@@ -304,6 +308,7 @@ const buildAppUnderTest = (options?: {
     serverRuntimeStartup?: Partial<ServerRuntimeStartupShape>;
     serverEnvironment?: Partial<ServerEnvironmentShape>;
     repositoryIdentityResolver?: Partial<RepositoryIdentityResolverShape>;
+    codexAccountManager?: Partial<CodexAccountManagerShape>;
   };
 }) =>
   Effect.gen(function* () {
@@ -469,6 +474,30 @@ const buildAppUnderTest = (options?: {
         Layer.mock(RepositoryIdentityResolver)({
           resolve: () => Effect.succeed(null),
           ...options?.layers?.repositoryIdentityResolver,
+        }),
+      ),
+      Layer.provide(
+        Layer.mock(CodexAccountManager)({
+          listAccounts: Effect.succeed({
+            codexHomePath: "/Users/test/.codex",
+            accounts: [],
+            currentAuthMode: "unknown",
+            managedCurrentAuth: false,
+            runningCodexSessionCount: 0,
+            message: "No managed Codex accounts were found in the current CODEX_HOME.",
+          }),
+          switchAccount: () =>
+            Effect.succeed({
+              snapshot: {
+                codexHomePath: "/Users/test/.codex",
+                accounts: [],
+                currentAuthMode: "unknown",
+                managedCurrentAuth: false,
+                runningCodexSessionCount: 0,
+                message: "No managed Codex accounts were found in the current CODEX_HOME.",
+              },
+            }),
+          ...options?.layers?.codexAccountManager,
         }),
       ),
       Layer.provideMerge(authTestLayer),

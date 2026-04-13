@@ -1,8 +1,11 @@
 import type {
+  CodexAccountsSnapshot,
+  CodexSwitchAccountResult,
   GitStatusLocalResult,
   GitStatusRemoteResult,
   GitStatusStreamEvent,
 } from "@t3tools/contracts";
+import { WS_METHODS } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./wsTransport", () => ({
@@ -100,5 +103,61 @@ describe("wsRpcClient", () => {
         },
       ],
     ]);
+  });
+
+  it("forwards codex account RPC helpers to the transport", async () => {
+    const listResult: CodexAccountsSnapshot = {
+      codexHomePath: "/Users/test/.codex",
+      accounts: [],
+      currentAuthMode: "unknown",
+      managedCurrentAuth: false,
+      runningCodexSessionCount: 0,
+      message: "No managed Codex accounts were found in the current CODEX_HOME.",
+    };
+    const switchResult: CodexSwitchAccountResult = {
+      snapshot: {
+        ...listResult,
+        accounts: [
+          {
+            accountKey: "acct-1",
+            alias: "Work",
+            authMode: "chatgpt",
+            hasSnapshot: true,
+            isActive: true,
+            planType: "pro",
+          },
+        ],
+        activeAccountKey: "acct-1",
+        currentAuthMode: "chatgpt",
+        managedCurrentAuth: true,
+      },
+    };
+    const serverListCodexAccounts = vi.fn(() => listResult);
+    const serverSwitchCodexAccount = vi.fn((input: { accountKey: string }) => ({
+      ...switchResult,
+      input,
+    }));
+    const request = vi.fn(async (callback: (client: Record<string, unknown>) => unknown) =>
+      callback({
+        [WS_METHODS.serverListCodexAccounts]: serverListCodexAccounts,
+        [WS_METHODS.serverSwitchCodexAccount]: serverSwitchCodexAccount,
+      }),
+    );
+
+    const client = createWsRpcClient({
+      dispose: vi.fn(async () => undefined),
+      reconnect: vi.fn(async () => undefined),
+      request,
+      requestStream: vi.fn(),
+      subscribe: vi.fn(() => () => undefined),
+    } as unknown as WsTransport);
+
+    await expect(client.server.listCodexAccounts()).resolves.toEqual(listResult);
+    await expect(client.server.switchCodexAccount({ accountKey: "acct-1" })).resolves.toEqual({
+      ...switchResult,
+      input: { accountKey: "acct-1" },
+    });
+    expect(serverListCodexAccounts).toHaveBeenCalledWith({});
+    expect(serverSwitchCodexAccount).toHaveBeenCalledWith({ accountKey: "acct-1" });
   });
 });
