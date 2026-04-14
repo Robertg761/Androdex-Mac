@@ -13,6 +13,13 @@
         const LIGHT_BACKGROUND = "#ffffff";
         const DARK_BACKGROUND = "#161616";
         const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+        const userAgent = navigator.userAgent || "";
+        const isAndroidWebView =
+          /Android/i.test(userAgent) &&
+          (/\bwv\b/i.test(userAgent) || userAgent.includes("AndrodexAndroidWebView"));
+        if (isAndroidWebView) {
+          document.documentElement.dataset.renderMode = "android-webview";
+        }
         try {
           const storedTheme =
             window.localStorage.getItem("androdex:theme") ??

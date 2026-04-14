@@ -162,6 +162,10 @@ body::after {
   background-size: 256px 256px;
 }
 
+html[data-render-mode="android-webview"] body::after {
+  display: none;
+}
+
 pre,
 code {
   font-family: "SF Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
@@ -469,4 +473,11 @@ label:has(> select#reasoning-effort) select {
   background-clip: text;
   -webkit-background-clip: text;
   animation: ultrathink-rainbow 10s linear infinite;
+}
+
+html[data-render-mode="android-webview"] .ultrathink-frame,
+html[data-render-mode="android-webview"] .ultrathink-chroma,
+html[data-render-mode="android-webview"] .ultrathink-pill,
+html[data-render-mode="android-webview"] .ultrathink-word {
+  animation: none;
 }

@@ -1,4 +1,5 @@
 import type { CodexAccountsSnapshot } from "@t3tools/contracts";
+import { RefreshCwIcon } from "lucide-react";
 import { useEffectEvent, useState } from "react";
 import { useRelativeTimeTick } from "~/hooks/useRelativeTimeTick";
 import { ensureLocalApi } from "~/localApi";
@@ -34,6 +35,8 @@ interface SidebarCodexAccountControlProps {
 function renderSelectorButton(input: {
   readonly disabled: boolean;
   readonly disabledReason: string | null;
+  readonly isRefreshing: boolean;
+  readonly onRequestRefresh: () => void;
 }) {
   const button = (
     <Button
@@ -41,11 +44,23 @@ function renderSelectorButton(input: {
       size="xs"
       disabled={input.disabled}
       aria-label="Codex account selector"
+      aria-busy={input.isRefreshing || undefined}
+      onKeyDownCapture={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          input.onRequestRefresh();
+        }
+      }}
+      onPointerDownCapture={(event) => {
+        if (event.button === 0) {
+          input.onRequestRefresh();
+        }
+      }}
       className={cn(
         "h-7 w-auto shrink-0 justify-start rounded-md border-transparent bg-transparent px-1.5 text-left text-xs font-medium text-muted-foreground/70 shadow-none hover:bg-background/80 hover:text-foreground/80 sm:h-7",
         input.disabled && "hover:bg-transparent hover:text-muted-foreground/60",
       )}
     >
+      {input.isRefreshing ? <RefreshCwIcon className="size-3 animate-spin" /> : null}
       <span className="truncate">Accounts</span>
     </Button>
   );
@@ -107,6 +122,13 @@ export function SidebarCodexAccountControl({
   const menuNote = snapshot
     ? formatRunningCodexSessionNotice(snapshot.runningCodexSessionCount)
     : null;
+  const handleRefreshRequest = useEffectEvent(() => {
+    if (selectorDisabled) {
+      return;
+    }
+
+    void reloadSnapshot();
+  });
 
   return (
     <Menu
@@ -115,7 +137,7 @@ export function SidebarCodexAccountControl({
           return;
         }
 
-        void reloadSnapshot();
+        handleRefreshRequest();
       }}
     >
       <MenuTrigger
@@ -123,6 +145,8 @@ export function SidebarCodexAccountControl({
         render={renderSelectorButton({
           disabled: selectorDisabled,
           disabledReason: selectorState.disabledReason,
+          isRefreshing: isLoading,
+          onRequestRefresh: handleRefreshRequest,
         })}
       />
       <MenuPopup
@@ -131,8 +155,11 @@ export function SidebarCodexAccountControl({
         className="min-w-80 rounded-xl border-border/70 bg-popover/96 shadow-lg/10 backdrop-blur-md"
       >
         <MenuGroup>
-          <MenuGroupLabel className="px-2.5 py-2 font-semibold uppercase tracking-[0.18em] text-[10px] text-muted-foreground/70">
-            Codex accounts
+          <MenuGroupLabel className="flex items-center justify-between gap-2 px-2.5 py-2 font-semibold uppercase tracking-[0.18em] text-[10px] text-muted-foreground/70">
+            <span>Codex accounts</span>
+            {isLoading ? (
+              <span className="tracking-[0.12em] text-muted-foreground/55">Refreshing…</span>
+            ) : null}
           </MenuGroupLabel>
           <MenuRadioGroup
             value={snapshot?.activeAccountKey}
