@@ -184,6 +184,7 @@ function makeDesktopBridge(overrides: Partial<DesktopBridge> = {}): DesktopBridg
     setTheme: async () => undefined,
     showContextMenu: async () => null,
     openExternal: async () => true,
+    showThreadNotification: async () => false,
     onMenuAction: () => () => undefined,
     getUpdateState: async () => {
       throw new Error("getUpdateState not implemented in test");
@@ -530,6 +531,39 @@ describe("wsApi", () => {
 
     await expect(api.contextMenu.show(items)).resolves.toBe("delete");
     expect(showContextMenu).toHaveBeenCalledWith(items, undefined);
+  });
+
+  it("forwards thread notifications to the desktop bridge", async () => {
+    const showThreadNotification = vi.fn().mockResolvedValue(true);
+    getWindowForTest().desktopBridge = makeDesktopBridge({ showThreadNotification });
+
+    const { createLocalApi } = await import("./localApi");
+    const api = createLocalApi(rpcClientMock as never);
+    const notification = {
+      kind: "thread-input-required" as const,
+      environmentId: EnvironmentId.make("environment-local"),
+      threadId: ThreadId.make("thread-1"),
+      title: "Thread needs input",
+      body: "Implement notifications in Local environment",
+    };
+
+    await expect(api.notifications.showThreadNotification(notification)).resolves.toBe(true);
+    expect(showThreadNotification).toHaveBeenCalledWith(notification);
+  });
+
+  it("no-ops thread notifications in the browser fallback", async () => {
+    const { createLocalApi } = await import("./localApi");
+    const api = createLocalApi(rpcClientMock as never);
+
+    await expect(
+      api.notifications.showThreadNotification({
+        kind: "thread-finished",
+        environmentId: EnvironmentId.make("environment-local"),
+        threadId: ThreadId.make("thread-1"),
+        title: "Thread finished",
+        body: "Implement notifications in Local environment",
+      }),
+    ).resolves.toBe(false);
   });
 
   it("falls back to the browser context menu helper when the desktop bridge is missing", async () => {

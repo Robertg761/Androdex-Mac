@@ -54,7 +54,7 @@ import type {
   OrchestrationEvent,
   OrchestrationReadModel,
 } from "./orchestration";
-import type { EnvironmentId } from "./baseSchemas";
+import type { EnvironmentId, ThreadId } from "./baseSchemas";
 import { EditorId } from "./editor";
 import { ClientSettings, ServerSettings, ServerSettingsPatch } from "./settings";
 
@@ -135,6 +135,16 @@ export interface DesktopServerExposureState {
   advertisedHost: string | null;
 }
 
+export type DesktopThreadNotificationKind = "thread-finished" | "thread-input-required";
+
+export interface DesktopThreadNotification {
+  kind: DesktopThreadNotificationKind;
+  environmentId: EnvironmentId;
+  threadId: ThreadId;
+  title: string;
+  body: string;
+}
+
 export interface DesktopBridge {
   getLocalEnvironmentBootstrap: () => DesktopEnvironmentBootstrap | null;
   getClientSettings: () => Promise<ClientSettings | null>;
@@ -156,6 +166,7 @@ export interface DesktopBridge {
     position?: { x: number; y: number },
   ) => Promise<T | null>;
   openExternal: (url: string) => Promise<boolean>;
+  showThreadNotification: (notification: DesktopThreadNotification) => Promise<boolean>;
   onMenuAction: (listener: (action: string) => void) => () => void;
   getUpdateState: () => Promise<DesktopUpdateState>;
   checkForUpdate: () => Promise<DesktopUpdateCheckResult>;
@@ -182,6 +193,9 @@ export interface LocalApi {
   shell: {
     openInEditor: (cwd: string, editor: EditorId) => Promise<void>;
     openExternal: (url: string) => Promise<void>;
+  };
+  notifications: {
+    showThreadNotification: (notification: DesktopThreadNotification) => Promise<boolean>;
   };
   contextMenu: {
     show: <T extends string>(

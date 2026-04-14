@@ -52,12 +52,14 @@ import {
 import { createEnvironmentConnection, type EnvironmentConnection } from "./connection";
 import {
   useStore,
+  selectProjectByRef,
   selectProjectsAcrossEnvironments,
   selectThreadByRef,
   selectThreadsAcrossEnvironments,
 } from "~/store";
 import { useTerminalStateStore } from "~/terminalStateStore";
 import { useUiStateStore } from "~/uiStateStore";
+import { deriveThreadNotifications } from "~/threadNotifications";
 import { WsTransport } from "../../rpc/wsTransport";
 import { createWsRpcClient, type WsRpcClient } from "../../rpc/wsRpcClient";
 
@@ -220,6 +222,7 @@ function applyRecoveredEventBatch(
     return;
   }
 
+  const previousStoreState = useStore.getState();
   const batchEffects = deriveOrchestrationBatchEffects(events);
   const uiEvents = coalesceOrchestrationUiEvents(events);
   const needsProjectUiSync = events.some(
@@ -235,6 +238,12 @@ function applyRecoveredEventBatch(
   }
 
   useStore.getState().applyOrchestrationEvents(uiEvents, environmentId);
+  dispatchThreadNotificationsForBatch({
+    previousStoreState,
+    nextStoreState: useStore.getState(),
+    events,
+    environmentId,
+  });
   if (needsProjectUiSync) {
     const projects = selectProjectsAcrossEnvironments(useStore.getState());
     useUiStateStore.getState().syncProjects(
@@ -270,6 +279,48 @@ function applyRecoveredEventBatch(
   }
   for (const threadId of batchEffects.removeTerminalStateThreadIds) {
     useTerminalStateStore.getState().removeTerminalState(scopeThreadRef(environmentId, threadId));
+  }
+}
+
+function dispatchThreadNotificationsForBatch(input: {
+  previousStoreState: ReturnType<typeof useStore.getState>;
+  nextStoreState: ReturnType<typeof useStore.getState>;
+  events: ReadonlyArray<OrchestrationEvent>;
+  environmentId: EnvironmentId;
+}) {
+  const affectedThreadIds = new Set<ThreadId>();
+  for (const event of input.events) {
+    if (event.aggregateKind !== "thread") {
+      continue;
+    }
+    affectedThreadIds.add(ThreadId.make(event.aggregateId));
+  }
+
+  if (affectedThreadIds.size === 0) {
+    return;
+  }
+
+  const localApi = ensureLocalApi();
+  for (const threadId of affectedThreadIds) {
+    const threadRef = scopeThreadRef(input.environmentId, threadId);
+    const previousThread = selectThreadByRef(input.previousStoreState, threadRef);
+    const nextThread = selectThreadByRef(input.nextStoreState, threadRef);
+    const projectThread = nextThread ?? previousThread;
+    const projectRef = projectThread
+      ? scopeProjectRef(projectThread.environmentId, projectThread.projectId)
+      : null;
+    const project =
+      selectProjectByRef(input.nextStoreState, projectRef) ??
+      selectProjectByRef(input.previousStoreState, projectRef);
+    const notifications = deriveThreadNotifications({
+      ...(previousThread ? { previousThread } : {}),
+      ...(nextThread ? { nextThread } : {}),
+      ...(project ? { project } : {}),
+    });
+
+    for (const notification of notifications) {
+      void localApi.notifications.showThreadNotification(notification);
+    }
   }
 }
 

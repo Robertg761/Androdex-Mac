@@ -13,6 +13,7 @@ import {
   Menu,
   nativeImage,
   nativeTheme,
+  Notification,
   protocol,
   safeStorage,
   shell,
@@ -24,6 +25,7 @@ import type {
   DesktopServerExposureMode,
   DesktopServerExposureState,
   PersistedSavedEnvironmentRecord,
+  DesktopThreadNotification,
   DesktopUpdateActionResult,
   DesktopUpdateCheckResult,
   DesktopUpdateState,
@@ -92,6 +94,7 @@ import {
 } from "./macManualUpdate";
 import { triggerDownloadedUpdateInstall } from "./updateInstall";
 import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runtimeArch";
+import { showDesktopThreadNotification } from "./threadNotifications";
 
 syncShellEnvironment();
 
@@ -100,6 +103,7 @@ const CONFIRM_CHANNEL = "desktop:confirm";
 const SET_THEME_CHANNEL = "desktop:set-theme";
 const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
+const SHOW_THREAD_NOTIFICATION_CHANNEL = "desktop:show-thread-notification";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
 const UPDATE_STATE_CHANNEL = "desktop:update-state";
 const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
@@ -182,6 +186,37 @@ function readLinkedEnv(preferredName: string, legacyName: string): string | unde
     return resolved;
   }
   return undefined;
+}
+
+function getDesktopThreadNotification(rawNotification: unknown): DesktopThreadNotification | null {
+  if (!rawNotification || typeof rawNotification !== "object") {
+    return null;
+  }
+
+  const candidate = rawNotification as Partial<DesktopThreadNotification>;
+  if (candidate.kind !== "thread-finished" && candidate.kind !== "thread-input-required") {
+    return null;
+  }
+  if (
+    typeof candidate.environmentId !== "string" ||
+    candidate.environmentId.trim().length === 0 ||
+    typeof candidate.threadId !== "string" ||
+    candidate.threadId.trim().length === 0 ||
+    typeof candidate.title !== "string" ||
+    candidate.title.trim().length === 0 ||
+    typeof candidate.body !== "string" ||
+    candidate.body.trim().length === 0
+  ) {
+    return null;
+  }
+
+  return {
+    kind: candidate.kind,
+    environmentId: candidate.environmentId,
+    threadId: candidate.threadId,
+    title: candidate.title.trim(),
+    body: candidate.body.trim(),
+  };
 }
 
 function resolveDesktopBaseDir(): string {
@@ -1781,6 +1816,27 @@ function registerIpcHandlers(): void {
     } catch {
       return false;
     }
+  });
+
+  ipcMain.removeHandler(SHOW_THREAD_NOTIFICATION_CHANNEL);
+  ipcMain.handle(SHOW_THREAD_NOTIFICATION_CHANNEL, async (_event, rawNotification: unknown) => {
+    const notification = getDesktopThreadNotification(rawNotification);
+    if (!notification) {
+      return false;
+    }
+
+    return showDesktopThreadNotification({
+      notification,
+      windows: BrowserWindow.getAllWindows(),
+      isNotificationSupported: () => Notification.isSupported(),
+      createNotification: (options) => new Notification(options),
+      onClick: () => {
+        const window = mainWindow ?? BrowserWindow.getAllWindows()[0];
+        if (window) {
+          revealWindow(window);
+        }
+      },
+    });
   });
 
   ipcMain.removeHandler(UPDATE_GET_STATE_CHANNEL);

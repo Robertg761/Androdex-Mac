@@ -54,6 +54,14 @@ export function createLocalApi(rpcClient: WsRpcClient): LocalApi {
         window.open(url, "_blank", "noopener,noreferrer");
       },
     },
+    notifications: {
+      showThreadNotification: async (notification) => {
+        if (!window.desktopBridge) {
+          return false;
+        }
+        return window.desktopBridge.showThreadNotification(notification);
+      },
+    },
     contextMenu: {
       show: async <T extends string>(
         items: readonly ContextMenuItem<T>[],
