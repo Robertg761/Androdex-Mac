@@ -498,4 +498,113 @@ describe("resolveInitialServerAuthGateState", () => {
       method: "POST",
     });
   });
+
+  it("creates an owner pairing credential when requested", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        id: "pairing-link-owner",
+        credential: "owner-token",
+        label: "Androdex Pixel",
+        expiresAt: "2026-04-05T00:00:00.000Z",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { createServerPairingCredential } = await import("./environments/primary");
+
+    await expect(createServerPairingCredential("Androdex Pixel", "owner")).resolves.toEqual({
+      id: "pairing-link-owner",
+      credential: "owner-token",
+      label: "Androdex Pixel",
+      expiresAt: "2026-04-05T00:00:00.000Z",
+    });
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost/api/auth/pairing-token", {
+      body: JSON.stringify({ label: "Androdex Pixel", role: "owner" }),
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+      },
+      method: "POST",
+    });
+  });
+
+  it("loads pairing links without using a cached auth-access snapshot", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse([
+        {
+          id: "pairing-link-owner",
+          credential: "owner-token",
+          role: "owner",
+          subject: "owner-pairing-token",
+          createdAt: "2026-04-05T00:00:00.000Z",
+          expiresAt: "2026-04-05T00:05:00.000Z",
+        },
+      ]),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { listServerPairingLinks } = await import("./environments/primary");
+
+    await expect(listServerPairingLinks()).resolves.toEqual([
+      {
+        id: "pairing-link-owner",
+        credential: "owner-token",
+        role: "owner",
+        subject: "owner-pairing-token",
+        createdAt: "2026-04-05T00:00:00.000Z",
+        expiresAt: "2026-04-05T00:05:00.000Z",
+      },
+    ]);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost/api/auth/pairing-links", {
+      cache: "no-store",
+      credentials: "include",
+    });
+  });
+
+  it("loads paired clients without using a cached auth-access snapshot", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse([
+        {
+          sessionId: "session-1",
+          subject: "owner-pairing-token",
+          role: "owner",
+          method: "browser-session-cookie",
+          client: {
+            deviceType: "mobile",
+            label: "Androdex Pixel",
+          },
+          issuedAt: "2026-04-05T00:00:00.000Z",
+          expiresAt: "2026-04-06T00:00:00.000Z",
+          lastConnectedAt: null,
+          connected: true,
+          current: false,
+        },
+      ]),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { listServerClientSessions } = await import("./environments/primary");
+
+    await expect(listServerClientSessions()).resolves.toEqual([
+      {
+        sessionId: "session-1",
+        subject: "owner-pairing-token",
+        role: "owner",
+        method: "browser-session-cookie",
+        client: {
+          deviceType: "mobile",
+          label: "Androdex Pixel",
+        },
+        issuedAt: "2026-04-05T00:00:00.000Z",
+        expiresAt: "2026-04-06T00:00:00.000Z",
+        lastConnectedAt: null,
+        connected: true,
+        current: false,
+      },
+    ]);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost/api/auth/clients", {
+      cache: "no-store",
+      credentials: "include",
+    });
+  });
 });

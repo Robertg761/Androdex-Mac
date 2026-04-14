@@ -50,6 +50,8 @@ import { CodexAccountsSettings } from "./CodexAccountsSettings";
 import {
   createServerPairingCredential,
   fetchSessionState,
+  listServerClientSessions,
+  listServerPairingLinks,
   revokeOtherServerClientSessions,
   revokeServerClientSession,
   revokeServerPairingLink,
@@ -255,6 +257,12 @@ function resolveCurrentOriginPairingUrl(credential: string): string {
   return setPairingTokenOnUrl(url, credential).toString();
 }
 
+export function resolveAndrodexPairingDeepLink(pairingUrl: string): string {
+  const url = new URL("androdex://pair");
+  url.searchParams.set("payload", pairingUrl);
+  return url.toString();
+}
+
 type PairingLinkListRowProps = {
   pairingLink: ServerPairingLinkRecord;
   endpointUrl: string | null | undefined;
@@ -285,6 +293,8 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
       : isLoopbackHostname(window.location.hostname)
         ? null
         : currentOriginPairingUrl;
+  const qrPairingUrl =
+    shareablePairingUrl == null ? null : resolveAndrodexPairingDeepLink(shareablePairingUrl);
   const copyValue = shareablePairingUrl ?? pairingLink.credential;
   const canCopyToClipboard =
     typeof window !== "undefined" &&
@@ -353,11 +363,11 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                   </PopoverTrigger>
                   <PopoverPopup side="top" align="start" tooltipStyle className="w-max">
                     <QRCodeSvg
-                      value={shareablePairingUrl}
+                      value={qrPairingUrl ?? shareablePairingUrl}
                       size={88}
                       level="M"
                       marginSize={2}
-                      title="Pairing link — scan to open on another device"
+                      title="Pairing link — scan to open in Androdex"
                     />
                   </PopoverPopup>
                 </>
@@ -405,11 +415,11 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                 {shareablePairingUrl ? (
                   <div className="flex justify-center rounded-xl border border-border/60 bg-muted/30 p-4">
                     <QRCodeSvg
-                      value={shareablePairingUrl}
+                      value={qrPairingUrl ?? shareablePairingUrl}
                       size={132}
                       level="M"
                       marginSize={2}
-                      title="Pairing link — scan to open on another device"
+                      title="Pairing link — scan to open in Androdex"
                     />
                   </div>
                 ) : null}
@@ -516,12 +526,14 @@ const ConnectedClientListRow = memo(function ConnectedClientListRow({
 type AuthorizedClientsHeaderActionProps = {
   clientSessions: ReadonlyArray<ServerClientSessionRecord>;
   isRevokingOtherClients: boolean;
+  onPairingLinkCreated: () => Promise<void>;
   onRevokeOtherClients: () => void;
 };
 
 const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderAction({
   clientSessions,
   isRevokingOtherClients,
+  onPairingLinkCreated,
   onRevokeOtherClients,
 }: AuthorizedClientsHeaderActionProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -531,7 +543,13 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
   const handleCreatePairingLink = useCallback(async () => {
     setIsCreatingPairingLink(true);
     try {
-      await createServerPairingCredential(pairingLabel);
+      await createServerPairingCredential(pairingLabel, "owner");
+      await onPairingLinkCreated();
+      toastManager.add({
+        type: "success",
+        title: "Pairing link created",
+        description: "Scan the QR code or copy the link to pair another Androdex device.",
+      });
       setPairingLabel("");
       setDialogOpen(false);
     } catch (error) {
@@ -544,7 +562,7 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
     } finally {
       setIsCreatingPairingLink(false);
     }
-  }, [pairingLabel]);
+  }, [onPairingLinkCreated, pairingLabel]);
 
   return (
     <div className="flex items-center gap-2">
@@ -579,8 +597,8 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
           <DialogHeader>
             <DialogTitle>Create pairing link</DialogTitle>
             <DialogDescription>
-              Generate a one-time link that another device can use to pair with this backend as an
-              authorized client.
+              Generate a one-time link that another Androdex device can use to pair with full access
+              to this backend.
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
@@ -846,23 +864,37 @@ export function ConnectionsSettings() {
     void handleDesktopServerExposureChange(checked);
   }, [handleDesktopServerExposureChange, pendingDesktopServerExposureMode]);
 
-  const handleRevokeDesktopPairingLink = useCallback(async (id: string) => {
-    setRevokingDesktopPairingLinkId(id);
+  const refreshDesktopAccessManagement = useCallback(async () => {
+    const [pairingLinks, clientSessions] = await Promise.all([
+      listServerPairingLinks(),
+      listServerClientSessions(),
+    ]);
+    setDesktopPairingLinks(sortDesktopPairingLinks(pairingLinks));
+    setDesktopClientSessions(sortDesktopClientSessions(clientSessions));
     setDesktopAccessManagementError(null);
-    try {
-      await revokeServerPairingLink(id);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to revoke pairing link.";
-      setDesktopAccessManagementError(message);
-      toastManager.add({
-        type: "error",
-        title: "Could not revoke pairing link",
-        description: message,
-      });
-    } finally {
-      setRevokingDesktopPairingLinkId(null);
-    }
   }, []);
+
+  const handleRevokeDesktopPairingLink = useCallback(
+    async (id: string) => {
+      setRevokingDesktopPairingLinkId(id);
+      setDesktopAccessManagementError(null);
+      try {
+        await revokeServerPairingLink(id);
+        await refreshDesktopAccessManagement();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to revoke pairing link.";
+        setDesktopAccessManagementError(message);
+        toastManager.add({
+          type: "error",
+          title: "Could not revoke pairing link",
+          description: message,
+        });
+      } finally {
+        setRevokingDesktopPairingLinkId(null);
+      }
+    },
+    [refreshDesktopAccessManagement],
+  );
 
   const handleRevokeDesktopClientSession = useCallback(
     async (sessionId: ServerClientSessionRecord["sessionId"]) => {
@@ -870,6 +902,7 @@ export function ConnectionsSettings() {
       setDesktopAccessManagementError(null);
       try {
         await revokeServerClientSession(sessionId);
+        await refreshDesktopAccessManagement();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to revoke client access.";
         setDesktopAccessManagementError(message);
@@ -882,7 +915,7 @@ export function ConnectionsSettings() {
         setRevokingDesktopClientSessionId(null);
       }
     },
-    [],
+    [refreshDesktopAccessManagement],
   );
 
   const handleRevokeOtherDesktopClients = useCallback(async () => {
@@ -890,6 +923,7 @@ export function ConnectionsSettings() {
     setDesktopAccessManagementError(null);
     try {
       const revokedCount = await revokeOtherServerClientSessions();
+      await refreshDesktopAccessManagement();
       toastManager.add({
         type: "success",
         title: revokedCount === 1 ? "Revoked 1 other client" : `Revoked ${revokedCount} clients`,
@@ -906,7 +940,7 @@ export function ConnectionsSettings() {
     } finally {
       setIsRevokingOtherDesktopClients(false);
     }
-  }, []);
+  }, [refreshDesktopAccessManagement]);
 
   const handleAddSavedBackend = useCallback(async () => {
     setIsAddingSavedBackend(true);
@@ -1108,10 +1142,6 @@ export function ConnectionsSettings() {
     setDesktopServerExposureState(null);
     setDesktopServerExposureError(null);
   }, [canManageLocalBackend]);
-  const visibleDesktopPairingLinks = useMemo(
-    () => desktopPairingLinks.filter((pairingLink) => pairingLink.role === "client"),
-    [desktopPairingLinks],
-  );
   return (
     <SettingsPageContainer>
       {canManageLocalBackend ? (
@@ -1237,6 +1267,7 @@ export function ConnectionsSettings() {
                 <AuthorizedClientsHeaderAction
                   clientSessions={desktopClientSessions}
                   isRevokingOtherClients={isRevokingOtherDesktopClients}
+                  onPairingLinkCreated={refreshDesktopAccessManagement}
                   onRevokeOtherClients={handleRevokeOtherDesktopClients}
                 />
               }
@@ -1249,7 +1280,7 @@ export function ConnectionsSettings() {
               <PairingClientsList
                 endpointUrl={desktopServerExposureState?.endpointUrl}
                 isLoading={isLoadingDesktopAccessManagement}
-                pairingLinks={visibleDesktopPairingLinks}
+                pairingLinks={desktopPairingLinks}
                 clientSessions={desktopClientSessions}
                 revokingPairingLinkId={revokingDesktopPairingLinkId}
                 revokingClientSessionId={revokingDesktopClientSessionId}

@@ -96,6 +96,31 @@ it.layer(NodeServices.layer)("ServerAuthLive", (it) => {
     }).pipe(Effect.provide(makeServerAuthLayer())),
   );
 
+  it.effect("issues owner pairing credentials that remain visible in pairing links", () =>
+    Effect.gen(function* () {
+      const serverAuth = yield* ServerAuth;
+
+      const pairingCredential = yield* serverAuth.issuePairingCredential({
+        role: "owner",
+        label: "Androdex Pixel",
+      });
+      const listedPairingLinks = yield* serverAuth.listPairingLinks();
+      const exchanged = yield* serverAuth.exchangeBootstrapCredential(
+        pairingCredential.credential,
+        requestMetadata,
+      );
+      const verified = yield* serverAuth.authenticateHttpRequest(
+        makeCookieRequest(exchanged.sessionToken),
+      );
+
+      expect(verified.role).toBe("owner");
+      expect(verified.subject).toBe("owner-pairing-token");
+      expect(listedPairingLinks.find((entry) => entry.id === pairingCredential.id)?.label).toBe(
+        "Androdex Pixel",
+      );
+    }).pipe(Effect.provide(makeServerAuthLayer())),
+  );
+
   it.effect("issues startup pairing URLs that bootstrap owner sessions", () =>
     Effect.gen(function* () {
       const serverAuth = yield* ServerAuth;

@@ -231,9 +231,13 @@ export async function submitServerAuthCredential(credential: string): Promise<vo
 
 export async function createServerPairingCredential(
   label?: string,
+  role: "owner" | "client" = "client",
 ): Promise<AuthPairingCredentialResult> {
   const trimmedLabel = label?.trim();
-  const payload: AuthCreatePairingCredentialInput = trimmedLabel ? { label: trimmedLabel } : {};
+  const payload: AuthCreatePairingCredentialInput = {
+    ...(trimmedLabel ? { label: trimmedLabel } : {}),
+    ...(role === "owner" ? { role } : {}),
+  };
   const response = await fetch(resolvePrimaryEnvironmentHttpUrl("/api/auth/pairing-token"), {
     body: JSON.stringify(payload),
     credentials: "include",
@@ -254,6 +258,7 @@ export async function createServerPairingCredential(
 
 export async function listServerPairingLinks(): Promise<ReadonlyArray<ServerPairingLinkRecord>> {
   const response = await fetch(resolvePrimaryEnvironmentHttpUrl("/api/auth/pairing-links"), {
+    cache: "no-store",
     credentials: "include",
   });
 
@@ -288,6 +293,7 @@ export async function listServerClientSessions(): Promise<
   ReadonlyArray<ServerClientSessionRecord>
 > {
   const response = await fetch(resolvePrimaryEnvironmentHttpUrl("/api/auth/clients"), {
+    cache: "no-store",
     credentials: "include",
   });
 
