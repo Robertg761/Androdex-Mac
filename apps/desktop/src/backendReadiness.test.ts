@@ -4,6 +4,7 @@ import {
   BackendReadinessAbortedError,
   isBackendReadinessAborted,
   waitForHttpReady,
+  waitForHttpReadyWithGrace,
 } from "./backendReadiness";
 
 describe("waitForHttpReady", () => {
@@ -79,5 +80,60 @@ describe("waitForHttpReady", () => {
   it("recognizes aborted readiness errors", () => {
     expect(isBackendReadinessAborted(new BackendReadinessAbortedError())).toBe(true);
     expect(isBackendReadinessAborted(new Error("nope"))).toBe(false);
+  });
+
+  it("extends the wait when the backend is still alive after the initial timeout", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    const onGracePeriodStart = vi.fn();
+
+    await waitForHttpReadyWithGrace("http://127.0.0.1:3773", {
+      fetchImpl,
+      initialTimeoutMs: 0,
+      graceTimeoutMs: 100,
+      intervalMs: 0,
+      shouldExtendWait: () => true,
+      onGracePeriodStart,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(onGracePeriodStart).toHaveBeenCalledWith({
+      initialTimeoutMs: 0,
+      graceTimeoutMs: 100,
+    });
+  });
+
+  it("preserves the initial timeout when the backend is no longer alive", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 503 }));
+
+    await expect(
+      waitForHttpReadyWithGrace("http://127.0.0.1:3773", {
+        fetchImpl,
+        initialTimeoutMs: 0,
+        graceTimeoutMs: 100,
+        intervalMs: 0,
+        shouldExtendWait: () => false,
+      }),
+    ).rejects.toThrow("Timed out waiting for backend readiness");
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails after the grace period if the backend never becomes ready", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 503 }));
+
+    await expect(
+      waitForHttpReadyWithGrace("http://127.0.0.1:3773", {
+        fetchImpl,
+        initialTimeoutMs: 0,
+        graceTimeoutMs: 0,
+        intervalMs: 0,
+        shouldExtendWait: () => true,
+      }),
+    ).rejects.toThrow("Timed out waiting for backend readiness");
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 });

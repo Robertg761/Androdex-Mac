@@ -62,7 +62,11 @@ import {
   writeSavedEnvironmentRegistry,
   writeSavedEnvironmentSecret,
 } from "./clientPersistence";
-import { isBackendReadinessAborted, waitForHttpReady } from "./backendReadiness";
+import {
+  isBackendReadinessAborted,
+  waitForHttpReady,
+  waitForHttpReadyWithGrace,
+} from "./backendReadiness";
 import { showDesktopConfirmDialog } from "./confirmDialog";
 import { resolveDesktopServerExposure } from "./serverExposure";
 import { syncShellEnvironment } from "./syncShellEnvironment";
@@ -155,6 +159,8 @@ const DESKTOP_UPDATE_CHANNEL = "latest";
 const DESKTOP_UPDATE_ALLOW_PRERELEASE = false;
 const DESKTOP_LOOPBACK_HOST = "127.0.0.1";
 const DESKTOP_REQUIRED_PORT_PROBE_HOSTS = ["0.0.0.0", "::"] as const;
+const DESKTOP_BACKEND_READINESS_TIMEOUT_MS = 10_000;
+const DESKTOP_PACKAGED_BACKEND_READINESS_GRACE_TIMEOUT_MS = 50_000;
 
 type DesktopUpdateErrorContext = DesktopUpdateState["errorContext"];
 type LinuxDesktopNamedApp = Electron.App & {
@@ -464,8 +470,27 @@ async function waitForBackendHttpReady(baseUrl: string): Promise<void> {
   backendReadinessAbortController = controller;
 
   try {
-    await waitForHttpReady(baseUrl, {
+    if (isDevelopment) {
+      await waitForHttpReady(baseUrl, {
+        signal: controller.signal,
+        timeoutMs: DESKTOP_BACKEND_READINESS_TIMEOUT_MS,
+      });
+      return;
+    }
+
+    await waitForHttpReadyWithGrace(baseUrl, {
       signal: controller.signal,
+      initialTimeoutMs: DESKTOP_BACKEND_READINESS_TIMEOUT_MS,
+      graceTimeoutMs: DESKTOP_PACKAGED_BACKEND_READINESS_GRACE_TIMEOUT_MS,
+      shouldExtendWait: () =>
+        backendProcess !== null &&
+        backendProcess.exitCode === null &&
+        backendProcess.signalCode === null,
+      onGracePeriodStart: ({ initialTimeoutMs, graceTimeoutMs }) => {
+        writeDesktopLogHeader(
+          `bootstrap backend readiness exceeded initialTimeoutMs=${initialTimeoutMs} graceTimeoutMs=${graceTimeoutMs} pid=${backendProcess?.pid ?? "unknown"}`,
+        );
+      },
     });
   } finally {
     if (backendReadinessAbortController === controller) {

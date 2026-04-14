@@ -6,6 +6,16 @@ export interface WaitForHttpReadyOptions {
   readonly signal?: AbortSignal;
 }
 
+export interface WaitForHttpReadyWithGraceOptions extends WaitForHttpReadyOptions {
+  readonly initialTimeoutMs?: number;
+  readonly graceTimeoutMs?: number;
+  readonly shouldExtendWait?: () => boolean;
+  readonly onGracePeriodStart?: (details: {
+    readonly initialTimeoutMs: number;
+    readonly graceTimeoutMs: number;
+  }) => void;
+}
+
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_INTERVAL_MS = 100;
 const DEFAULT_REQUEST_TIMEOUT_MS = 1_000;
@@ -100,4 +110,37 @@ export async function waitForHttpReady(
 
     await delay(intervalMs, signal);
   }
+}
+
+export async function waitForHttpReadyWithGrace(
+  baseUrl: string,
+  options?: WaitForHttpReadyWithGraceOptions,
+): Promise<void> {
+  const initialTimeoutMs = options?.initialTimeoutMs ?? options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const graceTimeoutMs = options?.graceTimeoutMs ?? initialTimeoutMs;
+
+  try {
+    await waitForHttpReady(baseUrl, {
+      ...options,
+      timeoutMs: initialTimeoutMs,
+    });
+    return;
+  } catch (error) {
+    if (isBackendReadinessAborted(error)) {
+      throw error;
+    }
+    if (!options?.shouldExtendWait?.()) {
+      throw error;
+    }
+  }
+
+  options?.onGracePeriodStart?.({
+    initialTimeoutMs,
+    graceTimeoutMs,
+  });
+
+  await waitForHttpReady(baseUrl, {
+    ...options,
+    timeoutMs: graceTimeoutMs,
+  });
 }
