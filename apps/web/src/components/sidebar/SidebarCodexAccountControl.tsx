@@ -65,7 +65,8 @@ function renderSelectorButton(input: {
 export function SidebarCodexAccountControl({
   initialSnapshot = null,
 }: SidebarCodexAccountControlProps) {
-  const { applySnapshot, isLoading, snapshot } = useCodexAccountsSnapshot(initialSnapshot);
+  const { applySnapshot, isLoading, reloadSnapshot, snapshot } =
+    useCodexAccountsSnapshot(initialSnapshot);
   const nowMs = useRelativeTimeTick(60_000);
   const [switchingAccountKey, setSwitchingAccountKey] = useState<string | null>(null);
 
@@ -102,15 +103,23 @@ export function SidebarCodexAccountControl({
   });
 
   const selectorState = resolveCodexAccountButtonState(snapshot);
-  const selectorDisabled = selectorState.selectableCount === 0;
+  const selectorDisabled = selectorState.selectableCount === 0 || (snapshot === null && isLoading);
   const menuNote = snapshot
     ? formatRunningCodexSessionNotice(snapshot.runningCodexSessionCount)
     : null;
 
   return (
-    <Menu>
+    <Menu
+      onOpenChange={(open) => {
+        if (!open) {
+          return;
+        }
+
+        void reloadSnapshot();
+      }}
+    >
       <MenuTrigger
-        disabled={selectorDisabled || isLoading}
+        disabled={selectorDisabled}
         render={renderSelectorButton({
           disabled: selectorDisabled,
           disabledReason: selectorState.disabledReason,
