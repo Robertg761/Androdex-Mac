@@ -5,8 +5,9 @@ import {
   type CodexAccountPlanType,
   type CodexAccountSummary,
   type CodexAccountsSnapshot,
+  type ProviderRuntimeEvent,
 } from "@t3tools/contracts";
-import { Effect, FileSystem, Layer, Path } from "effect";
+import { Effect, FileSystem, Layer, Path, Ref, Stream } from "effect";
 import { ProviderRegistry } from "../../provider/Services/ProviderRegistry";
 import { ProviderService } from "../../provider/Services/ProviderService";
 import { ServerSettingsService } from "../../serverSettings";
@@ -46,6 +47,8 @@ type RegistryDocument = {
   readonly accounts: ReadonlyArray<RegistryAccountRecord>;
   readonly activeAccountKey?: string | undefined;
 };
+
+type UsageLimitsOverlay = NonNullable<RegistryAccountRecord["usageLimits"]>;
 
 const SAFE_ACCOUNT_KEY_PATTERN = /^[a-z0-9._-]+$/i;
 
@@ -113,6 +116,136 @@ function normalizeAuthMode(value: unknown): CodexAccountAuthMode {
     default:
       return "unknown";
   }
+}
+
+function asUsageLimitsObject(value: unknown): UsageLimitsOverlay | undefined {
+  const record = asObject(value);
+  if (!record) {
+    return undefined;
+  }
+
+  const fiveHourUsedPercent = asNonNegativeInt(
+    record.fiveHourUsedPercent ?? record.five_hour_used_percent,
+  );
+  const fiveHourResetsAtEpochSeconds = asNonNegativeInt(
+    record.fiveHourResetsAtEpochSeconds ??
+      record.five_hour_resets_at_epoch_seconds ??
+      record.fiveHourResetsAt ??
+      record.five_hour_resets_at,
+  );
+  const weeklyUsedPercent = asNonNegativeInt(
+    record.weeklyUsedPercent ?? record.weekly_used_percent,
+  );
+  const weeklyResetsAtEpochSeconds = asNonNegativeInt(
+    record.weeklyResetsAtEpochSeconds ??
+      record.weekly_resets_at_epoch_seconds ??
+      record.weeklyResetsAt ??
+      record.weekly_resets_at,
+  );
+
+  if (
+    fiveHourUsedPercent === undefined &&
+    fiveHourResetsAtEpochSeconds === undefined &&
+    weeklyUsedPercent === undefined &&
+    weeklyResetsAtEpochSeconds === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(fiveHourUsedPercent !== undefined ? { fiveHourUsedPercent } : {}),
+    ...(fiveHourResetsAtEpochSeconds !== undefined ? { fiveHourResetsAtEpochSeconds } : {}),
+    ...(weeklyUsedPercent !== undefined ? { weeklyUsedPercent } : {}),
+    ...(weeklyResetsAtEpochSeconds !== undefined ? { weeklyResetsAtEpochSeconds } : {}),
+  };
+}
+
+function readUsageWindowSummary(
+  value: unknown,
+  windowMinutes: number,
+): {
+  readonly usedPercent?: number | undefined;
+  readonly resetsAtEpochSeconds?: number | undefined;
+} {
+  let resolvedUsedPercent: number | undefined;
+  let resolvedResetsAtEpochSeconds: number | undefined;
+
+  const visit = (candidate: unknown, depth: number) => {
+    if (depth > 4) {
+      return;
+    }
+
+    if (resolvedUsedPercent !== undefined && resolvedResetsAtEpochSeconds !== undefined) {
+      return;
+    }
+
+    if (Array.isArray(candidate)) {
+      for (const entry of candidate) {
+        visit(entry, depth + 1);
+      }
+      return;
+    }
+
+    const record = asObject(candidate);
+    if (!record) {
+      return;
+    }
+
+    const resolvedWindowMinutes = asNumber(record.window_minutes) ?? asNumber(record.windowMinutes);
+    if (resolvedWindowMinutes === windowMinutes) {
+      resolvedUsedPercent =
+        resolvedUsedPercent ?? asNonNegativeInt(record.used_percent ?? record.usedPercent);
+      resolvedResetsAtEpochSeconds =
+        resolvedResetsAtEpochSeconds ?? asNonNegativeInt(record.resets_at ?? record.resetsAt);
+    }
+
+    for (const nested of Object.values(record)) {
+      visit(nested, depth + 1);
+    }
+  };
+
+  visit(value, 0);
+
+  return {
+    ...(resolvedUsedPercent !== undefined ? { usedPercent: resolvedUsedPercent } : {}),
+    ...(resolvedResetsAtEpochSeconds !== undefined
+      ? { resetsAtEpochSeconds: resolvedResetsAtEpochSeconds }
+      : {}),
+  };
+}
+
+function normalizeUsageLimitsOverlay(value: unknown): UsageLimitsOverlay | undefined {
+  const directUsageLimits = asUsageLimitsObject(value);
+  if (directUsageLimits) {
+    return directUsageLimits;
+  }
+
+  const fiveHourUsage = readUsageWindowSummary(value, 300);
+  const weeklyUsage = readUsageWindowSummary(value, 10_080);
+
+  if (
+    fiveHourUsage.usedPercent === undefined &&
+    fiveHourUsage.resetsAtEpochSeconds === undefined &&
+    weeklyUsage.usedPercent === undefined &&
+    weeklyUsage.resetsAtEpochSeconds === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(fiveHourUsage.usedPercent !== undefined
+      ? { fiveHourUsedPercent: fiveHourUsage.usedPercent }
+      : {}),
+    ...(fiveHourUsage.resetsAtEpochSeconds !== undefined
+      ? { fiveHourResetsAtEpochSeconds: fiveHourUsage.resetsAtEpochSeconds }
+      : {}),
+    ...(weeklyUsage.usedPercent !== undefined
+      ? { weeklyUsedPercent: weeklyUsage.usedPercent }
+      : {}),
+    ...(weeklyUsage.resetsAtEpochSeconds !== undefined
+      ? { weeklyResetsAtEpochSeconds: weeklyUsage.resetsAtEpochSeconds }
+      : {}),
+  };
 }
 
 function base64UrlEncode(value: string): string {
@@ -291,6 +424,7 @@ export const CodexAccountManagerLive = Layer.effect(
     const serverSettings = yield* ServerSettingsService;
     const providerRegistry = yield* ProviderRegistry;
     const providerService = yield* ProviderService;
+    const liveUsageLimitsRef = yield* Ref.make<UsageLimitsOverlay | null>(null);
 
     const getCodexHomePath = Effect.gen(function* () {
       const settings = yield* serverSettings.getSettings.pipe(
@@ -388,6 +522,7 @@ export const CodexAccountManagerLive = Layer.effect(
               registry.accounts.some((account) => account.accountKey === activeAuth.recordKey)
             ? activeAuth.recordKey
             : undefined;
+      const liveUsageLimits = yield* Ref.get(liveUsageLimitsRef);
 
       const accounts = yield* Effect.forEach(registry.accounts, (record) =>
         Effect.gen(function* () {
@@ -412,6 +547,22 @@ export const CodexAccountManagerLive = Layer.effect(
             isActive: activeAccountKey === record.accountKey,
           } satisfies CodexAccountSummary;
         }),
+      ).pipe(
+        Effect.map((resolvedAccounts) =>
+          liveUsageLimits && activeAccountKey
+            ? resolvedAccounts.map((account) =>
+                account.accountKey === activeAccountKey
+                  ? {
+                      ...account,
+                      usageLimits: {
+                        ...account.usageLimits,
+                        ...liveUsageLimits,
+                      },
+                    }
+                  : account,
+              )
+            : resolvedAccounts,
+        ),
       );
 
       const runningCodexSessionCount = yield* providerService.listSessions().pipe(
@@ -536,10 +687,29 @@ export const CodexAccountManagerLive = Layer.effect(
         );
 
         yield* providerRegistry.refresh("codex").pipe(Effect.orElseSucceed(() => []));
+        yield* Ref.set(liveUsageLimitsRef, null);
         return {
           snapshot: yield* listSnapshot(),
         };
       });
+
+    const processRuntimeEvent = (event: ProviderRuntimeEvent) =>
+      Effect.gen(function* () {
+        if (event.provider !== "codex" || event.type !== "account.rate-limits.updated") {
+          return;
+        }
+
+        const usageLimits = normalizeUsageLimitsOverlay(event.payload.rateLimits);
+        if (!usageLimits) {
+          return;
+        }
+
+        yield* Ref.set(liveUsageLimitsRef, usageLimits);
+      });
+
+    yield* Stream.runForEach(providerService.streamEvents, processRuntimeEvent).pipe(
+      Effect.forkScoped,
+    );
 
     return {
       listAccounts: listSnapshot(),

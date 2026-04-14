@@ -1,7 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   DEFAULT_SERVER_SETTINGS,
+  EventId,
   ThreadId,
+  type ProviderRuntimeEvent,
   type ProviderKind,
   type ProviderSession,
 } from "@t3tools/contracts";
@@ -59,6 +61,7 @@ function makeProviderRegistryService(
 
 function makeProviderServiceShape(
   sessions: ReadonlyArray<ProviderSession> = [],
+  runtimeEvents: Stream.Stream<ProviderRuntimeEvent> = Stream.empty,
 ): ProviderServiceShape {
   const unused = () => Effect.die("unused ProviderService method");
 
@@ -72,7 +75,7 @@ function makeProviderServiceShape(
     listSessions: () => Effect.succeed(sessions),
     getCapabilities: () => unused(),
     rollbackConversation: () => unused(),
-    streamEvents: Stream.empty,
+    streamEvents: runtimeEvents,
   };
 }
 
@@ -262,6 +265,98 @@ describe("CodexAccountManager", () => {
         fiveHourResetsAtEpochSeconds: 1_777_123_400,
         weeklyUsedPercent: 63,
         weeklyResetsAtEpochSeconds: 1_777_777_000,
+      });
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("overlays live rate-limit events for the active Codex account", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const codexHomePath = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-codex-account-live-",
+      });
+      const accountKey = "user-live::acct-live";
+      const email = "live@example.com";
+      const authPayload = {
+        tokens: {
+          account_id: "acct-live",
+          id_token: createJwt({
+            email,
+            "https://api.openai.com/auth": {
+              chatgpt_plan_type: "pro",
+              chatgpt_user_id: "user-live",
+            },
+          }),
+        },
+      };
+      const runtimeEvent: ProviderRuntimeEvent = {
+        type: "account.rate-limits.updated",
+        eventId: EventId.make("event-live-rate-limits-1"),
+        provider: "codex",
+        threadId: ThreadId.make("thread-live-rate-limits"),
+        createdAt: "2026-04-14T00:00:00.000Z",
+        payload: {
+          rateLimits: {
+            five_hour_window: {
+              used_percent: 63,
+              resets_at: 1_800_000_000,
+              window_minutes: 300,
+            },
+            weekly_window: {
+              used_percent: 81,
+              resets_at: 1_900_000_000,
+              window_minutes: 10_080,
+            },
+          },
+        },
+      };
+
+      yield* writeJsonFile(path.join(codexHomePath, "accounts", "registry.json"), {
+        accounts: [
+          {
+            account_key: accountKey,
+            email,
+            auth_mode: "chatgpt",
+            last_usage: {
+              five_hour_window: {
+                resets_at: 1_700_000_000,
+                used_percent: 15,
+                window_minutes: 300,
+              },
+            },
+          },
+        ],
+        active_account_key: accountKey,
+      });
+      yield* writeJsonFile(
+        path.join(
+          codexHomePath,
+          "accounts",
+          `${Buffer.from(accountKey, "utf8").toString("base64url")}.auth.json`,
+        ),
+        authPayload,
+      );
+      yield* writeJsonFile(path.join(codexHomePath, "auth.json"), authPayload);
+
+      const snapshot = yield* Effect.gen(function* () {
+        const manager = yield* CodexAccountManager;
+        return yield* manager.listAccounts;
+      }).pipe(
+        Effect.provide(CodexAccountManagerLive),
+        Effect.provideService(ServerSettingsService, makeServerSettingsService(codexHomePath)),
+        Effect.provideService(ProviderRegistry, makeProviderRegistryService([])),
+        Effect.provideService(
+          ProviderService,
+          makeProviderServiceShape([], Stream.fromIterable([runtimeEvent])),
+        ),
+      );
+
+      assert.deepStrictEqual(snapshot.accounts[0]?.usageLimits, {
+        fiveHourUsedPercent: 63,
+        fiveHourResetsAtEpochSeconds: 1_800_000_000,
+        weeklyUsedPercent: 81,
+        weeklyResetsAtEpochSeconds: 1_900_000_000,
       });
     }).pipe(Effect.provide(NodeServices.layer)),
   );
