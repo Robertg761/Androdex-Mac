@@ -1143,16 +1143,16 @@ export function ConnectionsSettings() {
           <SettingsSection title="Manage local backend">
             {desktopBridge ? (
               <SettingsRow
-                title="Network access"
+                title="Remote access"
                 description={
                   desktopServerExposureState?.endpointUrl
-                    ? `Reachable at ${desktopServerExposureState.endpointUrl}`
+                    ? `Your phone can connect at ${desktopServerExposureState.endpointUrl} while Androdex stays open on this computer.`
                     : desktopServerExposureState?.mode === "network-accessible"
                       ? desktopServerExposureState.advertisedHost
-                        ? `Exposed on all interfaces. Pairing links use ${desktopServerExposureState.advertisedHost}.`
-                        : "Exposed on all interfaces."
+                        ? `Your phone can connect from this network or away from home. Pairing links use ${desktopServerExposureState.advertisedHost}.`
+                        : "Your phone can connect from this network or away from home."
                       : desktopServerExposureState
-                        ? "Limited to this machine."
+                        ? "Only available on this computer. Turn this on to use Androdex from your phone anywhere."
                         : "Loading…"
                 }
                 status={
@@ -1176,19 +1176,19 @@ export function ConnectionsSettings() {
                           checked ? "network-accessible" : "local-only",
                         );
                       }}
-                      aria-label="Enable network access"
+                      aria-label="Enable remote access"
                     />
                     <AlertDialogPopup>
                       <AlertDialogHeader>
                         <AlertDialogTitle>
                           {pendingDesktopServerExposureMode === "network-accessible"
-                            ? "Enable network access?"
-                            : "Disable network access?"}
+                            ? "Enable remote access?"
+                            : "Disable remote access?"}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                           {pendingDesktopServerExposureMode === "network-accessible"
-                            ? "Androdex will restart to expose this environment over the network."
-                            : "Androdex will restart and limit this environment back to this machine."}
+                            ? "Androdex will restart and keep this desktop available to your phone on your network and away from home."
+                            : "Androdex will restart and limit this desktop back to this computer only."}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -1213,9 +1213,9 @@ export function ConnectionsSettings() {
                               Restarting…
                             </>
                           ) : pendingDesktopServerExposureMode === "network-accessible" ? (
-                            "Restart and enable"
+                            "Restart and enable remote access"
                           ) : (
-                            "Restart and disable"
+                            "Restart and disable remote access"
                           )}
                         </Button>
                       </AlertDialogFooter>
@@ -1225,11 +1225,11 @@ export function ConnectionsSettings() {
               />
             ) : (
               <SettingsRow
-                title="Network access"
+                title="Remote access"
                 description={
                   currentAuthPolicy === "remote-reachable"
-                    ? "This backend is already configured for remote access. Network exposure changes must be made where the server is launched."
-                    : "This backend is only reachable on this machine. Restart it with a non-loopback host to enable remote pairing."
+                    ? "This backend is already configured for remote access. Changes must be made where the server is launched."
+                    : "This backend is only reachable on this machine. Restart it with remote access enabled to pair your phone from anywhere."
                 }
                 control={
                   <Tooltip>
@@ -1239,7 +1239,7 @@ export function ConnectionsSettings() {
                           <Switch
                             checked={isLocalBackendNetworkAccessible}
                             disabled
-                            aria-label="Enable network access"
+                            aria-label="Enable remote access"
                           />
                         </span>
                       }
