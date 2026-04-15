@@ -6,9 +6,18 @@ import { createHashHistory, createBrowserHistory } from "@tanstack/react-router"
 import "@xterm/xterm/css/xterm.css";
 import "./index.css";
 
+import {
+  restoreInitialDesktopRoute,
+  startDesktopRoutePersistence,
+} from "./desktopRoutePersistence";
 import { isElectron } from "./env";
 import { getRouter } from "./router";
 import { APP_DISPLAY_NAME } from "./branding";
+
+if (isElectron) {
+  restoreInitialDesktopRoute();
+  startDesktopRoutePersistence();
+}
 
 // Electron loads the app from a file-backed shell, so hash history avoids path resolution issues.
 const history = isElectron ? createHashHistory() : createBrowserHistory();

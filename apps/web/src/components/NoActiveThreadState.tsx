@@ -1,17 +1,26 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
 import { SidebarInset, SidebarTrigger } from "./ui/sidebar";
+import { getDesktopTitlebarStyle } from "../desktopShell";
 import { isElectron } from "../env";
 import { cn } from "~/lib/utils";
 
 export function NoActiveThreadState() {
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
+    <SidebarInset
+      className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground"
+      data-androdex-active-thread="false"
+    >
+      <div
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background"
+        data-androdex-role="thread-shell"
+      >
         <header
           className={cn(
             "border-b border-border px-3 sm:px-5",
-            isElectron ? "drag-region flex h-[52px] items-center" : "py-2 sm:py-3",
+            isElectron ? "drag-region flex items-center" : "py-2 sm:py-3",
           )}
+          data-androdex-role="thread-header"
+          style={isElectron ? getDesktopTitlebarStyle() : undefined}
         >
           {isElectron ? (
             <span className="text-xs text-muted-foreground/50">No active thread</span>

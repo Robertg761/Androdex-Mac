@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
+import { AndrodexAndroidBridge } from "./AndrodexAndroidBridge";
 import ThreadSidebar from "./Sidebar";
 import { Sidebar, SidebarProvider, SidebarRail } from "./ui/sidebar";
 
@@ -29,6 +30,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider defaultOpen>
+      <AndrodexAndroidBridge />
       <Sidebar
         side="left"
         collapsible="offcanvas"

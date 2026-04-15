@@ -119,6 +119,7 @@ import {
   SidebarMenuSubItem,
   SidebarSeparator,
   SidebarTrigger,
+  useSidebar,
 } from "./ui/sidebar";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { isNonEmpty as isNonEmptyString } from "effect/String";
@@ -141,6 +142,7 @@ import { SidebarUpdatePill } from "./sidebar/SidebarUpdatePill";
 import { SidebarCodexAccountControl } from "./sidebar/SidebarCodexAccountControl";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { CommandDialogTrigger } from "./ui/command";
+import { getDesktopTitlebarStyle } from "../desktopShell";
 import { readEnvironmentApi } from "../environmentApi";
 import { useSettings, useUpdateSettings } from "~/hooks/useSettings";
 import { useServerKeybindings } from "../rpc/serverState";
@@ -602,6 +604,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   return (
     <SidebarMenuSubItem
       className="w-full"
+      data-androdex-role="thread-row-container"
       data-thread-item
       onMouseLeave={handleMouseLeave}
       onBlurCapture={handleBlurCapture}
@@ -610,6 +613,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         render={rowButtonRender}
         size="sm"
         isActive={isActive}
+        data-androdex-role="thread-row"
+        data-androdex-thread-id={thread.id}
         data-testid={`thread-row-${thread.id}`}
         className={`${resolveThreadRowClassName({
           isActive,
@@ -1377,6 +1382,12 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       suppressProjectClickForContextMenuRef,
     ],
   );
+  const { isMobile, setOpenMobile } = useSidebar();
+  const closeMobileSidebar = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [isMobile, setOpenMobile]);
 
   const navigateToThread = useCallback(
     (threadRef: ScopedThreadRef) => {
@@ -1388,8 +1399,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         to: "/$environmentId/$threadId",
         params: buildThreadRouteParams(threadRef),
       });
+      closeMobileSidebar();
     },
-    [clearSelection, router, setSelectionAnchor],
+    [clearSelection, closeMobileSidebar, router, setSelectionAnchor],
   );
 
   const handleThreadClick = useCallback(
@@ -1532,9 +1544,16 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           ? { worktreePath: seedContext.worktreePath }
           : {}),
         envMode: seedContext.envMode,
-      });
+      }).finally(closeMobileSidebar);
     },
-    [defaultThreadEnvMode, handleNewThread, project.environmentId, project.id, router],
+    [
+      closeMobileSidebar,
+      defaultThreadEnvMode,
+      handleNewThread,
+      project.environmentId,
+      project.id,
+      router,
+    ],
   );
 
   const attemptArchiveThread = useCallback(
@@ -1755,6 +1774,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                 <button
                   type="button"
                   aria-label={`Create new thread in ${project.name}`}
+                  data-androdex-project-id={project.id}
+                  data-androdex-role="create-thread"
                   data-testid="new-thread-button"
                   className="inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 hover:bg-secondary hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                   onClick={handleCreateThreadClick}
@@ -1964,7 +1985,10 @@ const SidebarChromeHeader = memo(function SidebarChromeHeader({
   );
 
   return isElectron ? (
-    <SidebarHeader className="drag-region h-[52px] flex-row items-center gap-2 px-4 py-0 pl-[90px]">
+    <SidebarHeader
+      className="drag-region flex-row items-center gap-2 px-4 py-0"
+      style={getDesktopTitlebarStyle({ reserveMacTrafficLights: true })}
+    >
       {wordmark}
     </SidebarHeader>
   ) : (
@@ -2350,6 +2374,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
 });
 
 export default function Sidebar() {
+  const { isMobile, setOpenMobile } = useSidebar();
   const projects = useStore(useShallow(selectProjectsAcrossEnvironments));
   const sidebarThreads = useStore(useShallow(selectSidebarThreadsAcrossEnvironments));
   const activeEnvironmentId = useStore((store) => store.activeEnvironmentId);
@@ -2402,6 +2427,25 @@ export default function Sidebar() {
       getId: (project) => scopedProjectKey(scopeProjectRef(project.environmentId, project.id)),
     });
   }, [projectOrder, projects]);
+  const closeMobileSidebar = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [isMobile, setOpenMobile]);
+  const handleSidebarNewThread = useCallback(
+    async (
+      projectRef: ScopedProjectRef,
+      options?: {
+        branch?: string | null;
+        worktreePath?: string | null;
+        envMode?: ThreadEnvMode;
+      },
+    ) => {
+      await handleNewThread(projectRef, options);
+      closeMobileSidebar();
+    },
+    [closeMobileSidebar, handleNewThread],
+  );
 
   // Build a mapping from physical project key → logical project key for
   // cross-environment grouping.  Projects that share a repositoryIdentity
@@ -2690,8 +2734,9 @@ export default function Sidebar() {
         to: "/$environmentId/$threadId",
         params: buildThreadRouteParams(threadRef),
       });
+      closeMobileSidebar();
     },
-    [clearSelection, navigate, setSelectionAnchor],
+    [clearSelection, closeMobileSidebar, navigate, setSelectionAnchor],
   );
 
   const projectDnDSensors = useSensors(
@@ -3188,7 +3233,7 @@ export default function Sidebar() {
             handleProjectDragStart={handleProjectDragStart}
             handleProjectDragEnd={handleProjectDragEnd}
             handleProjectDragCancel={handleProjectDragCancel}
-            handleNewThread={handleNewThread}
+            handleNewThread={handleSidebarNewThread}
             archiveThread={archiveThread}
             deleteThread={deleteThread}
             sortedProjects={sortedProjects}

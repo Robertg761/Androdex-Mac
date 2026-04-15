@@ -1,5 +1,28 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import { readdirSync } from "node:fs";
+import { extname } from "node:path";
+
+const screenshotExtensions = new Set([".avif", ".jpeg", ".jpg", ".png", ".webp"]);
+
+const runtimeScreenshots = (() => {
+  try {
+    return readdirSync(new URL("../../public/runtime-screenshots/", import.meta.url))
+      .filter((fileName) => screenshotExtensions.has(extname(fileName).toLowerCase()))
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+      .map((fileName, index) => ({
+        alt: `Androdex runtime screenshot ${index + 1}`,
+        src: `/runtime-screenshots/${encodeURIComponent(fileName)}`,
+      }));
+  } catch {
+    return [];
+  }
+})();
+
+const showcaseScreenshots =
+  runtimeScreenshots.length > 0
+    ? runtimeScreenshots
+    : [{ alt: "Androdex companion preview", src: "/screenshot.jpeg" }];
 ---
 
 <Layout>
@@ -19,7 +42,28 @@ import Layout from "../layouts/Layout.astro";
   <a href="/download" class="other-platforms">Other platforms</a>
 
   <div class="screenshot-wrap">
-    <img src="/screenshot.jpeg" alt="Androdex companion preview" class="screenshot" />
+    <div class="screenshot-header">
+      <p class="screenshot-eyebrow">Runtime snapshots</p>
+      <p class="screenshot-copy">
+        Real screens from the in-progress desktop runtime, shown directly on the draft site.
+      </p>
+    </div>
+
+    <div
+      class="screenshot-grid"
+      data-layout={showcaseScreenshots.length > 1 ? "gallery" : "single"}
+    >
+      {showcaseScreenshots.map((screenshot, index) => (
+        <figure class={index === 0 ? "screenshot-card screenshot-card--hero" : "screenshot-card"}>
+          <img
+            src={screenshot.src}
+            alt={screenshot.alt}
+            class="screenshot"
+            loading={index === 0 ? "eager" : "lazy"}
+          />
+        </figure>
+      ))}
+    </div>
   </div>
 </Layout>
 
@@ -185,13 +229,66 @@ import Layout from "../layouts/Layout.astro";
     animation: screenshot-in 1s ease-out 0.15s forwards;
   }
 
+  .screenshot-header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 0 0.4rem;
+  }
+
+  .screenshot-eyebrow {
+    color: var(--fg-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+  }
+
+  .screenshot-copy {
+    max-width: 34rem;
+    color: var(--fg-dim);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    text-align: right;
+  }
+
+  .screenshot-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(260px, 0.9fr);
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .screenshot-grid[data-layout="single"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .screenshot-card {
+    position: relative;
+    overflow: hidden;
+    min-height: 220px;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+      rgba(255, 255, 255, 0.02);
+    box-shadow:
+      0 24px 80px rgba(0, 0, 0, 0.34),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .screenshot-card--hero {
+    grid-row: span 3;
+    min-height: clamp(320px, 52vw, 760px);
+  }
+
   .screenshot {
     width: 100%;
+    height: 100%;
     display: block;
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+    object-fit: cover;
   }
 
   .screenshot-wrap::after {
@@ -232,6 +329,24 @@ import Layout from "../layouts/Layout.astro";
 
     .screenshot-wrap {
       width: 95vw;
+    }
+
+    .screenshot-header {
+      align-items: start;
+      flex-direction: column;
+    }
+
+    .screenshot-copy {
+      text-align: left;
+    }
+
+    .screenshot-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .screenshot-card--hero {
+      grid-row: auto;
+      min-height: auto;
     }
   }
 </style>

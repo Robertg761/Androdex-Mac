@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { isElectron } from "~/env";
 import { cn } from "~/lib/utils";
+import { getDesktopTitlebarStyle } from "~/desktopShell";
 
 import { Skeleton } from "./ui/skeleton";
 
@@ -11,7 +12,7 @@ function getDiffPanelHeaderRowClassName(mode: DiffPanelMode) {
   const shouldUseDragRegion = isElectron && mode !== "sheet";
   return cn(
     "flex items-center justify-between gap-2 px-4",
-    shouldUseDragRegion ? "drag-region h-[52px] border-b border-border" : "h-12",
+    shouldUseDragRegion ? "drag-region border-b border-border" : "h-12",
   );
 }
 
@@ -32,7 +33,12 @@ export function DiffPanelShell(props: {
       )}
     >
       {shouldUseDragRegion ? (
-        <div className={getDiffPanelHeaderRowClassName(props.mode)}>{props.header}</div>
+        <div
+          className={getDiffPanelHeaderRowClassName(props.mode)}
+          style={getDesktopTitlebarStyle()}
+        >
+          {props.header}
+        </div>
       ) : (
         <div className="border-b border-border">
           <div className={getDiffPanelHeaderRowClassName(props.mode)}>{props.header}</div>

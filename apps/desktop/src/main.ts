@@ -46,6 +46,7 @@ import {
   makeAppDisplayName,
   makeLegacyAppDisplayName,
 } from "@t3tools/shared/branding";
+import { DESKTOP_MAC_TRAFFIC_LIGHT_POSITION } from "@t3tools/shared/desktopShell";
 import { DEFAULT_DESKTOP_BACKEND_PORT, resolveDesktopBackendPort } from "./backendPort";
 import {
   DEFAULT_DESKTOP_SETTINGS,
@@ -1933,7 +1934,7 @@ function createWindow(): BrowserWindow {
     ...getIconOption(),
     title: APP_DISPLAY_NAME,
     titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 18 },
+    trafficLightPosition: DESKTOP_MAC_TRAFFIC_LIGHT_POSITION,
     webPreferences: {
       preload: Path.join(__dirname, "preload.js"),
       contextIsolation: true,

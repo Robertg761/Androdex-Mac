@@ -33,6 +33,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useShallow } from "zustand/react/shallow";
 import { useGitStatus } from "~/lib/gitStatusState";
 import { usePrimaryEnvironmentId } from "../environments/primary";
+import { getDesktopTitlebarStyle } from "../desktopShell";
 import { readEnvironmentApi } from "../environmentApi";
 import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
@@ -3289,13 +3290,19 @@ export default function ChatView(props: ChatViewProps) {
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background"
+      data-androdex-active-thread="true"
+      data-androdex-role="thread-shell"
+    >
       {/* Top bar */}
       <header
         className={cn(
           "border-b border-border px-3 sm:px-5",
-          isElectron ? "drag-region flex h-[52px] items-center" : "py-2 sm:py-3",
+          isElectron ? "drag-region flex items-center" : "py-2 sm:py-3",
         )}
+        data-androdex-role="thread-header"
+        style={isElectron ? getDesktopTitlebarStyle() : undefined}
       >
         <ChatHeader
           activeThreadEnvironmentId={activeThread.environmentId}

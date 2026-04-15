@@ -63,6 +63,10 @@
     "./branding": {
       "types": "./src/branding.ts",
       "import": "./src/branding.ts"
+    },
+    "./desktopShell": {
+      "types": "./src/desktopShell.ts",
+      "import": "./src/desktopShell.ts"
     }
   },
   "scripts": {
