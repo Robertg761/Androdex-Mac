@@ -45,7 +45,7 @@ import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
-import { setPairingTokenOnUrl } from "../../pairingUrl";
+import { buildPairingUrl, setPairingTokenOnUrl } from "../../pairingUrl";
 import { CodexAccountsSettings } from "./CodexAccountsSettings";
 import {
   createServerPairingCredential,
@@ -246,12 +246,6 @@ function removeDesktopClientSession(
   return current.filter((clientSession) => clientSession.sessionId !== sessionId);
 }
 
-function resolveDesktopPairingUrl(endpointUrl: string, credential: string): string {
-  const url = new URL(endpointUrl);
-  url.pathname = "/pair";
-  return setPairingTokenOnUrl(url, credential).toString();
-}
-
 function resolveCurrentOriginPairingUrl(credential: string): string {
   const url = new URL("/pair", window.location.href);
   return setPairingTokenOnUrl(url, credential).toString();
@@ -289,7 +283,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   );
   const shareablePairingUrl =
     endpointUrl != null && endpointUrl !== ""
-      ? resolveDesktopPairingUrl(endpointUrl, pairingLink.credential)
+      ? buildPairingUrl(endpointUrl, pairingLink.credential)
       : isLoopbackHostname(window.location.hostname)
         ? null
         : currentOriginPairingUrl;

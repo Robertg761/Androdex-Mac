@@ -21,9 +21,18 @@ There are two ways to expose your server for remote connections: from the deskto
 If you are already running the desktop app and want to make it reachable from other devices:
 
 1. Open **Settings** → **Connections**.
-2. Under **Manage Local Backend**, toggle **Network access** on. This will restart the app and run the backend on all network interfaces.
-3. The settings panel will show the address the server is reachable at (e.g. `http://192.168.x.y:3773`).
-4. Use **Create Link** to generate a pairing link you can share with another device.
+2. Under **Manage Local Backend**, toggle **Network access** on. This will restart the app and keep the backend reachable for other devices.
+3. By default, the desktop app advertises a stable public tunnel route on `https://relay.androdex.xyz`, so the same pairing link can keep working even when the phone is away from your home network.
+4. The settings panel will show the remote entrypoint that pairing links use.
+5. Use **Create Link** to generate a pairing link you can share with another device.
+
+If you self-host the tunnel service instead of using the default relay, point the desktop app at it with:
+
+```bash
+ANDRODEX_REMOTE_TUNNEL_ORIGIN=https://remote.example.com /path/to/androdex-desktop
+```
+
+Set `ANDRODEX_REMOTE_TUNNEL_ORIGIN=off` if you want to disable the automatic desktop tunnel and go back to LAN-only advertised endpoints.
 
 ### Option 2: Headless Server (CLI)
 
@@ -54,6 +63,29 @@ Use `androdex serve --help` for the full flag reference. It supports the same ge
 > The GUIs do not currently support adding projects on remote environments.
 > For now, use `androdex project ...` on the server machine instead.
 > Full GUI support for remote project management is coming soon.
+
+## Stable Public Endpoints
+
+If you put Androdex behind a tunnel, reverse proxy, or other transport-forwarding layer, set a
+public base URL so pairing links always point at the stable remote address instead of a transient
+LAN IP.
+
+Examples:
+
+```bash
+npx androdex serve --host 127.0.0.1 --public-base-url https://remote.example.com/androdex
+```
+
+```bash
+ANDRODEX_PUBLIC_BASE_URL=https://remote.example.com/androdex androdex serve
+```
+
+That keeps the backend contract the same while letting pairing URLs and auth posture reflect the
+real remote entrypoint your phone should use.
+
+The desktop app's built-in tunnel uses the same idea automatically. It keeps a stable random route
+ID on disk, advertises that public base URL to Android, and reconnects the transport behind the
+same route whenever the app relaunches.
 
 ## How Pairing Works
 

@@ -8,7 +8,10 @@ import { isLoopbackHost, isWildcardHost } from "../../startupAccess.ts";
 
 export const makeServerAuthPolicy = Effect.gen(function* () {
   const config = yield* ServerConfig;
-  const isRemoteReachable = isWildcardHost(config.host) || !isLoopbackHost(config.host);
+  const isRemoteReachable =
+    (typeof config.publicBaseUrl === "string" && config.publicBaseUrl.length > 0) ||
+    isWildcardHost(config.host) ||
+    !isLoopbackHost(config.host);
 
   const policy =
     config.mode === "desktop"
