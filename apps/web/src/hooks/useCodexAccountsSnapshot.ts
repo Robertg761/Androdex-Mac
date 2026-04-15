@@ -17,7 +17,7 @@ export function useCodexAccountsSnapshot(initialSnapshot: CodexAccountsSnapshot 
     });
   });
 
-  const reloadSnapshot = useEffectEvent(async () => {
+  const reloadSnapshotInternal = useEffectEvent(async (mode: "passive" | "full") => {
     if (reloadPromiseRef.current) {
       return reloadPromiseRef.current;
     }
@@ -25,6 +25,9 @@ export function useCodexAccountsSnapshot(initialSnapshot: CodexAccountsSnapshot 
     const reloadPromise = (async () => {
       setIsLoading(true);
       try {
+        if (mode === "full") {
+          await ensureLocalApi().server.refreshProviders();
+        }
         const nextSnapshot = await ensureLocalApi().server.listCodexAccounts();
         applySnapshot(nextSnapshot);
         return nextSnapshot;
@@ -39,8 +42,11 @@ export function useCodexAccountsSnapshot(initialSnapshot: CodexAccountsSnapshot 
     return reloadPromise;
   });
 
+  const reloadSnapshotPassive = useEffectEvent(async () => reloadSnapshotInternal("passive"));
+  const reloadSnapshot = useEffectEvent(async () => reloadSnapshotInternal("full"));
+
   useEffect(() => {
-    void reloadSnapshot();
+    void reloadSnapshotPassive();
   }, [
     codexProvider?.auth.status,
     codexProvider?.auth.type,

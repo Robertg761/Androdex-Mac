@@ -45,6 +45,7 @@ import {
   codexAuthSubType,
   type CodexAccountSnapshot,
 } from "../codexAccount";
+import { readCodexAuthSnapshotFingerprint } from "../codexAuthState";
 import { probeCodexDiscovery } from "../codexAppServer";
 import { CodexProvider } from "../Services/CodexProvider";
 import { ServerSettingsService } from "../../serverSettings";
@@ -301,6 +302,20 @@ export const hasCustomModelProvider = readCodexConfigModelProvider().pipe(
 );
 
 const CAPABILITIES_PROBE_TIMEOUT_MS = 8_000;
+
+export function buildCodexDiscoveryCacheKey(input: {
+  readonly binaryPath: string;
+  readonly homePath?: string;
+  readonly cwd: string;
+}): string {
+  const normalizedHomePath = input.homePath?.trim();
+  return JSON.stringify([
+    input.binaryPath,
+    normalizedHomePath && normalizedHomePath.length > 0 ? normalizedHomePath : undefined,
+    input.cwd,
+    readCodexAuthSnapshotFingerprint(input.homePath),
+  ]);
+}
 
 const probeCodexCapabilities = (input: {
   readonly binaryPath: string;
@@ -563,7 +578,12 @@ export const CodexProviderLive = Layer.effect(
       capacity: 4,
       timeToLive: Duration.minutes(5),
       lookup: (key: string) => {
-        const [binaryPath, homePath, cwd] = JSON.parse(key) as [string, string | undefined, string];
+        const [binaryPath, homePath, cwd] = JSON.parse(key) as [
+          string,
+          string | undefined,
+          string,
+          string | undefined,
+        ];
         return probeCodexCapabilities({
           binaryPath,
           cwd,
@@ -576,8 +596,7 @@ export const CodexProviderLive = Layer.effect(
       readonly binaryPath: string;
       readonly homePath?: string;
       readonly cwd: string;
-    }) =>
-      Cache.get(accountProbeCache, JSON.stringify([input.binaryPath, input.homePath, input.cwd]));
+    }) => Cache.get(accountProbeCache, buildCodexDiscoveryCacheKey(input));
 
     const checkProvider = checkCodexProviderStatus(
       (input) =>

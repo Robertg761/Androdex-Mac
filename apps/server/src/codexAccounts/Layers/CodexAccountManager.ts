@@ -1,3 +1,4 @@
+import * as NodePath from "node:path";
 import * as OS from "node:os";
 import {
   CodexAccountsError,
@@ -7,7 +8,7 @@ import {
   type CodexAccountsSnapshot,
   type ProviderRuntimeEvent,
 } from "@t3tools/contracts";
-import { Effect, FileSystem, Layer, Path, Ref, Stream } from "effect";
+import { Cause, Duration, Effect, FileSystem, Layer, Path, Ref, Stream } from "effect";
 import { ProviderRegistry } from "../../provider/Services/ProviderRegistry";
 import { ProviderService } from "../../provider/Services/ProviderService";
 import { ServerSettingsService } from "../../serverSettings";
@@ -51,6 +52,7 @@ type RegistryDocument = {
 type UsageLimitsOverlay = NonNullable<RegistryAccountRecord["usageLimits"]>;
 
 const SAFE_ACCOUNT_KEY_PATTERN = /^[a-z0-9._-]+$/i;
+const CODEX_ACCOUNT_WATCH_DEBOUNCE = Duration.millis(150);
 
 function fail(message: string): CodexAccountsError {
   return new CodexAccountsError({ message });
@@ -416,6 +418,20 @@ function createSnapshotMessage(input: {
   return undefined;
 }
 
+export function shouldRefreshForCodexAccountWatchPath(eventPath: string): boolean {
+  const basename = NodePath.basename(eventPath);
+  if (basename.length === 0 || basename.includes(".bak.")) {
+    return false;
+  }
+
+  return (
+    basename === "auth.json" ||
+    basename === "accounts" ||
+    basename === "registry.json" ||
+    basename.endsWith(".auth.json")
+  );
+}
+
 export const CodexAccountManagerLive = Layer.effect(
   CodexAccountManager,
   Effect.gen(function* () {
@@ -433,6 +449,11 @@ export const CodexAccountManagerLive = Layer.effect(
       const configuredHome = settings.providers.codex.homePath.trim();
       return configuredHome.length > 0 ? configuredHome : path.join(OS.homedir(), ".codex");
     });
+
+    const pathExists = (filePath: string) =>
+      fileSystem
+        .exists(filePath)
+        .pipe(Effect.mapError((error) => fail(`Failed to check ${filePath}: ${String(error)}`)));
 
     const readTextFileIfExists = (filePath: string) =>
       fileSystem.exists(filePath).pipe(
@@ -707,9 +728,42 @@ export const CodexAccountManagerLive = Layer.effect(
         yield* Ref.set(liveUsageLimitsRef, usageLimits);
       });
 
+    const refreshCodexAccountState = Effect.gen(function* () {
+      yield* Ref.set(liveUsageLimitsRef, null);
+      yield* providerRegistry.refresh("codex").pipe(Effect.orElseSucceed(() => []));
+    });
+
+    const startAuthWatcher = Effect.gen(function* () {
+      const codexHomePath = yield* getCodexHomePath;
+      const accountsPath = path.join(codexHomePath, "accounts");
+      const homeWatchStream = (yield* pathExists(codexHomePath))
+        ? fileSystem.watch(codexHomePath)
+        : Stream.empty;
+      const accountsWatchStream = (yield* pathExists(accountsPath))
+        ? fileSystem.watch(accountsPath)
+        : Stream.empty;
+      const watchEvents = Stream.merge(homeWatchStream, accountsWatchStream).pipe(
+        Stream.filter((event) => shouldRefreshForCodexAccountWatchPath(event.path)),
+        Stream.debounce(CODEX_ACCOUNT_WATCH_DEBOUNCE),
+      );
+
+      yield* Stream.runForEach(watchEvents, () =>
+        refreshCodexAccountState.pipe(Effect.ignoreCause({ log: true })),
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.failCause(cause)
+            : Effect.logWarning("codex account auth watcher stopped", { cause }),
+        ),
+        Effect.forkScoped,
+        Effect.asVoid,
+      );
+    });
+
     yield* Stream.runForEach(providerService.streamEvents, processRuntimeEvent).pipe(
       Effect.forkScoped,
     );
+    yield* startAuthWatcher.pipe(Effect.ignoreCause({ log: true }));
 
     return {
       listAccounts: listSnapshot(),

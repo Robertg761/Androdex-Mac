@@ -19,7 +19,10 @@ import {
 } from "../../provider/Services/ProviderService";
 import { type ServerSettingsShape, ServerSettingsService } from "../../serverSettings";
 import { CodexAccountManager } from "../Services/CodexAccountManager";
-import { CodexAccountManagerLive } from "./CodexAccountManager";
+import {
+  CodexAccountManagerLive,
+  shouldRefreshForCodexAccountWatchPath,
+} from "./CodexAccountManager";
 
 function createJwt(payload: Record<string, unknown>): string {
   return `header.${Buffer.from(JSON.stringify(payload), "utf8").toString("base64url")}.signature`;
@@ -515,4 +518,16 @@ describe("CodexAccountManager", () => {
         assert.strictEqual(typeof nextRegistry.active_account_activated_at_ms, "number");
       }).pipe(Effect.provide(NodeServices.layer)),
   );
+
+  it("matches auth and account watch paths while ignoring backup files", () => {
+    assert.strictEqual(shouldRefreshForCodexAccountWatchPath("auth.json"), true);
+    assert.strictEqual(shouldRefreshForCodexAccountWatchPath("/tmp/.codex/accounts"), true);
+    assert.strictEqual(shouldRefreshForCodexAccountWatchPath("registry.json"), true);
+    assert.strictEqual(shouldRefreshForCodexAccountWatchPath("account.auth.json"), true);
+    assert.strictEqual(shouldRefreshForCodexAccountWatchPath("registry.json.bak.20260415"), false);
+    assert.strictEqual(
+      shouldRefreshForCodexAccountWatchPath("account.auth.json.bak.20260415"),
+      false,
+    );
+  });
 });
