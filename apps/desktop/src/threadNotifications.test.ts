@@ -62,7 +62,6 @@ describe("threadNotifications", () => {
           isFocused: () => false,
         },
       ],
-      isNotificationSupported: () => true,
       createNotification: () => ({ show, on }),
       onClick,
     });
@@ -72,17 +71,15 @@ describe("threadNotifications", () => {
     expect(show).toHaveBeenCalledOnce();
   });
 
-  it("returns false without creating a notification when support is unavailable", () => {
-    const createNotification = vi.fn();
-
+  it("returns false when creating a native notification throws", () => {
     const shown = showDesktopThreadNotification({
       notification: baseNotification,
       windows: [],
-      isNotificationSupported: () => false,
-      createNotification,
+      createNotification: () => {
+        throw new Error("unsupported");
+      },
     });
 
     expect(shown).toBe(false);
-    expect(createNotification).not.toHaveBeenCalled();
   });
 });

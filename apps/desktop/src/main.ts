@@ -231,6 +231,13 @@ function getDesktopThreadNotification(rawNotification: unknown): DesktopThreadNo
   };
 }
 
+function getDesktopNotificationTargetWindows(): BrowserWindow[] {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    return [mainWindow];
+  }
+  return BrowserWindow.getAllWindows();
+}
+
 function resolveDesktopBaseDir(): string {
   const configured =
     readLinkedEnv("ANDRODEX_HOME", "T3CODE_HOME") ??
@@ -1921,8 +1928,7 @@ function registerIpcHandlers(): void {
 
     return showDesktopThreadNotification({
       notification,
-      windows: BrowserWindow.getAllWindows(),
-      isNotificationSupported: () => Notification.isSupported(),
+      windows: getDesktopNotificationTargetWindows(),
       createNotification: (options) => new Notification(options),
       onClick: () => {
         const window = mainWindow ?? BrowserWindow.getAllWindows()[0];

@@ -319,7 +319,9 @@ function dispatchThreadNotificationsForBatch(input: {
     });
 
     for (const notification of notifications) {
-      void localApi.notifications.showThreadNotification(notification);
+      void localApi.notifications.showThreadNotification(notification).catch((error) => {
+        console.warn("Failed to show desktop thread notification.", error);
+      });
     }
   }
 }
