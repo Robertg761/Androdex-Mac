@@ -355,6 +355,7 @@ export interface ChatComposerProps {
 
   // Session phase
   phase: SessionPhase;
+  isRunning: boolean;
   isConnecting: boolean;
   isSendBusy: boolean;
   isPreparingWorktree: boolean;
@@ -459,6 +460,7 @@ export const ChatComposer = memo(
       isServerThread: _isServerThread,
       isLocalDraftThread: _isLocalDraftThread,
       phase,
+      isRunning,
       isConnecting,
       isSendBusy,
       isPreparingWorktree,
@@ -835,7 +837,7 @@ export const ChatComposer = memo(
       if (activePendingProgress) {
         return `pending:${activePendingProgress.questionIndex}:${activePendingProgress.isLastQuestion}:${activePendingIsResponding}`;
       }
-      if (phase === "running") {
+      if (isRunning) {
         return "running";
       }
       if (showPlanFollowUpPrompt) {
@@ -849,7 +851,7 @@ export const ChatComposer = memo(
       isConnecting,
       isPreparingWorktree,
       isSendBusy,
-      phase,
+      isRunning,
       prompt,
       showPlanFollowUpPrompt,
     ]);
@@ -2012,7 +2014,7 @@ export const ChatComposer = memo(
                     compact={isComposerPrimaryActionsCompact}
                     activeContextWindow={activeContextWindow}
                     pendingAction={pendingPrimaryAction}
-                    isRunning={phase === "running"}
+                    isRunning={isRunning}
                     showPlanFollowUpPrompt={
                       pendingUserInputs.length === 0 && showPlanFollowUpPrompt
                     }

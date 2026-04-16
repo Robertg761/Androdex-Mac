@@ -20,6 +20,7 @@ import {
   findSidebarProposedPlan,
   hasActionableProposedPlan,
   hasToolActivityForTurn,
+  isThreadActivelyWorking,
   isLatestTurnSettled,
 } from "./session-logic";
 
@@ -1162,6 +1163,7 @@ describe("hasToolActivityForTurn", () => {
 describe("isLatestTurnSettled", () => {
   const latestTurn = {
     turnId: TurnId.make("turn-1"),
+    state: "completed",
     startedAt: "2026-02-27T21:10:00.000Z",
     completedAt: "2026-02-27T21:10:06.000Z",
   } as const;
@@ -1184,6 +1186,15 @@ describe("isLatestTurnSettled", () => {
     ).toBe(false);
   });
 
+  it("returns true when running state has no active turn and the latest turn already completed", () => {
+    expect(
+      isLatestTurnSettled(latestTurn, {
+        orchestrationStatus: "running",
+        activeTurnId: undefined,
+      }),
+    ).toBe(true);
+  });
+
   it("returns true once the session is no longer running that turn", () => {
     expect(
       isLatestTurnSettled(latestTurn, {
@@ -1198,6 +1209,7 @@ describe("isLatestTurnSettled", () => {
       isLatestTurnSettled(
         {
           turnId: TurnId.make("turn-1"),
+          state: "running",
           startedAt: null,
           completedAt: "2026-02-27T21:10:06.000Z",
         },
@@ -1207,9 +1219,53 @@ describe("isLatestTurnSettled", () => {
   });
 });
 
+describe("isThreadActivelyWorking", () => {
+  const completedTurn = {
+    turnId: TurnId.make("turn-1"),
+    state: "completed" as const,
+    startedAt: "2026-02-27T21:10:00.000Z",
+    completedAt: "2026-02-27T21:10:06.000Z",
+  };
+
+  it("returns true when the session reports a running active turn", () => {
+    expect(
+      isThreadActivelyWorking(completedTurn, {
+        orchestrationStatus: "running",
+        activeTurnId: TurnId.make("turn-2"),
+      }),
+    ).toBe(true);
+  });
+
+  it("returns false for stale running-without-active-turn when the latest turn is completed", () => {
+    expect(
+      isThreadActivelyWorking(completedTurn, {
+        orchestrationStatus: "running",
+        activeTurnId: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it("returns true when latest-turn state is still running even if session is ready", () => {
+    expect(
+      isThreadActivelyWorking(
+        {
+          ...completedTurn,
+          state: "running",
+          completedAt: null,
+        },
+        {
+          orchestrationStatus: "ready",
+          activeTurnId: undefined,
+        },
+      ),
+    ).toBe(true);
+  });
+});
+
 describe("deriveActiveWorkStartedAt", () => {
   const latestTurn = {
     turnId: TurnId.make("turn-1"),
+    state: "completed",
     startedAt: "2026-02-27T21:10:00.000Z",
     completedAt: "2026-02-27T21:10:06.000Z",
   } as const;
@@ -1245,6 +1301,7 @@ describe("deriveActiveWorkStartedAt", () => {
       deriveActiveWorkStartedAt(
         {
           turnId: TurnId.make("turn-1"),
+          state: "completed",
           startedAt: "2026-02-27T21:10:00.000Z",
           completedAt: "2026-02-27T21:10:06.000Z",
         },

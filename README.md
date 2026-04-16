@@ -51,6 +51,8 @@ Android convergence note: this repo is now the canonical backend for the Androde
 
 Observability guide: [docs/observability.md](./docs/observability.md)
 
+Thread runtime state and reconciliation guide: [docs/orchestration-thread-runtime-state.md](./docs/orchestration-thread-runtime-state.md)
+
 ## If you REALLY want to contribute still.... read this first
 
 Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.
