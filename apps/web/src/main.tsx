@@ -12,6 +12,7 @@ import {
 } from "./desktopRoutePersistence";
 import { isElectron } from "./env";
 import { getRouter } from "./router";
+import { resolveRouterBasepath } from "./routerBasepath";
 import { APP_DISPLAY_NAME } from "./branding";
 
 if (isElectron) {
@@ -22,7 +23,7 @@ if (isElectron) {
 // Electron loads the app from a file-backed shell, so hash history avoids path resolution issues.
 const history = isElectron ? createHashHistory() : createBrowserHistory();
 
-const router = getRouter(history);
+const router = getRouter(history, isElectron ? "/" : resolveRouterBasepath(window.location.pathname));
 
 document.title = APP_DISPLAY_NAME;
 
