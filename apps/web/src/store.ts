@@ -1279,42 +1279,34 @@ function applyEnvironmentOrchestrationEvent(
       });
 
     case "thread.session-set":
-      return updateThreadState(state, event.payload.threadId, (thread) => {
-        const nextSession = mapSession(event.payload.session);
-        if (thread.session && nextSession.updatedAt < thread.session.updatedAt) {
-          // Replays/reconnects can surface older snapshots after newer live events.
-          // Ignore stale session snapshots so the UI does not regress from done->running (or vice versa).
-          return thread;
-        }
-        return {
-          ...thread,
-          session: nextSession,
-          error: sanitizeThreadErrorMessage(event.payload.session.lastError),
-          latestTurn:
-            nextSession.status === "running" && nextSession.activeTurnId !== undefined
-              ? buildLatestTurn({
-                  previous: thread.latestTurn,
-                  turnId: nextSession.activeTurnId,
-                  state: "running",
-                  requestedAt:
-                    thread.latestTurn?.turnId === nextSession.activeTurnId
-                      ? thread.latestTurn.requestedAt
-                      : event.payload.session.updatedAt,
-                  startedAt:
-                    thread.latestTurn?.turnId === nextSession.activeTurnId
-                      ? (thread.latestTurn.startedAt ?? event.payload.session.updatedAt)
-                      : event.payload.session.updatedAt,
-                  completedAt: null,
-                  assistantMessageId:
-                    thread.latestTurn?.turnId === nextSession.activeTurnId
-                      ? thread.latestTurn.assistantMessageId
-                      : null,
-                  sourceProposedPlan: thread.pendingSourceProposedPlan,
-                })
-              : thread.latestTurn,
-          updatedAt: event.occurredAt,
-        };
-      });
+      return updateThreadState(state, event.payload.threadId, (thread) => ({
+        ...thread,
+        session: mapSession(event.payload.session),
+        error: sanitizeThreadErrorMessage(event.payload.session.lastError),
+        latestTurn:
+          event.payload.session.status === "running" && event.payload.session.activeTurnId !== null
+            ? buildLatestTurn({
+                previous: thread.latestTurn,
+                turnId: event.payload.session.activeTurnId,
+                state: "running",
+                requestedAt:
+                  thread.latestTurn?.turnId === event.payload.session.activeTurnId
+                    ? thread.latestTurn.requestedAt
+                    : event.payload.session.updatedAt,
+                startedAt:
+                  thread.latestTurn?.turnId === event.payload.session.activeTurnId
+                    ? (thread.latestTurn.startedAt ?? event.payload.session.updatedAt)
+                    : event.payload.session.updatedAt,
+                completedAt: null,
+                assistantMessageId:
+                  thread.latestTurn?.turnId === event.payload.session.activeTurnId
+                    ? thread.latestTurn.assistantMessageId
+                    : null,
+                sourceProposedPlan: thread.pendingSourceProposedPlan,
+              })
+            : thread.latestTurn,
+        updatedAt: event.occurredAt,
+      }));
 
     case "thread.session-stop-requested":
       return updateThreadState(state, event.payload.threadId, (thread) =>

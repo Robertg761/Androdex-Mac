@@ -120,35 +120,6 @@ describe("resolveDesktopServerExposure", () => {
     });
   });
 
-  it("prefers a configured public base url for remote pairing links", () => {
-    expect(
-      resolveDesktopServerExposure({
-        mode: "network-accessible",
-        port: 3773,
-        networkInterfaces: {
-          en0: [
-            {
-              address: "192.168.1.44",
-              family: "IPv4",
-              internal: false,
-              netmask: "255.255.255.0",
-              cidr: "192.168.1.44/24",
-              mac: "00:00:00:00:00:00",
-            },
-          ],
-        },
-        publicBaseUrlOverride: "https://remote.example.com/androdex",
-      }),
-    ).toEqual({
-      mode: "network-accessible",
-      bindHost: "0.0.0.0",
-      localHttpUrl: "http://127.0.0.1:3773",
-      localWsUrl: "ws://127.0.0.1:3773",
-      endpointUrl: "https://remote.example.com/androdex",
-      advertisedHost: "remote.example.com",
-    });
-  });
-
   it("stays network-accessible even when no LAN address is currently detectable", () => {
     expect(
       resolveDesktopServerExposure({

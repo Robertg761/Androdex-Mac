@@ -43,8 +43,7 @@ function resolveWsRpcSocketUrl(rawUrl: string): string {
     throw new Error(`Unsupported websocket transport URL protocol: ${resolved.protocol}`);
   }
 
-  const basePath = resolved.pathname.replace(/\/+$/, "");
-  resolved.pathname = `${basePath}/ws`;
+  resolved.pathname = "/ws";
   return resolved.toString();
 }
 

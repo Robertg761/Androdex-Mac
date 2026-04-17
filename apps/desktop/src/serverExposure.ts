@@ -1,5 +1,4 @@
 import type { NetworkInterfaceInfo } from "node:os";
-import { normalizePairingBaseUrl } from "@t3tools/shared/pairingUrl";
 import type { DesktopServerExposureMode } from "@t3tools/contracts";
 
 const DESKTOP_LOOPBACK_HOST = "127.0.0.1";
@@ -50,7 +49,6 @@ export function resolveDesktopServerExposure(input: {
   readonly port: number;
   readonly networkInterfaces: NodeJS.Dict<NetworkInterfaceInfo[]>;
   readonly advertisedHostOverride?: string;
-  readonly publicBaseUrlOverride?: string;
 }): DesktopServerExposure {
   const localHttpUrl = `http://${DESKTOP_LOOPBACK_HOST}:${input.port}`;
   const localWsUrl = `ws://${DESKTOP_LOOPBACK_HOST}:${input.port}`;
@@ -63,19 +61,6 @@ export function resolveDesktopServerExposure(input: {
       localWsUrl,
       endpointUrl: null,
       advertisedHost: null,
-    };
-  }
-
-  if (input.publicBaseUrlOverride) {
-    const endpointUrl = normalizePairingBaseUrl(input.publicBaseUrlOverride);
-    const endpoint = new URL(endpointUrl);
-    return {
-      mode: input.mode,
-      bindHost: DESKTOP_LAN_BIND_HOST,
-      localHttpUrl,
-      localWsUrl,
-      endpointUrl,
-      advertisedHost: endpoint.host,
     };
   }
 

@@ -405,11 +405,11 @@ describe("GeneralSettingsPanel observability", () => {
     );
 
     await expect.element(page.getByText("Manage local backend")).toBeInTheDocument();
-    await expect.element(page.getByLabelText("Enable remote access")).toBeDisabled();
+    await expect.element(page.getByLabelText("Enable network access")).toBeDisabled();
     await expect
       .element(
         page.getByText(
-          "This backend is only reachable on this machine. Restart it with remote access enabled to pair your phone from anywhere.",
+          "This backend is only reachable on this machine. Restart it with a non-loopback host to enable remote pairing.",
         ),
       )
       .toBeInTheDocument();
@@ -643,7 +643,7 @@ describe("GeneralSettingsPanel observability", () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 
-  it("shows a remote access toggle with clearer guidance in desktop builds", async () => {
+  it("shows a disabled network access toggle with guidance in desktop builds", async () => {
     const desktopBridge = createDesktopBridgeStub();
     window.desktopBridge = desktopBridge;
 
@@ -655,29 +655,19 @@ describe("GeneralSettingsPanel observability", () => {
       </AppAtomRegistryProvider>,
     );
 
-    const remoteAccessToggle = page.getByLabelText("Enable remote access");
-    await expect.element(remoteAccessToggle).not.toBeDisabled();
-    await remoteAccessToggle.click();
-    await expect.element(page.getByText("Enable remote access?")).toBeInTheDocument();
+    const networkAccessToggle = page.getByLabelText("Enable network access");
+    await expect.element(networkAccessToggle).not.toBeDisabled();
+    await networkAccessToggle.click();
+    await expect.element(page.getByText("Enable network access?")).toBeInTheDocument();
     await expect
-      .element(
-        page.getByText(
-          "Androdex will restart and keep this desktop available to your phone on your network and away from home.",
-        ),
-      )
+      .element(page.getByText("Androdex will restart to expose this environment over the network."))
       .toBeInTheDocument();
-    await page
-      .getByRole("button", { name: "Restart and enable remote access", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Restart and enable", exact: true }).click();
     await vi.waitFor(() => {
       expect(desktopBridge.setServerExposureMode).toHaveBeenCalledWith("network-accessible");
     });
     await expect
-      .element(
-        page.getByText(
-          "Your phone can connect at http://192.168.1.44:3773 while Androdex stays open on this computer.",
-        ),
-      )
+      .element(page.getByText("Reachable at http://192.168.1.44:3773"))
       .toBeInTheDocument();
   });
 

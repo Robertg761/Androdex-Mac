@@ -27,23 +27,20 @@ export function createDesktopThreadNotificationOptions(
 export function showDesktopThreadNotification(input: {
   notification: DesktopThreadNotification;
   windows: readonly WindowLike[];
+  isNotificationSupported: () => boolean;
   createNotification: (options: NotificationConstructorOptions) => NotificationLike;
   onClick?: () => void;
 }): boolean {
-  if (!shouldShowDesktopThreadNotification(input.windows)) {
+  if (!input.isNotificationSupported() || !shouldShowDesktopThreadNotification(input.windows)) {
     return false;
   }
 
-  try {
-    const desktopNotification = input.createNotification(
-      createDesktopThreadNotificationOptions(input.notification),
-    );
-    if (input.onClick) {
-      desktopNotification.on?.("click", input.onClick);
-    }
-    desktopNotification.show();
-    return true;
-  } catch {
-    return false;
+  const desktopNotification = input.createNotification(
+    createDesktopThreadNotificationOptions(input.notification),
+  );
+  if (input.onClick) {
+    desktopNotification.on?.("click", input.onClick);
   }
+  desktopNotification.show();
+  return true;
 }

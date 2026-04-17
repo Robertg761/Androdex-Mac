@@ -1,4 +1,4 @@
-import { getPairingTokenFromUrl, normalizePairingBaseUrl } from "../../pairingUrl";
+import { getPairingTokenFromUrl } from "../../pairingUrl";
 
 export interface ResolvedRemotePairingTarget {
   readonly credential: string;
@@ -17,7 +17,7 @@ function normalizeRemoteBaseUrl(rawValue: string): URL {
       ? trimmed
       : `https://${trimmed}`;
   const url = new URL(normalizedInput, window.location.origin);
-  url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+  url.pathname = "/";
   url.search = "";
   url.hash = "";
   return url;
@@ -30,7 +30,7 @@ function toHttpBaseUrl(url: URL): string {
   } else if (next.protocol === "wss:") {
     next.protocol = "https:";
   }
-  next.pathname = next.pathname.replace(/\/+$/, "") || "/";
+  next.pathname = "/";
   next.search = "";
   next.hash = "";
   return next.toString();
@@ -43,19 +43,10 @@ function toWsBaseUrl(url: URL): string {
   } else if (next.protocol === "https:") {
     next.protocol = "wss:";
   }
-  next.pathname = next.pathname.replace(/\/+$/, "") || "/";
+  next.pathname = "/";
   next.search = "";
   next.hash = "";
   return next.toString();
-}
-
-function stripPairingPath(url: URL): URL {
-  const next = new URL(url.toString());
-  const normalizedPath = next.pathname.replace(/\/+$/, "");
-  next.pathname = normalizedPath.endsWith("/pair")
-    ? normalizedPath.slice(0, -"/pair".length) || "/"
-    : normalizedPath || "/";
-  return next;
 }
 
 export function resolveRemotePairingTarget(input: {
@@ -65,14 +56,11 @@ export function resolveRemotePairingTarget(input: {
 }): ResolvedRemotePairingTarget {
   const pairingUrl = input.pairingUrl?.trim() ?? "";
   if (pairingUrl.length > 0) {
-    const pairingUrlObject = new URL(pairingUrl, window.location.origin);
-    const credential = getPairingTokenFromUrl(pairingUrlObject) ?? "";
+    const url = new URL(pairingUrl, window.location.origin);
+    const credential = getPairingTokenFromUrl(url) ?? "";
     if (!credential) {
       throw new Error("Pairing URL is missing its token.");
     }
-    const url = stripPairingPath(
-      new URL(normalizePairingBaseUrl(pairingUrl), window.location.origin),
-    );
     return {
       credential,
       httpBaseUrl: toHttpBaseUrl(url),

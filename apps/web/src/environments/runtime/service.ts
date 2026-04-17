@@ -12,7 +12,6 @@ import { Throttler } from "@tanstack/react-pacer";
 import {
   createKnownEnvironment,
   getKnownEnvironmentWsBaseUrl,
-  type KnownEnvironment,
   scopedProjectKey,
   scopedThreadKey,
   scopeProjectRef,
@@ -320,9 +319,7 @@ function dispatchThreadNotificationsForBatch(input: {
     });
 
     for (const notification of notifications) {
-      void localApi.notifications.showThreadNotification(notification).catch((error) => {
-        console.warn("Failed to show desktop thread notification.", error);
-      });
+      void localApi.notifications.showThreadNotification(notification);
     }
   }
 }
@@ -434,26 +431,6 @@ function registerConnection(connection: EnvironmentConnection): EnvironmentConne
   return connection;
 }
 
-function knownEnvironmentTargetsEqual(
-  left: KnownEnvironment["target"],
-  right: KnownEnvironment["target"],
-): boolean {
-  return left.httpBaseUrl === right.httpBaseUrl && left.wsBaseUrl === right.wsBaseUrl;
-}
-
-export function shouldReusePrimaryEnvironmentConnection(
-  existing: Pick<EnvironmentConnection, "environmentId" | "kind" | "knownEnvironment"> | null,
-  nextKnownEnvironment: KnownEnvironment,
-): boolean {
-  return (
-    existing !== null &&
-    existing.kind === "primary" &&
-    existing.environmentId === nextKnownEnvironment.environmentId &&
-    existing.knownEnvironment.source === nextKnownEnvironment.source &&
-    knownEnvironmentTargetsEqual(existing.knownEnvironment.target, nextKnownEnvironment.target)
-  );
-}
-
 async function removeConnection(environmentId: EnvironmentId): Promise<boolean> {
   const connection = environmentConnections.get(environmentId);
   if (!connection) {
@@ -472,15 +449,9 @@ function createPrimaryEnvironmentConnection(): EnvironmentConnection {
     throw new Error("Unable to resolve the primary environment.");
   }
 
-  const existing = environmentConnections.get(knownEnvironment.environmentId) ?? null;
-  if (shouldReusePrimaryEnvironmentConnection(existing, knownEnvironment)) {
-    return existing!;
-  }
-
+  const existing = environmentConnections.get(knownEnvironment.environmentId);
   if (existing) {
-    environmentConnections.delete(existing.environmentId);
-    emitEnvironmentConnectionRegistryChange();
-    void existing.dispose().catch(() => undefined);
+    return existing;
   }
 
   return registerConnection(

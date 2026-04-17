@@ -67,7 +67,7 @@ describe("SidebarCodexAccountControl", () => {
     expect(html).not.toContain("Pro");
   });
 
-  it("keeps the trigger interactive when no managed accounts are available", () => {
+  it("renders a disabled trigger when no managed accounts are available", () => {
     const html = renderToStaticMarkup(
       <SidebarCodexAccountControl
         initialSnapshot={{
@@ -83,6 +83,6 @@ describe("SidebarCodexAccountControl", () => {
     );
 
     expect(html).toContain("Codex account");
-    expect(html).not.toContain(' disabled=""');
+    expect(html).toContain("disabled");
   });
 });

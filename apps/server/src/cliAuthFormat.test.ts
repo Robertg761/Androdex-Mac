@@ -25,22 +25,6 @@ it("formats issued pairing credentials with the secret and optional pair URL", (
   expect(output).toContain("https://example.com/pair#token=secret-pairing-token");
 });
 
-it("formats issued pairing credentials with a base-path-aware pair URL", () => {
-  const output = formatIssuedPairingCredential(
-    {
-      id: "pairing-1",
-      credential: "secret-pairing-token",
-      role: "client",
-      subject: "one-time-token",
-      createdAt: DateTime.fromDateUnsafe(new Date("2026-04-08T09:00:00.000Z")),
-      expiresAt: DateTime.fromDateUnsafe(new Date("2026-04-08T10:00:00.000Z")),
-    },
-    { baseUrl: "https://example.com/androdex", json: false },
-  );
-
-  expect(output).toContain("https://example.com/androdex/pair#token=secret-pairing-token");
-});
-
 it("formats pairing listings without exposing the secret token", () => {
   const output = formatPairingCredentialList(
     [

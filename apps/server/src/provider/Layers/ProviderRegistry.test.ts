@@ -24,7 +24,6 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 import { deepMerge } from "@t3tools/shared/Struct";
 
 import {
-  buildCodexDiscoveryCacheKey,
   checkCodexProviderStatus,
   hasCustomModelProvider,
   parseAuthStatusFromOutput,
@@ -188,37 +187,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
             }),
           ),
         ),
-      );
-
-      it.effect("changes the discovery cache key when the active auth snapshot changes", () =>
-        Effect.gen(function* () {
-          const fileSystem = yield* FileSystem.FileSystem;
-          const path = yield* Path.Path;
-          const { tmpDir } = yield* withTempCodexHome();
-          const authPath = path.join(tmpDir, "auth.json");
-
-          yield* fileSystem.writeFileString(
-            authPath,
-            JSON.stringify({ tokens: { account_id: "acct-1" } }, null, 2),
-          );
-          const firstKey = buildCodexDiscoveryCacheKey({
-            binaryPath: "codex",
-            homePath: tmpDir,
-            cwd: "/repo/project",
-          });
-
-          yield* fileSystem.writeFileString(
-            authPath,
-            JSON.stringify({ tokens: { account_id: "acct-2" } }, null, 2),
-          );
-          const secondKey = buildCodexDiscoveryCacheKey({
-            binaryPath: "codex",
-            homePath: tmpDir,
-            cwd: "/repo/project",
-          });
-
-          assert.notStrictEqual(firstKey, secondKey);
-        }),
       );
 
       it.effect("returns the codex plan type in auth and keeps spark for supported plans", () =>

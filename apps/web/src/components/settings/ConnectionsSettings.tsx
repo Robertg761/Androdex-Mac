@@ -45,7 +45,7 @@ import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
-import { buildPairingUrl, setPairingTokenOnUrl } from "../../pairingUrl";
+import { setPairingTokenOnUrl } from "../../pairingUrl";
 import { CodexAccountsSettings } from "./CodexAccountsSettings";
 import {
   createServerPairingCredential,
@@ -246,6 +246,12 @@ function removeDesktopClientSession(
   return current.filter((clientSession) => clientSession.sessionId !== sessionId);
 }
 
+function resolveDesktopPairingUrl(endpointUrl: string, credential: string): string {
+  const url = new URL(endpointUrl);
+  url.pathname = "/pair";
+  return setPairingTokenOnUrl(url, credential).toString();
+}
+
 function resolveCurrentOriginPairingUrl(credential: string): string {
   const url = new URL("/pair", window.location.href);
   return setPairingTokenOnUrl(url, credential).toString();
@@ -283,7 +289,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
   );
   const shareablePairingUrl =
     endpointUrl != null && endpointUrl !== ""
-      ? buildPairingUrl(endpointUrl, pairingLink.credential)
+      ? resolveDesktopPairingUrl(endpointUrl, pairingLink.credential)
       : isLoopbackHostname(window.location.hostname)
         ? null
         : currentOriginPairingUrl;
@@ -1143,16 +1149,16 @@ export function ConnectionsSettings() {
           <SettingsSection title="Manage local backend">
             {desktopBridge ? (
               <SettingsRow
-                title="Remote access"
+                title="Network access"
                 description={
                   desktopServerExposureState?.endpointUrl
-                    ? `Your phone can connect at ${desktopServerExposureState.endpointUrl} while Androdex stays open on this computer.`
+                    ? `Reachable at ${desktopServerExposureState.endpointUrl}`
                     : desktopServerExposureState?.mode === "network-accessible"
                       ? desktopServerExposureState.advertisedHost
-                        ? `Your phone can connect from this network or away from home. Pairing links use ${desktopServerExposureState.advertisedHost}.`
-                        : "Your phone can connect from this network or away from home."
+                        ? `Exposed on all interfaces. Pairing links use ${desktopServerExposureState.advertisedHost}.`
+                        : "Exposed on all interfaces."
                       : desktopServerExposureState
-                        ? "Only available on this computer. Turn this on to use Androdex from your phone anywhere."
+                        ? "Limited to this machine."
                         : "Loading…"
                 }
                 status={
@@ -1176,19 +1182,19 @@ export function ConnectionsSettings() {
                           checked ? "network-accessible" : "local-only",
                         );
                       }}
-                      aria-label="Enable remote access"
+                      aria-label="Enable network access"
                     />
                     <AlertDialogPopup>
                       <AlertDialogHeader>
                         <AlertDialogTitle>
                           {pendingDesktopServerExposureMode === "network-accessible"
-                            ? "Enable remote access?"
-                            : "Disable remote access?"}
+                            ? "Enable network access?"
+                            : "Disable network access?"}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                           {pendingDesktopServerExposureMode === "network-accessible"
-                            ? "Androdex will restart and keep this desktop available to your phone on your network and away from home."
-                            : "Androdex will restart and limit this desktop back to this computer only."}
+                            ? "Androdex will restart to expose this environment over the network."
+                            : "Androdex will restart and limit this environment back to this machine."}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -1213,9 +1219,9 @@ export function ConnectionsSettings() {
                               Restarting…
                             </>
                           ) : pendingDesktopServerExposureMode === "network-accessible" ? (
-                            "Restart and enable remote access"
+                            "Restart and enable"
                           ) : (
-                            "Restart and disable remote access"
+                            "Restart and disable"
                           )}
                         </Button>
                       </AlertDialogFooter>
@@ -1225,11 +1231,11 @@ export function ConnectionsSettings() {
               />
             ) : (
               <SettingsRow
-                title="Remote access"
+                title="Network access"
                 description={
                   currentAuthPolicy === "remote-reachable"
-                    ? "This backend is already configured for remote access. Changes must be made where the server is launched."
-                    : "This backend is only reachable on this machine. Restart it with remote access enabled to pair your phone from anywhere."
+                    ? "This backend is already configured for remote access. Network exposure changes must be made where the server is launched."
+                    : "This backend is only reachable on this machine. Restart it with a non-loopback host to enable remote pairing."
                 }
                 control={
                   <Tooltip>
@@ -1239,7 +1245,7 @@ export function ConnectionsSettings() {
                           <Switch
                             checked={isLocalBackendNetworkAccessible}
                             disabled
-                            aria-label="Enable remote access"
+                            aria-label="Enable network access"
                           />
                         </span>
                       }

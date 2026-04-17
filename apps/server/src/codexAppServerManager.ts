@@ -1,7 +1,9 @@
 import { type ChildProcessWithoutNullStreams, spawn, spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import * as OS from "node:os";
+import path from "node:path";
 import readline from "node:readline";
 
 import {
@@ -32,7 +34,6 @@ import {
   resolveCodexModelForAccount,
   type CodexAccountSnapshot,
 } from "./provider/codexAccount";
-import { readCodexAuthSnapshotFingerprint } from "./provider/codexAuthState";
 import { buildCodexInitializeParams, killCodexChildProcess } from "./provider/codexAppServer";
 
 export { buildCodexInitializeParams } from "./provider/codexAppServer";
@@ -1585,6 +1586,26 @@ function brandIfNonEmpty<T extends string>(
 
 function normalizeProviderThreadId(value: string | undefined): string | undefined {
   return brandIfNonEmpty(value, (normalized) => normalized);
+}
+
+function resolveCodexHomePath(homePath?: string): string {
+  const normalizedHomePath = homePath?.trim();
+  return normalizedHomePath && normalizedHomePath.length > 0
+    ? normalizedHomePath
+    : path.join(OS.homedir(), ".codex");
+}
+
+function readCodexAuthSnapshotFingerprint(homePath?: string): string | undefined {
+  const authPath = path.join(resolveCodexHomePath(homePath), "auth.json");
+  if (!existsSync(authPath)) {
+    return undefined;
+  }
+
+  try {
+    return createHash("sha256").update(readFileSync(authPath, "utf8")).digest("hex");
+  } catch {
+    return undefined;
+  }
 }
 
 function assertSupportedCodexCliVersion(input: {

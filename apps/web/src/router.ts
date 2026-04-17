@@ -5,13 +5,12 @@ import { createRouter, RouterHistory } from "@tanstack/react-router";
 import { AppAtomRegistryProvider } from "./rpc/atomRegistry";
 import { routeTree } from "./routeTree.gen";
 
-export function getRouter(history: RouterHistory, basepath = "/") {
+export function getRouter(history: RouterHistory) {
   const queryClient = new QueryClient();
 
   return createRouter({
     routeTree,
     history,
-    basepath,
     context: {
       queryClient,
     },

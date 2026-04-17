@@ -65,7 +65,7 @@ function renderSelectorButton(input: {
     </Button>
   );
 
-  if (!input.disabled || !input.disabledReason) {
+  if (!input.disabledReason) {
     return button;
   }
 
@@ -118,12 +118,12 @@ export function SidebarCodexAccountControl({
   });
 
   const selectorState = resolveCodexAccountButtonState(snapshot);
-  const triggerDisabled = snapshot === null && isLoading;
+  const selectorDisabled = selectorState.selectableCount === 0 || (snapshot === null && isLoading);
   const menuNote = snapshot
     ? formatRunningCodexSessionNotice(snapshot.runningCodexSessionCount)
     : null;
   const handleRefreshRequest = useEffectEvent(() => {
-    if (triggerDisabled) {
+    if (selectorDisabled) {
       return;
     }
 
@@ -141,10 +141,10 @@ export function SidebarCodexAccountControl({
       }}
     >
       <MenuTrigger
-        disabled={triggerDisabled}
+        disabled={selectorDisabled}
         render={renderSelectorButton({
-          disabled: triggerDisabled,
-          disabledReason: triggerDisabled ? selectorState.disabledReason : null,
+          disabled: selectorDisabled,
+          disabledReason: selectorState.disabledReason,
           isRefreshing: isLoading,
           onRequestRefresh: handleRefreshRequest,
         })}
@@ -157,21 +157,9 @@ export function SidebarCodexAccountControl({
         <MenuGroup>
           <MenuGroupLabel className="flex items-center justify-between gap-2 px-2.5 py-2 font-semibold uppercase tracking-[0.18em] text-[10px] text-muted-foreground/70">
             <span>Codex accounts</span>
-            <div className="flex items-center gap-1.5">
-              {isLoading ? (
-                <span className="tracking-[0.12em] text-muted-foreground/55">Refreshing…</span>
-              ) : null}
-              <Button
-                size="icon-xs"
-                variant="ghost"
-                aria-label="Refresh Codex accounts"
-                disabled={isLoading}
-                onClick={() => handleRefreshRequest()}
-                className="text-muted-foreground/70"
-              >
-                <RefreshCwIcon className={cn("size-3", isLoading && "animate-spin")} />
-              </Button>
-            </div>
+            {isLoading ? (
+              <span className="tracking-[0.12em] text-muted-foreground/55">Refreshing…</span>
+            ) : null}
           </MenuGroupLabel>
           <MenuRadioGroup
             value={snapshot?.activeAccountKey}

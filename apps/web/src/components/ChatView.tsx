@@ -55,7 +55,6 @@ import {
   deriveWorkLogEntries,
   hasActionableProposedPlan,
   hasToolActivityForTurn,
-  isThreadActivelyWorking,
   isLatestTurnSettled,
   formatElapsed,
 } from "../session-logic";
@@ -838,10 +837,6 @@ export default function ChatView(props: ChatViewProps) {
     });
   }, [activeThreadKey, existingOpenTerminalThreadKeys, terminalState.terminalOpen]);
   const latestTurnSettled = isLatestTurnSettled(activeLatestTurn, activeThread?.session ?? null);
-  const threadIsActivelyWorking = isThreadActivelyWorking(
-    activeLatestTurn,
-    activeThread?.session ?? null,
-  );
   const activeProjectRef = activeThread
     ? scopeProjectRef(activeThread.environmentId, activeThread.projectId)
     : null;
@@ -1149,7 +1144,7 @@ export default function ChatView(props: ChatViewProps) {
     activePendingUserInput: activePendingUserInput?.requestId ?? null,
     threadError: activeThread?.error,
   });
-  const isWorking = threadIsActivelyWorking || isSendBusy || isConnecting || isRevertingCheckpoint;
+  const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
   const nowIso = new Date(nowTick).toISOString();
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     activeLatestTurn,
@@ -2131,10 +2126,10 @@ export default function ChatView(props: ChatViewProps) {
     scheduleStickToBottom();
   }, [messageCount, scheduleStickToBottom]);
   useEffect(() => {
-    if (!threadIsActivelyWorking) return;
+    if (phase !== "running") return;
     if (!shouldAutoScrollRef.current) return;
     scheduleStickToBottom();
-  }, [scheduleStickToBottom, threadIsActivelyWorking, timelineEntries]);
+  }, [phase, scheduleStickToBottom, timelineEntries]);
 
   useEffect(() => {
     setExpandedWorkGroups({});
@@ -2297,14 +2292,14 @@ export default function ChatView(props: ChatViewProps) {
   ]);
 
   useEffect(() => {
-    if (!threadIsActivelyWorking) return;
+    if (phase !== "running") return;
     const timer = window.setInterval(() => {
       setNowTick(Date.now());
     }, 1000);
     return () => {
       window.clearInterval(timer);
     };
-  }, [threadIsActivelyWorking]);
+  }, [phase]);
 
   useEffect(() => {
     if (!activeThreadKey) return;
@@ -2416,7 +2411,7 @@ export default function ChatView(props: ChatViewProps) {
       const localApi = readLocalApi();
       if (!api || !localApi || !activeThread || isRevertingCheckpoint) return;
 
-      if (threadIsActivelyWorking || isSendBusy || isConnecting) {
+      if (phase === "running" || isSendBusy || isConnecting) {
         setThreadError(activeThread.id, "Interrupt the current turn before reverting checkpoints.");
         return;
       }
@@ -2455,8 +2450,8 @@ export default function ChatView(props: ChatViewProps) {
       isConnecting,
       isRevertingCheckpoint,
       isSendBusy,
+      phase,
       setThreadError,
-      threadIsActivelyWorking,
     ],
   );
 
@@ -3425,7 +3420,6 @@ export default function ChatView(props: ChatViewProps) {
               isServerThread={isServerThread}
               isLocalDraftThread={isLocalDraftThread}
               phase={phase}
-              isRunning={threadIsActivelyWorking}
               isConnecting={isConnecting}
               isSendBusy={isSendBusy}
               isPreparingWorktree={isPreparingWorktree}

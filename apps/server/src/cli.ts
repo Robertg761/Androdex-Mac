@@ -91,7 +91,6 @@ const SERVER_ENV_ALIASES: ReadonlyArray<readonly [string, string]> = [
   ["ANDRODEX_MODE", "T3CODE_MODE"],
   ["ANDRODEX_PORT", "T3CODE_PORT"],
   ["ANDRODEX_HOST", "T3CODE_HOST"],
-  ["ANDRODEX_PUBLIC_BASE_URL", "T3CODE_PUBLIC_BASE_URL"],
   ["ANDRODEX_HOME", "T3CODE_HOME"],
   ["ANDRODEX_NO_BROWSER", "T3CODE_NO_BROWSER"],
   ["ANDRODEX_BOOTSTRAP_FD", "T3CODE_BOOTSTRAP_FD"],
@@ -109,7 +108,6 @@ const BootstrapEnvelopeSchema = Schema.Struct({
   mode: Schema.optional(RuntimeMode),
   port: Schema.optional(PortSchema),
   host: Schema.optional(Schema.String),
-  publicBaseUrl: Schema.optional(Schema.String),
   t3Home: Schema.optional(Schema.String),
   devUrl: Schema.optional(Schema.URLFromString),
   noBrowser: Schema.optional(Schema.Boolean),
@@ -135,12 +133,6 @@ const hostFlag = Flag.string("host").pipe(
 );
 const baseDirFlag = Flag.string("base-dir").pipe(
   Flag.withDescription("Base directory path (equivalent to ANDRODEX_HOME, legacy: T3CODE_HOME)."),
-  Flag.optional,
-);
-const publicBaseUrlFlag = Flag.string("public-base-url").pipe(
-  Flag.withDescription(
-    "Optional public base URL used for pairing links and remote auth posture, including tunneled or proxied deployments.",
-  ),
   Flag.optional,
 );
 const devUrlFlag = Flag.string("dev-url").pipe(
@@ -204,10 +196,6 @@ const EnvServerConfig = Config.all({
   ),
   port: Config.port("ANDRODEX_PORT").pipe(Config.option, Config.map(Option.getOrUndefined)),
   host: Config.string("ANDRODEX_HOST").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  publicBaseUrl: Config.string("ANDRODEX_PUBLIC_BASE_URL").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
   t3Home: Config.string("ANDRODEX_HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
   devUrl: Config.url("VITE_DEV_SERVER_URL").pipe(Config.option, Config.map(Option.getOrUndefined)),
   noBrowser: Config.boolean("ANDRODEX_NO_BROWSER").pipe(
@@ -233,7 +221,6 @@ interface CliServerFlags {
   readonly port: Option.Option<number>;
   readonly host: Option.Option<string>;
   readonly baseDir: Option.Option<string>;
-  readonly publicBaseUrl?: Option.Option<string>;
   readonly cwd: Option.Option<string>;
   readonly devUrl: Option.Option<URL>;
   readonly noBrowser: Option.Option<boolean>;
@@ -280,7 +267,6 @@ export const resolveServerConfig = (
       port: flags.port ?? Option.none(),
       host: flags.host ?? Option.none(),
       baseDir: flags.baseDir ?? Option.none(),
-      publicBaseUrl: flags.publicBaseUrl ?? Option.none(),
       cwd: flags.cwd ?? Option.none(),
       devUrl: flags.devUrl ?? Option.none(),
       noBrowser: flags.noBrowser ?? Option.none(),
@@ -378,14 +364,6 @@ export const resolveServerConfig = (
       () => Boolean(devUrl),
     );
     const staticDir = devUrl ? undefined : yield* resolveStaticDir();
-    const publicBaseUrl = Option.getOrElse(
-      resolveOptionPrecedence(
-        normalizedFlags.publicBaseUrl,
-        Option.fromUndefinedOr(env.publicBaseUrl),
-        Option.fromUndefinedOr(bootstrap?.publicBaseUrl),
-      ),
-      () => undefined,
-    );
     const host = Option.getOrElse(
       resolveOptionPrecedence(
         normalizedFlags.host,
@@ -420,7 +398,6 @@ export const resolveServerConfig = (
       ...derivedPaths,
       serverTracePath,
       host,
-      publicBaseUrl,
       staticDir,
       devUrl,
       noBrowser,
@@ -443,7 +420,6 @@ const resolveCliAuthConfig = (
       port: Option.none(),
       host: Option.none(),
       baseDir: flags.baseDir,
-      publicBaseUrl: Option.none(),
       cwd: Option.none(),
       devUrl: flags.devUrl ?? Option.none(),
       noBrowser: Option.none(),
@@ -819,7 +795,6 @@ const sharedServerCommandFlags = {
   port: portFlag,
   host: hostFlag,
   baseDir: baseDirFlag,
-  publicBaseUrl: publicBaseUrlFlag,
   cwd: Argument.string("cwd").pipe(
     Argument.withDescription(
       "Working directory for provider sessions (defaults to the current directory).",

@@ -86,7 +86,6 @@ import { toastManager } from "../ui/toast";
 import {
   BotIcon,
   CircleAlertIcon,
-  ImagePlusIcon,
   ListTodoIcon,
   type LucideIcon,
   LockIcon,
@@ -355,7 +354,6 @@ export interface ChatComposerProps {
 
   // Session phase
   phase: SessionPhase;
-  isRunning: boolean;
   isConnecting: boolean;
   isSendBusy: boolean;
   isPreparingWorktree: boolean;
@@ -460,7 +458,6 @@ export const ChatComposer = memo(
       isServerThread: _isServerThread,
       isLocalDraftThread: _isLocalDraftThread,
       phase,
-      isRunning,
       isConnecting,
       isSendBusy,
       isPreparingWorktree,
@@ -662,7 +659,6 @@ export const ChatComposer = memo(
     const composerMenuOpenRef = useRef(false);
     const composerMenuItemsRef = useRef<ComposerCommandItem[]>([]);
     const activeComposerMenuItemRef = useRef<ComposerCommandItem | null>(null);
-    const composerImageInputRef = useRef<HTMLInputElement>(null);
     const dragDepthRef = useRef(0);
 
     // ------------------------------------------------------------------
@@ -837,7 +833,7 @@ export const ChatComposer = memo(
       if (activePendingProgress) {
         return `pending:${activePendingProgress.questionIndex}:${activePendingProgress.isLastQuestion}:${activePendingIsResponding}`;
       }
-      if (isRunning) {
+      if (phase === "running") {
         return "running";
       }
       if (showPlanFollowUpPrompt) {
@@ -851,7 +847,7 @@ export const ChatComposer = memo(
       isConnecting,
       isPreparingWorktree,
       isSendBusy,
-      isRunning,
+      phase,
       prompt,
       showPlanFollowUpPrompt,
     ]);
@@ -1556,27 +1552,6 @@ export const ChatComposer = memo(
       removeComposerImageFromDraft(imageId);
     };
 
-    const openComposerImagePicker = useCallback(() => {
-      if (pendingUserInputs.length > 0) {
-        toastManager.add({
-          type: "error",
-          title: "Attach images after answering plan questions.",
-        });
-        return;
-      }
-      composerImageInputRef.current?.click();
-    }, [pendingUserInputs.length]);
-
-    const onComposerImageInputChange = useCallback(
-      (event: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(event.currentTarget.files ?? []);
-        event.currentTarget.value = "";
-        if (files.length === 0) return;
-        addComposerImages(files);
-      },
-      [addComposerImages],
-    );
-
     // ------------------------------------------------------------------
     // Callbacks: paste / drag
     // ------------------------------------------------------------------
@@ -1738,15 +1713,6 @@ export const ChatComposer = memo(
         className="mx-auto w-full min-w-0 max-w-208"
         data-chat-composer-form="true"
       >
-        <input
-          ref={composerImageInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="sr-only"
-          tabIndex={-1}
-          onChange={onComposerImageInputChange}
-        />
         <div
           className={cn(
             "group rounded-[22px] p-px transition-colors duration-200",
@@ -1953,20 +1919,6 @@ export const ChatComposer = memo(
                     onProviderModelChange={onProviderModelSelect}
                   />
 
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="shrink-0 px-2 text-muted-foreground/70 hover:text-foreground/80"
-                    aria-label="Attach images"
-                    title="Attach images"
-                    disabled={isConnecting}
-                    onClick={openComposerImagePicker}
-                  >
-                    <ImagePlusIcon aria-hidden="true" className="size-4" />
-                    <span className="sr-only">Attach images</span>
-                  </Button>
-
                   {isComposerFooterCompact ? (
                     <CompactComposerControlsMenu
                       activePlan={showPlanSidebarToggle}
@@ -2014,7 +1966,7 @@ export const ChatComposer = memo(
                     compact={isComposerPrimaryActionsCompact}
                     activeContextWindow={activeContextWindow}
                     pendingAction={pendingPrimaryAction}
-                    isRunning={isRunning}
+                    isRunning={phase === "running"}
                     showPlanFollowUpPrompt={
                       pendingUserInputs.length === 0 && showPlanFollowUpPrompt
                     }

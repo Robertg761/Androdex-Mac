@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { shouldApplyTerminalEvent, shouldReusePrimaryEnvironmentConnection } from "./service";
+import { shouldApplyTerminalEvent } from "./service";
 
 describe("shouldApplyTerminalEvent", () => {
   it("applies terminal events for draft-only threads", () => {
@@ -37,61 +37,5 @@ describe("shouldApplyTerminalEvent", () => {
         hasDraftThread: false,
       }),
     ).toBe(true);
-  });
-});
-
-describe("shouldReusePrimaryEnvironmentConnection", () => {
-  it("reuses a primary connection when the tunnel target is unchanged", () => {
-    expect(
-      shouldReusePrimaryEnvironmentConnection(
-        {
-          environmentId: "environment-1" as never,
-          kind: "primary",
-          knownEnvironment: {
-            environmentId: "environment-1" as never,
-            source: "window-origin",
-            target: {
-              httpBaseUrl: "https://relay.androdex.xyz/desktop/route-123",
-              wsBaseUrl: "wss://relay.androdex.xyz/desktop/route-123",
-            },
-          } as never,
-        },
-        {
-          environmentId: "environment-1" as never,
-          source: "window-origin",
-          target: {
-            httpBaseUrl: "https://relay.androdex.xyz/desktop/route-123",
-            wsBaseUrl: "wss://relay.androdex.xyz/desktop/route-123",
-          },
-        } as never,
-      ),
-    ).toBe(true);
-  });
-
-  it("replaces a primary connection when the tunnel target changes", () => {
-    expect(
-      shouldReusePrimaryEnvironmentConnection(
-        {
-          environmentId: "environment-1" as never,
-          kind: "primary",
-          knownEnvironment: {
-            environmentId: "environment-1" as never,
-            source: "window-origin",
-            target: {
-              httpBaseUrl: "https://relay.androdex.xyz/",
-              wsBaseUrl: "wss://relay.androdex.xyz/",
-            },
-          } as never,
-        },
-        {
-          environmentId: "environment-1" as never,
-          source: "window-origin",
-          target: {
-            httpBaseUrl: "https://relay.androdex.xyz/desktop/route-123",
-            wsBaseUrl: "wss://relay.androdex.xyz/desktop/route-123",
-          },
-        } as never,
-      ),
-    ).toBe(false);
   });
 });

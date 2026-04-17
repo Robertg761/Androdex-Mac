@@ -1,5 +1,4 @@
 import type { AuthClientMetadata, AuthClientSession, AuthPairingLink } from "@t3tools/contracts";
-import { buildPairingUrl } from "@t3tools/shared/pairingUrl";
 import { DateTime } from "effect";
 
 import type { IssuedBearerSession, IssuedPairingLink } from "./auth/Services/AuthControlPlane.ts";
@@ -34,7 +33,12 @@ export function formatIssuedPairingCredential(
 ): string {
   const pairUrl =
     options?.baseUrl != null && options.baseUrl.length > 0
-      ? buildPairingUrl(options.baseUrl, credential.credential)
+      ? (() => {
+          const url = new URL("/pair", options.baseUrl);
+          url.searchParams.delete("token");
+          url.hash = new URLSearchParams([["token", credential.credential]]).toString();
+          return url.toString();
+        })()
       : undefined;
 
   if (options?.json) {

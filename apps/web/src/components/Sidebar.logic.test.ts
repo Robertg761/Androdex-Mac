@@ -490,19 +490,6 @@ describe("resolveThreadStatusPill", () => {
       }),
     ).toMatchObject({ label: "Completed", pulse: false });
   });
-
-  it("treats stale running-without-active-turn as completed when the latest turn is already done", () => {
-    expect(
-      resolveThreadStatusPill({
-        thread: {
-          ...baseThread,
-          interactionMode: "default",
-          latestTurn: makeLatestTurn(),
-          lastVisitedAt: "2026-03-09T10:04:00.000Z",
-        },
-      }),
-    ).toMatchObject({ label: "Completed", pulse: false });
-  });
 });
 
 describe("resolveThreadRowClassName", () => {

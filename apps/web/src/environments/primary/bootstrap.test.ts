@@ -145,21 +145,6 @@ describe("environmentBootstrap", () => {
     expect(fetchMock).toHaveBeenCalledWith("http://localhost:5735/.well-known/t3/environment");
   });
 
-  it("preserves tunneled desktop route prefixes for primary environment bootstrap", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(BASE_ENVIRONMENT));
-    vi.stubGlobal("fetch", fetchMock);
-    installTestBrowser("https://relay.androdex.xyz/desktop/route-123/pair");
-
-    await expect(resolveInitialPrimaryEnvironmentDescriptor()).resolves.toEqual(BASE_ENVIRONMENT);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://relay.androdex.xyz/desktop/route-123/.well-known/t3/environment",
-    );
-    expect(getPrimaryKnownEnvironment()?.target).toEqual({
-      httpBaseUrl: "https://relay.androdex.xyz/desktop/route-123",
-      wsBaseUrl: "wss://relay.androdex.xyz/desktop/route-123",
-    });
-  });
-
   it("uses the vite proxy for desktop-managed loopback descriptor requests during local dev", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(BASE_ENVIRONMENT));
     vi.stubGlobal("fetch", fetchMock);

@@ -17,8 +17,7 @@ class RemoteEnvironmentAuthHttpError extends Error {
 
 function remoteEndpointUrl(httpBaseUrl: string, pathname: string): string {
   const url = new URL(httpBaseUrl);
-  const basePath = url.pathname.replace(/\/+$/, "");
-  url.pathname = `${basePath}${pathname}`;
+  url.pathname = pathname;
   url.search = "";
   url.hash = "";
   return url.toString();
