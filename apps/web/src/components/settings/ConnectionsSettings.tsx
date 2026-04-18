@@ -169,6 +169,8 @@ const ITEM_ROW_CLASSNAME = "border-t border-border/60 px-4 py-4 first:border-t-0
 const ITEM_ROW_INNER_CLASSNAME =
   "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between";
 
+const PAIRING_LINK_QR_CODE_SIZE = 132;
+
 function sortDesktopPairingLinks(links: ReadonlyArray<ServerPairingLinkRecord>) {
   return [...links].toSorted(
     (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
@@ -364,7 +366,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                   <PopoverPopup side="top" align="start" tooltipStyle className="w-max">
                     <QRCodeSvg
                       value={qrPairingUrl ?? shareablePairingUrl}
-                      size={88}
+                      size={PAIRING_LINK_QR_CODE_SIZE}
                       level="M"
                       marginSize={2}
                       title="Pairing link — scan to open in Androdex"
@@ -416,7 +418,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                   <div className="flex justify-center rounded-xl border border-border/60 bg-muted/30 p-4">
                     <QRCodeSvg
                       value={qrPairingUrl ?? shareablePairingUrl}
-                      size={132}
+                      size={PAIRING_LINK_QR_CODE_SIZE}
                       level="M"
                       marginSize={2}
                       title="Pairing link — scan to open in Androdex"
