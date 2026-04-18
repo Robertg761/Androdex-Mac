@@ -56,6 +56,7 @@ describe("SidebarCodexAccountControl", () => {
 
     expect(html).toContain("Accounts");
     expect(html).toContain("Codex account selector");
+    expect(html).toContain("Refresh Codex accounts");
   });
 
   it("does not render account metadata inside the trigger", () => {

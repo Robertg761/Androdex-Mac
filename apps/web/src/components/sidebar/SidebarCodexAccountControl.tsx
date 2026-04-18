@@ -35,8 +35,6 @@ interface SidebarCodexAccountControlProps {
 function renderSelectorButton(input: {
   readonly disabled: boolean;
   readonly disabledReason: string | null;
-  readonly isRefreshing: boolean;
-  readonly onRequestRefresh: () => void;
 }) {
   const button = (
     <Button
@@ -44,23 +42,11 @@ function renderSelectorButton(input: {
       size="xs"
       disabled={input.disabled}
       aria-label="Codex account selector"
-      aria-busy={input.isRefreshing || undefined}
-      onKeyDownCapture={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          input.onRequestRefresh();
-        }
-      }}
-      onPointerDownCapture={(event) => {
-        if (event.button === 0) {
-          input.onRequestRefresh();
-        }
-      }}
       className={cn(
         "h-7 w-auto shrink-0 justify-start rounded-md border-transparent bg-transparent px-1.5 text-left text-xs font-medium text-muted-foreground/70 shadow-none hover:bg-background/80 hover:text-foreground/80 sm:h-7",
         input.disabled && "hover:bg-transparent hover:text-muted-foreground/60",
       )}
     >
-      {input.isRefreshing ? <RefreshCwIcon className="size-3 animate-spin" /> : null}
       <span className="truncate">Accounts</span>
     </Button>
   );
@@ -123,7 +109,7 @@ export function SidebarCodexAccountControl({
     ? formatRunningCodexSessionNotice(snapshot.runningCodexSessionCount)
     : null;
   const handleRefreshRequest = useEffectEvent(() => {
-    if (selectorDisabled) {
+    if (isLoading) {
       return;
     }
 
@@ -140,15 +126,37 @@ export function SidebarCodexAccountControl({
         handleRefreshRequest();
       }}
     >
-      <MenuTrigger
-        disabled={selectorDisabled}
-        render={renderSelectorButton({
-          disabled: selectorDisabled,
-          disabledReason: selectorState.disabledReason,
-          isRefreshing: isLoading,
-          onRequestRefresh: handleRefreshRequest,
-        })}
-      />
+      <div className="inline-flex items-center gap-1">
+        <MenuTrigger
+          disabled={selectorDisabled}
+          render={renderSelectorButton({
+            disabled: selectorDisabled,
+            disabledReason: selectorState.disabledReason,
+          })}
+        />
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Refresh Codex accounts"
+                aria-busy={isLoading || undefined}
+                disabled={isLoading}
+                className="shrink-0 rounded-md border-transparent bg-transparent text-muted-foreground/70 shadow-none hover:bg-background/80 hover:text-foreground/80"
+                onClick={() => {
+                  handleRefreshRequest();
+                }}
+              >
+                <RefreshCwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
+              </Button>
+            }
+          />
+          <TooltipPopup side="top">
+            {isLoading ? "Refreshing Codex accounts..." : "Refresh Codex accounts"}
+          </TooltipPopup>
+        </Tooltip>
+      </div>
       <MenuPopup
         align="start"
         side="top"

@@ -38,12 +38,13 @@ vi.mock("~/hooks/useCodexAccountsSnapshot", () => ({
 }));
 
 describe("SidebarCodexAccountControl refreshing state", () => {
-  it("keeps the trigger enabled while refreshing an existing snapshot", () => {
+  it("keeps the account trigger enabled while the refresh button is busy", () => {
     const html = renderToStaticMarkup(
       <SidebarCodexAccountControl initialSnapshot={activeSnapshot} />,
     );
 
     expect(html).toContain('aria-busy="true"');
-    expect(html).not.toContain(' disabled=""');
+    expect(html).toContain('aria-label="Refresh Codex accounts"');
+    expect(html).toMatch(/aria-label="Codex account selector"(?:(?!disabled).)*>Accounts</s);
   });
 });
