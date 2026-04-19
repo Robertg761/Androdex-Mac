@@ -43,7 +43,8 @@ import { DESKTOP_MAC_TRAFFIC_LIGHT_POSITION } from "@t3tools/shared/desktopShell
 import { DEFAULT_DESKTOP_BACKEND_PORT, resolveDesktopBackendPort } from "./backendPort";
 import {
   DEFAULT_DESKTOP_SETTINGS,
-  readDesktopSettings,
+  type DesktopSettings,
+  loadDesktopSettings,
   setDesktopServerExposurePreference,
   writeDesktopSettings,
 } from "./desktopSettings";
@@ -213,12 +214,20 @@ function resolveDesktopBaseDir(): string {
   }
   return preferredBaseDir;
 }
+
+function resolveDefaultDesktopSettings(): DesktopSettings {
+  return DEFAULT_DESKTOP_SETTINGS;
+}
+
 let aboutCommitHashCache: string | null | undefined;
 let desktopLogSink: RotatingFileSink | null = null;
 let backendLogSink: RotatingFileSink | null = null;
 let restoreStdIoCapture: (() => void) | null = null;
 let backendObservabilitySettings = readPersistedBackendObservabilitySettings();
-let desktopSettings = readDesktopSettings(DESKTOP_SETTINGS_PATH);
+const defaultDesktopSettings = resolveDefaultDesktopSettings();
+const initialDesktopSettings = loadDesktopSettings(DESKTOP_SETTINGS_PATH, defaultDesktopSettings);
+let desktopSettings = initialDesktopSettings.settings;
+let desktopSettingsSource = initialDesktopSettings.source;
 let desktopServerExposureMode: DesktopServerExposureMode = desktopSettings.serverExposureMode;
 
 let destructiveMenuIconCache: Electron.NativeImage | null | undefined;
@@ -417,6 +426,7 @@ async function applyDesktopServerExposureMode(
 
   if (options?.persist) {
     writeDesktopSettings(DESKTOP_SETTINGS_PATH, desktopSettings);
+    desktopSettingsSource = "persisted";
   }
 
   return getDesktopServerExposureState();
@@ -1837,7 +1847,10 @@ async function bootstrap(): Promise<void> {
       : `using configured backend port port=${backendPort}`,
   );
   backendBootstrapToken = Crypto.randomBytes(24).toString("hex");
-  if (desktopSettings.serverExposureMode !== DEFAULT_DESKTOP_SETTINGS.serverExposureMode) {
+  if (
+    desktopSettingsSource === "persisted" &&
+    desktopSettings.serverExposureMode !== defaultDesktopSettings.serverExposureMode
+  ) {
     writeDesktopLogHeader(
       `bootstrap restoring persisted server exposure mode mode=${desktopSettings.serverExposureMode}`,
     );
@@ -1845,7 +1858,9 @@ async function bootstrap(): Promise<void> {
   const serverExposureState = await applyDesktopServerExposureMode(
     desktopSettings.serverExposureMode,
     {
-      persist: desktopSettings.serverExposureMode !== DEFAULT_DESKTOP_SETTINGS.serverExposureMode,
+      persist:
+        desktopSettingsSource === "persisted" &&
+        desktopSettings.serverExposureMode !== defaultDesktopSettings.serverExposureMode,
     },
   );
   writeDesktopLogHeader(`bootstrap resolved backend endpoint baseUrl=${backendHttpUrl}`);

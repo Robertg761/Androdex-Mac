@@ -110,7 +110,7 @@ describe("desktopTunnelClient", () => {
 
     await vi.waitFor(() => {
       expect(fetchFn).toHaveBeenCalledWith(
-        "http://127.0.0.1:3773/desktop/route-1/api/orchestration/dispatch?via=tunnel",
+        "http://127.0.0.1:3773/api/orchestration/dispatch?via=tunnel",
         expect.objectContaining({
           method: "POST",
         }),
@@ -152,7 +152,7 @@ describe("desktopTunnelClient", () => {
       JSON.stringify({
         type: "ws-open",
         sessionId: "session-1",
-        path: "/ws?wsToken=token-123",
+        path: "/desktop/route-1/ws?wsToken=token-123",
       }),
     );
 
@@ -182,6 +182,48 @@ describe("desktopTunnelClient", () => {
         sessionId: "session-1",
         text: "from-local-backend",
       });
+    });
+  });
+
+  it("buffers public websocket frames until the local backend socket opens", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const client = new DesktopTunnelClient({
+      origin: "https://relay.example.com",
+      routeId: "route-1",
+      routeToken: "token-1",
+      localHttpUrl: "http://127.0.0.1:3773",
+      createWebSocket: (url) => {
+        const socket = new FakeWebSocket(url);
+        sockets.push(socket);
+        return socket as unknown as WebSocket;
+      },
+    });
+
+    client.start();
+    const controlSocket = sockets[0]!;
+    controlSocket.open();
+    controlSocket.message(
+      JSON.stringify({
+        type: "ws-open",
+        sessionId: "session-1",
+        path: "/desktop/route-1/ws?wsToken=token-123",
+      }),
+    );
+
+    const localSocket = sockets[1]!;
+    controlSocket.message(
+      JSON.stringify({
+        type: "ws-frame",
+        sessionId: "session-1",
+        text: "queued-before-open",
+      }),
+    );
+    expect(localSocket.sent).toEqual([]);
+
+    localSocket.open();
+
+    await vi.waitFor(() => {
+      expect(localSocket.sent).toContain("queued-before-open");
     });
   });
 });

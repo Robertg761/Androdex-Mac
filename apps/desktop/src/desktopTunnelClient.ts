@@ -177,6 +177,25 @@ function localHttpRequestUrl(localHttpUrl: string, path: string): string {
   return new URL(path, localHttpUrl).toString();
 }
 
+function normalizeTunnelTargetPath(path: string, routeId: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) {
+    return "/";
+  }
+
+  const normalized = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  const routePrefix = `${DESKTOP_TUNNEL_PUBLIC_PREFIX}/${encodeURIComponent(routeId)}`;
+  if (normalized === routePrefix) {
+    return "/";
+  }
+  if (!normalized.startsWith(`${routePrefix}/`) && !normalized.startsWith(`${routePrefix}?`)) {
+    return normalized;
+  }
+
+  const stripped = normalized.slice(routePrefix.length);
+  return stripped.length > 0 ? stripped : "/";
+}
+
 function normalizeHeaders(headers: Record<string, string> | undefined): Record<string, string> {
   if (!headers) {
     return {};
@@ -252,6 +271,10 @@ export class DesktopTunnelClient {
   private controlSocket: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly localSockets = new Map<string, WebSocket>();
+  private readonly pendingLocalSocketFrames = new Map<
+    string,
+    Array<Pick<DesktopTunnelWebSocketFrameMessage, "text" | "bodyBase64">>
+  >();
 
   constructor(options: DesktopTunnelClientOptions) {
     this.origin = options.origin;
@@ -376,12 +399,18 @@ export class DesktopTunnelClient {
     timeout.unref?.();
 
     try {
-      const response = await this.fetchFn(localHttpRequestUrl(this.localHttpUrl, message.path), {
-        method: message.method,
-        headers: normalizeHeaders(message.headers),
-        ...(message.bodyBase64 ? { body: Buffer.from(message.bodyBase64, "base64") } : {}),
-        signal: abortController.signal,
-      });
+      const response = await this.fetchFn(
+        localHttpRequestUrl(
+          this.localHttpUrl,
+          normalizeTunnelTargetPath(message.path, this.routeId),
+        ),
+        {
+          method: message.method,
+          headers: normalizeHeaders(message.headers),
+          ...(message.bodyBase64 ? { body: Buffer.from(message.bodyBase64, "base64") } : {}),
+          signal: abortController.signal,
+        },
+      );
       const body = Buffer.from(await response.arrayBuffer());
 
       this.sendControlMessage({
@@ -408,11 +437,15 @@ export class DesktopTunnelClient {
 
   private openLocalWebSocket(message: DesktopTunnelWebSocketOpenMessage): void {
     this.closeLocalWebSocket(message.sessionId, 1012, "Replaced by new session");
+    this.pendingLocalSocketFrames.set(message.sessionId, []);
 
-    const socket = this.createWebSocket(localWebSocketUrl(this.localHttpUrl, message.path));
+    const socket = this.createWebSocket(
+      localWebSocketUrl(this.localHttpUrl, normalizeTunnelTargetPath(message.path, this.routeId)),
+    );
     this.localSockets.set(message.sessionId, socket);
 
     socket.addEventListener("open", () => {
+      this.flushPendingLocalSocketFrames(message.sessionId, socket);
       this.sendControlMessage({
         type: "ws-opened",
         sessionId: message.sessionId,
@@ -434,6 +467,7 @@ export class DesktopTunnelClient {
       if (this.localSockets.get(message.sessionId) === socket) {
         this.localSockets.delete(message.sessionId);
       }
+      this.pendingLocalSocketFrames.delete(message.sessionId);
       this.sendControlMessage({
         type: "ws-close",
         sessionId: message.sessionId,
@@ -459,18 +493,27 @@ export class DesktopTunnelClient {
 
   private forwardWebSocketFrameToLocal(message: DesktopTunnelWebSocketFrameMessage): void {
     const socket = this.localSockets.get(message.sessionId);
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
+    if (!socket) {
       return;
     }
 
-    if (message.text !== undefined) {
-      socket.send(message.text);
+    if (socket.readyState === WebSocket.CONNECTING) {
+      const pendingFrames = this.pendingLocalSocketFrames.get(message.sessionId);
+      if (!pendingFrames) {
+        return;
+      }
+      pendingFrames.push({
+        ...(message.text !== undefined ? { text: message.text } : {}),
+        ...(message.bodyBase64 ? { bodyBase64: message.bodyBase64 } : {}),
+      });
       return;
     }
 
-    if (message.bodyBase64) {
-      socket.send(Buffer.from(message.bodyBase64, "base64"));
+    if (socket.readyState !== WebSocket.OPEN) {
+      return;
     }
+
+    this.sendFrameToLocalSocket(socket, message);
   }
 
   private closeLocalWebSocket(sessionId: string, code = 1000, reason = ""): void {
@@ -479,6 +522,7 @@ export class DesktopTunnelClient {
       return;
     }
     this.localSockets.delete(sessionId);
+    this.pendingLocalSocketFrames.delete(sessionId);
     if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
       return;
     }
@@ -497,5 +541,31 @@ export class DesktopTunnelClient {
       return;
     }
     socket.send(JSON.stringify(message));
+  }
+
+  private flushPendingLocalSocketFrames(sessionId: string, socket: WebSocket): void {
+    const pendingFrames = this.pendingLocalSocketFrames.get(sessionId);
+    if (!pendingFrames || pendingFrames.length === 0) {
+      return;
+    }
+
+    for (const frame of pendingFrames) {
+      this.sendFrameToLocalSocket(socket, frame);
+    }
+    this.pendingLocalSocketFrames.delete(sessionId);
+  }
+
+  private sendFrameToLocalSocket(
+    socket: WebSocket,
+    frame: Pick<DesktopTunnelWebSocketFrameMessage, "text" | "bodyBase64">,
+  ): void {
+    if (frame.text !== undefined) {
+      socket.send(frame.text);
+      return;
+    }
+
+    if (frame.bodyBase64) {
+      socket.send(Buffer.from(frame.bodyBase64, "base64"));
+    }
   }
 }

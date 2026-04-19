@@ -6,9 +6,32 @@ export interface DesktopSettings {
   readonly serverExposureMode: DesktopServerExposureMode;
 }
 
+export type DesktopSettingsSource = "default" | "persisted";
+
+export interface LoadedDesktopSettings {
+  readonly settings: DesktopSettings;
+  readonly source: DesktopSettingsSource;
+}
+
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   serverExposureMode: "local-only",
 };
+
+function normalizeDesktopSettings(
+  parsed: {
+    readonly serverExposureMode?: unknown;
+  },
+  defaults: DesktopSettings,
+): DesktopSettings {
+  if (parsed.serverExposureMode === undefined) {
+    return defaults;
+  }
+
+  return {
+    serverExposureMode:
+      parsed.serverExposureMode === "network-accessible" ? "network-accessible" : "local-only",
+  };
+}
 
 export function setDesktopServerExposurePreference(
   settings: DesktopSettings,
@@ -22,10 +45,16 @@ export function setDesktopServerExposurePreference(
       };
 }
 
-export function readDesktopSettings(settingsPath: string): DesktopSettings {
+export function loadDesktopSettings(
+  settingsPath: string,
+  defaults: DesktopSettings = DEFAULT_DESKTOP_SETTINGS,
+): LoadedDesktopSettings {
   try {
     if (!FS.existsSync(settingsPath)) {
-      return DEFAULT_DESKTOP_SETTINGS;
+      return {
+        settings: defaults,
+        source: "default",
+      };
     }
 
     const raw = FS.readFileSync(settingsPath, "utf8");
@@ -34,12 +63,22 @@ export function readDesktopSettings(settingsPath: string): DesktopSettings {
     };
 
     return {
-      serverExposureMode:
-        parsed.serverExposureMode === "network-accessible" ? "network-accessible" : "local-only",
+      settings: normalizeDesktopSettings(parsed, defaults),
+      source: "persisted",
     };
   } catch {
-    return DEFAULT_DESKTOP_SETTINGS;
+    return {
+      settings: defaults,
+      source: "default",
+    };
   }
+}
+
+export function readDesktopSettings(
+  settingsPath: string,
+  defaults: DesktopSettings = DEFAULT_DESKTOP_SETTINGS,
+): DesktopSettings {
+  return loadDesktopSettings(settingsPath, defaults).settings;
 }
 
 export function writeDesktopSettings(settingsPath: string, settings: DesktopSettings): void {

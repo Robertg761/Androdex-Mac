@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   DEFAULT_DESKTOP_SETTINGS,
+  loadDesktopSettings,
   readDesktopSettings,
   setDesktopServerExposurePreference,
   writeDesktopSettings,
@@ -28,6 +29,46 @@ function makeSettingsPath() {
 describe("desktopSettings", () => {
   it("returns defaults when no settings file exists", () => {
     expect(readDesktopSettings(makeSettingsPath())).toEqual(DEFAULT_DESKTOP_SETTINGS);
+  });
+
+  it("supports caller-provided defaults when no settings file exists", () => {
+    expect(
+      readDesktopSettings(makeSettingsPath(), {
+        serverExposureMode: "network-accessible",
+      }),
+    ).toEqual({
+      serverExposureMode: "network-accessible",
+    });
+  });
+
+  it("reports whether settings came from disk or defaults", () => {
+    const settingsPath = makeSettingsPath();
+
+    expect(
+      loadDesktopSettings(settingsPath, {
+        serverExposureMode: "network-accessible",
+      }),
+    ).toEqual({
+      settings: {
+        serverExposureMode: "network-accessible",
+      },
+      source: "default",
+    });
+
+    writeDesktopSettings(settingsPath, {
+      serverExposureMode: "local-only",
+    });
+
+    expect(
+      loadDesktopSettings(settingsPath, {
+        serverExposureMode: "network-accessible",
+      }),
+    ).toEqual({
+      settings: {
+        serverExposureMode: "local-only",
+      },
+      source: "persisted",
+    });
   });
 
   it("persists and reloads the configured server exposure mode", () => {
