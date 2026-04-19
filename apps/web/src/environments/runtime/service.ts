@@ -29,7 +29,7 @@ import { collectActiveTerminalThreadIds } from "~/lib/terminalStateCleanup";
 import { deriveOrchestrationBatchEffects } from "~/orchestrationEventEffects";
 import { projectQueryKeys } from "~/lib/projectReactQuery";
 import { providerQueryKeys } from "~/lib/providerReactQuery";
-import { getPrimaryKnownEnvironment } from "../primary";
+import { getPrimaryKnownEnvironment, resolvePrimaryWebSocketConnectionUrl } from "../primary";
 import {
   bootstrapRemoteBearerSession,
   fetchRemoteEnvironmentDescriptor,
@@ -354,13 +354,26 @@ function createPrimaryEnvironmentClient(
   knownEnvironment: ReturnType<typeof getPrimaryKnownEnvironment>,
 ) {
   const wsBaseUrl = getKnownEnvironmentWsBaseUrl(knownEnvironment);
+  const httpBaseUrl = knownEnvironment?.target.httpBaseUrl;
   if (!wsBaseUrl) {
     throw new Error(
       `Unable to resolve websocket URL for ${knownEnvironment?.label ?? "primary environment"}.`,
     );
   }
+  if (!httpBaseUrl) {
+    throw new Error(
+      `Unable to resolve HTTP base URL for ${knownEnvironment?.label ?? "primary environment"}.`,
+    );
+  }
 
-  return createWsRpcClient(new WsTransport(wsBaseUrl));
+  return createWsRpcClient(
+    new WsTransport(() =>
+      resolvePrimaryWebSocketConnectionUrl({
+        httpBaseUrl,
+        wsBaseUrl,
+      }),
+    ),
+  );
 }
 
 function createSavedEnvironmentClient(

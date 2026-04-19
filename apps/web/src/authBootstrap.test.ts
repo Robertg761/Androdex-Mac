@@ -528,6 +528,61 @@ describe("resolveInitialServerAuthGateState", () => {
     });
   });
 
+  it("mints a primary websocket url with a short-lived ws token", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        token: "ws-token",
+        expiresAt: "2026-04-05T00:05:00.000Z",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { resolvePrimaryWebSocketConnectionUrl } = await import("./environments/primary");
+
+    await expect(
+      resolvePrimaryWebSocketConnectionUrl({
+        httpBaseUrl: "http://localhost:3773",
+        wsBaseUrl: "ws://localhost:3773",
+      }),
+    ).resolves.toBe("ws://localhost:3773/?wsToken=ws-token");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:3773/api/auth/ws-token",
+      expect.objectContaining({
+        credentials: "include",
+        method: "POST",
+      }),
+    );
+  });
+
+  it("preserves tunneled desktop route prefixes when minting primary websocket urls", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        token: "ws-token",
+        expiresAt: "2026-04-05T00:05:00.000Z",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    installTestBrowser("https://relay.androdex.xyz/desktop/route-123/pair");
+
+    const { resolvePrimaryWebSocketConnectionUrl } = await import("./environments/primary");
+
+    await expect(
+      resolvePrimaryWebSocketConnectionUrl({
+        httpBaseUrl: "https://relay.androdex.xyz/desktop/route-123",
+        wsBaseUrl: "wss://relay.androdex.xyz/desktop/route-123",
+      }),
+    ).resolves.toBe("wss://relay.androdex.xyz/desktop/route-123?wsToken=ws-token");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://relay.androdex.xyz/desktop/route-123/api/auth/ws-token",
+      expect.objectContaining({
+        credentials: "include",
+        method: "POST",
+      }),
+    );
+  });
+
   it("loads pairing links without using a cached auth-access snapshot", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
       jsonResponse([

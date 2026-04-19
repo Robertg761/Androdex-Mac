@@ -163,6 +163,18 @@ export function resolvePrimaryEnvironmentHttpUrl(
   return url.toString();
 }
 
+export function resolvePrimaryEnvironmentHttpUrlFromBase(
+  httpBaseUrl: string,
+  pathname: string,
+  searchParams?: Record<string, string>,
+): string {
+  const url = new URL(joinBaseUrlPath(resolveHttpRequestBaseUrl(httpBaseUrl), pathname));
+  if (searchParams) {
+    url.search = new URLSearchParams(searchParams).toString();
+  }
+  return url.toString();
+}
+
 export function readPrimaryEnvironmentTarget(): PrimaryEnvironmentTarget | null {
   return (
     resolveDesktopPrimaryTarget() ??

@@ -8,6 +8,7 @@ import type {
   AuthRevokePairingLinkInput,
   AuthSessionId,
   AuthSessionState,
+  AuthWebSocketTokenResult,
 } from "@t3tools/contracts";
 
 import {
@@ -15,7 +16,10 @@ import {
   stripPairingTokenFromUrl as stripPairingTokenUrl,
 } from "../../pairingUrl";
 
-import { resolvePrimaryEnvironmentHttpUrl } from "./target";
+import {
+  resolvePrimaryEnvironmentHttpUrl,
+  resolvePrimaryEnvironmentHttpUrlFromBase,
+} from "./target";
 import { Data, Predicate } from "effect";
 
 export class BootstrapHttpError extends Data.TaggedError("BootstrapHttpError")<{
@@ -131,6 +135,30 @@ async function exchangeBootstrapCredential(credential: string): Promise<AuthBoot
 
     return (await response.json()) as AuthBootstrapResult;
   });
+}
+
+export async function resolvePrimaryWebSocketConnectionUrl(input: {
+  readonly httpBaseUrl: string;
+  readonly wsBaseUrl: string;
+}): Promise<string> {
+  const response = await fetch(
+    resolvePrimaryEnvironmentHttpUrlFromBase(input.httpBaseUrl, "/api/auth/ws-token"),
+    {
+      credentials: "include",
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      await readErrorMessage(response, `Failed to issue websocket token (${response.status}).`),
+    );
+  }
+
+  const issued = (await response.json()) as AuthWebSocketTokenResult;
+  const url = new URL(input.wsBaseUrl, window.location.origin);
+  url.searchParams.set("wsToken", issued.token);
+  return url.toString();
 }
 
 async function waitForAuthenticatedSessionAfterBootstrap(): Promise<AuthSessionState> {
