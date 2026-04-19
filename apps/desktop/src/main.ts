@@ -9,30 +9,23 @@ import {
   BrowserWindow,
   clipboard,
   dialog,
-  ipcMain,
   Menu,
   nativeImage,
   nativeTheme,
-  Notification,
   protocol,
   safeStorage,
   shell,
 } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
 import type {
-  ClientSettings,
   DesktopTheme,
   DesktopServerExposureMode,
   DesktopServerExposureState,
-  PersistedSavedEnvironmentRecord,
   DesktopThreadNotification,
-  DesktopUpdateActionResult,
-  DesktopUpdateCheckResult,
   DesktopUpdateState,
 } from "@t3tools/contracts";
 import { autoUpdater } from "electron-updater";
 
-import type { ContextMenuItem } from "@t3tools/contracts";
 import { RotatingFileSink } from "@t3tools/shared/logging";
 import { parsePersistedServerObservabilitySettings } from "@t3tools/shared/serverSettings";
 import {
@@ -54,15 +47,6 @@ import {
   setDesktopServerExposurePreference,
   writeDesktopSettings,
 } from "./desktopSettings";
-import {
-  readClientSettings,
-  readSavedEnvironmentRegistry,
-  readSavedEnvironmentSecret,
-  removeSavedEnvironmentSecret,
-  writeClientSettings,
-  writeSavedEnvironmentRegistry,
-  writeSavedEnvironmentSecret,
-} from "./clientPersistence";
 import {
   isBackendReadinessAborted,
   waitForHttpReady,
@@ -99,32 +83,12 @@ import {
 } from "./macManualUpdate";
 import { triggerDownloadedUpdateInstall } from "./updateInstall";
 import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runtimeArch";
-import { showDesktopThreadNotification } from "./threadNotifications";
+import { registerDesktopIpcHandlers } from "./ipc";
+import { MENU_ACTION_CHANNEL } from "./ipc/channels";
 
 syncShellEnvironment();
 
-const PICK_FOLDER_CHANNEL = "desktop:pick-folder";
-const CONFIRM_CHANNEL = "desktop:confirm";
-const SET_THEME_CHANNEL = "desktop:set-theme";
-const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
-const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
-const SHOW_THREAD_NOTIFICATION_CHANNEL = "desktop:show-thread-notification";
-const MENU_ACTION_CHANNEL = "desktop:menu-action";
 const UPDATE_STATE_CHANNEL = "desktop:update-state";
-const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
-const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
-const UPDATE_INSTALL_CHANNEL = "desktop:update-install";
-const UPDATE_CHECK_CHANNEL = "desktop:update-check";
-const GET_LOCAL_ENVIRONMENT_BOOTSTRAP_CHANNEL = "desktop:get-local-environment-bootstrap";
-const GET_CLIENT_SETTINGS_CHANNEL = "desktop:get-client-settings";
-const SET_CLIENT_SETTINGS_CHANNEL = "desktop:set-client-settings";
-const GET_SAVED_ENVIRONMENT_REGISTRY_CHANNEL = "desktop:get-saved-environment-registry";
-const SET_SAVED_ENVIRONMENT_REGISTRY_CHANNEL = "desktop:set-saved-environment-registry";
-const GET_SAVED_ENVIRONMENT_SECRET_CHANNEL = "desktop:get-saved-environment-secret";
-const SET_SAVED_ENVIRONMENT_SECRET_CHANNEL = "desktop:set-saved-environment-secret";
-const REMOVE_SAVED_ENVIRONMENT_SECRET_CHANNEL = "desktop:remove-saved-environment-secret";
-const GET_SERVER_EXPOSURE_STATE_CHANNEL = "desktop:get-server-exposure-state";
-const SET_SERVER_EXPOSURE_MODE_CHANNEL = "desktop:set-server-exposure-mode";
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
 const APP_STAGE = isDevelopment ? "Dev" : "Alpha";
 const APP_DISPLAY_NAME = makeAppDisplayName(APP_STAGE);
@@ -1620,294 +1584,34 @@ async function stopBackendAndWaitForExit(timeoutMs = 5_000): Promise<void> {
 }
 
 function registerIpcHandlers(): void {
-  ipcMain.removeAllListeners(GET_LOCAL_ENVIRONMENT_BOOTSTRAP_CHANNEL);
-  ipcMain.on(GET_LOCAL_ENVIRONMENT_BOOTSTRAP_CHANNEL, (event) => {
-    event.returnValue = {
+  registerDesktopIpcHandlers({
+    clientSettingsPath: CLIENT_SETTINGS_PATH,
+    savedEnvironmentRegistryPath: SAVED_ENVIRONMENT_REGISTRY_PATH,
+    getBootstrapPayload: () => ({
       label: "Local environment",
       httpBaseUrl: backendHttpUrl || null,
       wsBaseUrl: backendWsUrl || null,
-      bootstrapToken: backendBootstrapToken || undefined,
-    } as const;
-  });
-
-  ipcMain.removeHandler(GET_CLIENT_SETTINGS_CHANNEL);
-  ipcMain.handle(GET_CLIENT_SETTINGS_CHANNEL, async () => readClientSettings(CLIENT_SETTINGS_PATH));
-
-  ipcMain.removeHandler(SET_CLIENT_SETTINGS_CHANNEL);
-  ipcMain.handle(SET_CLIENT_SETTINGS_CHANNEL, async (_event, rawSettings: unknown) => {
-    if (typeof rawSettings !== "object" || rawSettings === null) {
-      throw new Error("Invalid client settings payload.");
-    }
-
-    writeClientSettings(CLIENT_SETTINGS_PATH, rawSettings as ClientSettings);
-  });
-
-  ipcMain.removeHandler(GET_SAVED_ENVIRONMENT_REGISTRY_CHANNEL);
-  ipcMain.handle(GET_SAVED_ENVIRONMENT_REGISTRY_CHANNEL, async () =>
-    readSavedEnvironmentRegistry(SAVED_ENVIRONMENT_REGISTRY_PATH),
-  );
-
-  ipcMain.removeHandler(SET_SAVED_ENVIRONMENT_REGISTRY_CHANNEL);
-  ipcMain.handle(SET_SAVED_ENVIRONMENT_REGISTRY_CHANNEL, async (_event, rawRecords: unknown) => {
-    if (!Array.isArray(rawRecords)) {
-      throw new Error("Invalid saved environment registry payload.");
-    }
-
-    writeSavedEnvironmentRegistry(
-      SAVED_ENVIRONMENT_REGISTRY_PATH,
-      rawRecords as readonly PersistedSavedEnvironmentRecord[],
-    );
-  });
-
-  ipcMain.removeHandler(GET_SAVED_ENVIRONMENT_SECRET_CHANNEL);
-  ipcMain.handle(
-    GET_SAVED_ENVIRONMENT_SECRET_CHANNEL,
-    async (_event, rawEnvironmentId: unknown) => {
-      if (typeof rawEnvironmentId !== "string" || rawEnvironmentId.trim().length === 0) {
-        return null;
-      }
-
-      return readSavedEnvironmentSecret({
-        registryPath: SAVED_ENVIRONMENT_REGISTRY_PATH,
-        environmentId: rawEnvironmentId,
-        secretStorage: getDesktopSecretStorage(),
-      });
-    },
-  );
-
-  ipcMain.removeHandler(SET_SAVED_ENVIRONMENT_SECRET_CHANNEL);
-  ipcMain.handle(
-    SET_SAVED_ENVIRONMENT_SECRET_CHANNEL,
-    async (_event, rawEnvironmentId: unknown, rawSecret: unknown) => {
-      if (typeof rawEnvironmentId !== "string" || rawEnvironmentId.trim().length === 0) {
-        throw new Error("Invalid saved environment id.");
-      }
-      if (typeof rawSecret !== "string" || rawSecret.trim().length === 0) {
-        throw new Error("Invalid saved environment secret.");
-      }
-
-      return writeSavedEnvironmentSecret({
-        registryPath: SAVED_ENVIRONMENT_REGISTRY_PATH,
-        environmentId: rawEnvironmentId,
-        secret: rawSecret,
-        secretStorage: getDesktopSecretStorage(),
-      });
-    },
-  );
-
-  ipcMain.removeHandler(REMOVE_SAVED_ENVIRONMENT_SECRET_CHANNEL);
-  ipcMain.handle(
-    REMOVE_SAVED_ENVIRONMENT_SECRET_CHANNEL,
-    async (_event, rawEnvironmentId: unknown) => {
-      if (typeof rawEnvironmentId !== "string" || rawEnvironmentId.trim().length === 0) {
-        return;
-      }
-
-      removeSavedEnvironmentSecret({
-        registryPath: SAVED_ENVIRONMENT_REGISTRY_PATH,
-        environmentId: rawEnvironmentId,
-      });
-    },
-  );
-
-  ipcMain.removeHandler(GET_SERVER_EXPOSURE_STATE_CHANNEL);
-  ipcMain.handle(GET_SERVER_EXPOSURE_STATE_CHANNEL, async () => getDesktopServerExposureState());
-
-  ipcMain.removeHandler(SET_SERVER_EXPOSURE_MODE_CHANNEL);
-  ipcMain.handle(SET_SERVER_EXPOSURE_MODE_CHANNEL, async (_event, rawMode: unknown) => {
-    if (rawMode !== "local-only" && rawMode !== "network-accessible") {
-      throw new Error("Invalid desktop server exposure input.");
-    }
-
-    const nextMode = rawMode as DesktopServerExposureMode;
-    if (nextMode === desktopServerExposureMode) {
-      return getDesktopServerExposureState();
-    }
-
-    const nextState = await applyDesktopServerExposureMode(nextMode, {
-      persist: true,
-      rejectIfUnavailable: true,
-    });
-    relaunchDesktopApp(`serverExposureMode=${nextMode}`);
-    return nextState;
-  });
-
-  ipcMain.removeHandler(PICK_FOLDER_CHANNEL);
-  ipcMain.handle(PICK_FOLDER_CHANNEL, async () => {
-    const owner = BrowserWindow.getFocusedWindow() ?? mainWindow;
-    const result = owner
-      ? await dialog.showOpenDialog(owner, {
-          properties: ["openDirectory", "createDirectory"],
-        })
-      : await dialog.showOpenDialog({
-          properties: ["openDirectory", "createDirectory"],
-        });
-    if (result.canceled) return null;
-    return result.filePaths[0] ?? null;
-  });
-
-  ipcMain.removeHandler(CONFIRM_CHANNEL);
-  ipcMain.handle(CONFIRM_CHANNEL, async (_event, message: unknown) => {
-    if (typeof message !== "string") {
-      return false;
-    }
-
-    const owner = BrowserWindow.getFocusedWindow() ?? mainWindow;
-    return showDesktopConfirmDialog(message, owner);
-  });
-
-  ipcMain.removeHandler(SET_THEME_CHANNEL);
-  ipcMain.handle(SET_THEME_CHANNEL, async (_event, rawTheme: unknown) => {
-    const theme = getSafeTheme(rawTheme);
-    if (!theme) {
-      return;
-    }
-
-    nativeTheme.themeSource = theme;
-  });
-
-  ipcMain.removeHandler(CONTEXT_MENU_CHANNEL);
-  ipcMain.handle(
-    CONTEXT_MENU_CHANNEL,
-    async (_event, items: ContextMenuItem[], position?: { x: number; y: number }) => {
-      const normalizedItems = items
-        .filter((item) => typeof item.id === "string" && typeof item.label === "string")
-        .map((item) => ({
-          id: item.id,
-          label: item.label,
-          destructive: item.destructive === true,
-          disabled: item.disabled === true,
-        }));
-      if (normalizedItems.length === 0) {
-        return null;
-      }
-
-      const popupPosition =
-        position &&
-        Number.isFinite(position.x) &&
-        Number.isFinite(position.y) &&
-        position.x >= 0 &&
-        position.y >= 0
-          ? {
-              x: Math.floor(position.x),
-              y: Math.floor(position.y),
-            }
-          : null;
-
-      const window = BrowserWindow.getFocusedWindow() ?? mainWindow;
-      if (!window) return null;
-
-      return new Promise<string | null>((resolve) => {
-        const template: MenuItemConstructorOptions[] = [];
-        let hasInsertedDestructiveSeparator = false;
-        for (const item of normalizedItems) {
-          if (item.destructive && !hasInsertedDestructiveSeparator && template.length > 0) {
-            template.push({ type: "separator" });
-            hasInsertedDestructiveSeparator = true;
-          }
-          const itemOption: MenuItemConstructorOptions = {
-            label: item.label,
-            enabled: !item.disabled,
-            click: () => resolve(item.id),
-          };
-          if (item.destructive) {
-            const destructiveIcon = getDestructiveMenuIcon();
-            if (destructiveIcon) {
-              itemOption.icon = destructiveIcon;
-            }
-          }
-          template.push(itemOption);
-        }
-
-        const menu = Menu.buildFromTemplate(template);
-        menu.popup({
-          window,
-          ...popupPosition,
-          callback: () => resolve(null),
-        });
-      });
-    },
-  );
-
-  ipcMain.removeHandler(OPEN_EXTERNAL_CHANNEL);
-  ipcMain.handle(OPEN_EXTERNAL_CHANNEL, async (_event, rawUrl: unknown) => {
-    const externalUrl = getSafeExternalUrl(rawUrl);
-    if (!externalUrl) {
-      return false;
-    }
-
-    try {
-      await shell.openExternal(externalUrl);
-      return true;
-    } catch {
-      return false;
-    }
-  });
-
-  ipcMain.removeHandler(SHOW_THREAD_NOTIFICATION_CHANNEL);
-  ipcMain.handle(SHOW_THREAD_NOTIFICATION_CHANNEL, async (_event, rawNotification: unknown) => {
-    const notification = getDesktopThreadNotification(rawNotification);
-    if (!notification) {
-      return false;
-    }
-
-    return showDesktopThreadNotification({
-      notification,
-      windows: BrowserWindow.getAllWindows(),
-      isNotificationSupported: () => Notification.isSupported(),
-      createNotification: (options) => new Notification(options),
-      onClick: () => {
-        const window = mainWindow ?? BrowserWindow.getAllWindows()[0];
-        if (window) {
-          revealWindow(window);
-        }
-      },
-    });
-  });
-
-  ipcMain.removeHandler(UPDATE_GET_STATE_CHANNEL);
-  ipcMain.handle(UPDATE_GET_STATE_CHANNEL, async () => updateState);
-
-  ipcMain.removeHandler(UPDATE_DOWNLOAD_CHANNEL);
-  ipcMain.handle(UPDATE_DOWNLOAD_CHANNEL, async () => {
-    const result = await downloadAvailableUpdate();
-    return {
-      accepted: result.accepted,
-      completed: result.completed,
-      state: updateState,
-    } satisfies DesktopUpdateActionResult;
-  });
-
-  ipcMain.removeHandler(UPDATE_INSTALL_CHANNEL);
-  ipcMain.handle(UPDATE_INSTALL_CHANNEL, async () => {
-    if (isQuitting) {
-      return {
-        accepted: false,
-        completed: false,
-        state: updateState,
-      } satisfies DesktopUpdateActionResult;
-    }
-    const result = await installDownloadedUpdate();
-    return {
-      accepted: result.accepted,
-      completed: result.completed,
-      state: updateState,
-    } satisfies DesktopUpdateActionResult;
-  });
-
-  ipcMain.removeHandler(UPDATE_CHECK_CHANNEL);
-  ipcMain.handle(UPDATE_CHECK_CHANNEL, async () => {
-    if (!updaterConfigured) {
-      return {
-        checked: false,
-        state: updateState,
-      } satisfies DesktopUpdateCheckResult;
-    }
-    const checked = await checkForUpdates("web-ui");
-    return {
-      checked,
-      state: updateState,
-    } satisfies DesktopUpdateCheckResult;
+      ...(backendBootstrapToken ? { bootstrapToken: backendBootstrapToken } : {}),
+    }),
+    getDesktopSecretStorage,
+    getServerExposureState: getDesktopServerExposureState,
+    getDesktopServerExposureMode: () => desktopServerExposureMode,
+    applyDesktopServerExposureMode,
+    relaunchDesktopApp,
+    getMainWindow: () => mainWindow,
+    showConfirmDialog: (message, owner) =>
+      Promise.resolve(showDesktopConfirmDialog(message, owner)),
+    getSafeTheme,
+    getSafeExternalUrl,
+    getDesktopThreadNotification,
+    revealWindow,
+    getDestructiveMenuIcon,
+    getUpdateState: () => updateState,
+    downloadAvailableUpdate,
+    installDownloadedUpdate,
+    isQuitting: () => isQuitting,
+    isUpdaterConfigured: () => updaterConfigured,
+    checkForUpdates,
   });
 }
 

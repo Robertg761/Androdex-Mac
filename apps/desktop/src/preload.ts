@@ -1,28 +1,29 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { DesktopBridge } from "@t3tools/contracts";
-
-const PICK_FOLDER_CHANNEL = "desktop:pick-folder";
-const CONFIRM_CHANNEL = "desktop:confirm";
-const SET_THEME_CHANNEL = "desktop:set-theme";
-const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
-const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
-const SHOW_THREAD_NOTIFICATION_CHANNEL = "desktop:show-thread-notification";
-const MENU_ACTION_CHANNEL = "desktop:menu-action";
-const UPDATE_STATE_CHANNEL = "desktop:update-state";
-const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
-const UPDATE_CHECK_CHANNEL = "desktop:update-check";
-const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
-const UPDATE_INSTALL_CHANNEL = "desktop:update-install";
-const GET_LOCAL_ENVIRONMENT_BOOTSTRAP_CHANNEL = "desktop:get-local-environment-bootstrap";
-const GET_CLIENT_SETTINGS_CHANNEL = "desktop:get-client-settings";
-const SET_CLIENT_SETTINGS_CHANNEL = "desktop:set-client-settings";
-const GET_SAVED_ENVIRONMENT_REGISTRY_CHANNEL = "desktop:get-saved-environment-registry";
-const SET_SAVED_ENVIRONMENT_REGISTRY_CHANNEL = "desktop:set-saved-environment-registry";
-const GET_SAVED_ENVIRONMENT_SECRET_CHANNEL = "desktop:get-saved-environment-secret";
-const SET_SAVED_ENVIRONMENT_SECRET_CHANNEL = "desktop:set-saved-environment-secret";
-const REMOVE_SAVED_ENVIRONMENT_SECRET_CHANNEL = "desktop:remove-saved-environment-secret";
-const GET_SERVER_EXPOSURE_STATE_CHANNEL = "desktop:get-server-exposure-state";
-const SET_SERVER_EXPOSURE_MODE_CHANNEL = "desktop:set-server-exposure-mode";
+import {
+  CONFIRM_CHANNEL,
+  CONTEXT_MENU_CHANNEL,
+  GET_CLIENT_SETTINGS_CHANNEL,
+  GET_LOCAL_ENVIRONMENT_BOOTSTRAP_CHANNEL,
+  GET_SAVED_ENVIRONMENT_REGISTRY_CHANNEL,
+  GET_SAVED_ENVIRONMENT_SECRET_CHANNEL,
+  GET_SERVER_EXPOSURE_STATE_CHANNEL,
+  MENU_ACTION_CHANNEL,
+  OPEN_EXTERNAL_CHANNEL,
+  PICK_FOLDER_CHANNEL,
+  REMOVE_SAVED_ENVIRONMENT_SECRET_CHANNEL,
+  SET_CLIENT_SETTINGS_CHANNEL,
+  SET_SAVED_ENVIRONMENT_REGISTRY_CHANNEL,
+  SET_SAVED_ENVIRONMENT_SECRET_CHANNEL,
+  SET_SERVER_EXPOSURE_MODE_CHANNEL,
+  SET_THEME_CHANNEL,
+  SHOW_THREAD_NOTIFICATION_CHANNEL,
+  UPDATE_CHECK_CHANNEL,
+  UPDATE_DOWNLOAD_CHANNEL,
+  UPDATE_GET_STATE_CHANNEL,
+  UPDATE_INSTALL_CHANNEL,
+  UPDATE_STATE_CHANNEL,
+} from "./ipc/channels";
 
 contextBridge.exposeInMainWorld("desktopBridge", {
   getLocalEnvironmentBootstrap: () => {
