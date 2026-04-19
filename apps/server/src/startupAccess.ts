@@ -1,6 +1,7 @@
 import { networkInterfaces } from "node:os";
 
 import { QrCode } from "@t3tools/shared/qrCode";
+import { buildPairingUrl } from "@t3tools/shared/pairingUrl";
 import { Effect } from "effect";
 import { HttpServer } from "effect/unstable/http";
 
@@ -14,6 +15,8 @@ export interface HeadlessServeAccessInfo {
 }
 
 type NetworkInterfacesMap = ReturnType<typeof networkInterfaces>;
+
+export { buildPairingUrl };
 
 export const isLoopbackHost = (host: string | undefined): boolean => {
   if (!host || host.length === 0) {
@@ -89,14 +92,6 @@ export const resolveListeningPort = (address: unknown, fallbackPort: number): nu
   return fallbackPort;
 };
 
-export const buildPairingUrl = (connectionString: string, token: string): string => {
-  const url = new URL(connectionString);
-  url.pathname = "/pair";
-  url.searchParams.delete("token");
-  url.hash = new URLSearchParams([["token", token]]).toString();
-  return url.toString();
-};
-
 export const renderTerminalQrCode = (value: string, margin = 2): string => {
   const qrCode = QrCode.encodeText(value, QrCode.Ecc.MEDIUM);
   const rows: Array<string> = [];
@@ -139,10 +134,11 @@ export const issueHeadlessServeAccessInfo = Effect.fn("issueHeadlessServeAccessI
     resolveListeningPort(httpServer.address, serverConfig.port),
   );
   const issued = yield* serverAuth.issuePairingCredential({ role: "owner" });
+  const pairingBaseUrl = serverConfig.publicBaseUrl ?? connectionString;
 
   return {
     connectionString,
     token: issued.credential,
-    pairingUrl: buildPairingUrl(connectionString, issued.credential),
+    pairingUrl: buildPairingUrl(pairingBaseUrl, issued.credential),
   } satisfies HeadlessServeAccessInfo;
 });

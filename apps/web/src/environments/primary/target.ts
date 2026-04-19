@@ -1,5 +1,6 @@
 import type { DesktopEnvironmentBootstrap } from "@t3tools/contracts";
 import type { KnownEnvironment } from "@t3tools/client-runtime";
+import { resolveRouterBasepath } from "../../routerBasepath";
 
 export interface PrimaryEnvironmentTarget {
   readonly source: KnownEnvironment["source"];
@@ -14,6 +15,14 @@ function getDesktopLocalEnvironmentBootstrap(): DesktopEnvironmentBootstrap | nu
 
 function normalizeBaseUrl(rawValue: string): string {
   return new URL(rawValue, window.location.origin).toString();
+}
+
+function joinBaseUrlPath(baseUrl: string, pathname: string): string {
+  const url = new URL(baseUrl);
+  const basePath = url.pathname.replace(/\/+$/, "");
+  const normalizedPathname = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  url.pathname = `${basePath}${normalizedPathname}`;
+  return url.toString();
 }
 
 function swapBaseUrlProtocol(
@@ -91,7 +100,11 @@ function resolveConfiguredPrimaryTarget(): PrimaryEnvironmentTarget | null {
 }
 
 function resolveWindowOriginPrimaryTarget(): PrimaryEnvironmentTarget {
-  const httpBaseUrl = normalizeBaseUrl(window.location.origin);
+  const basepath = resolveRouterBasepath(window.location.pathname ?? "/");
+  const httpBaseUrl =
+    basepath === "/"
+      ? normalizeBaseUrl(window.location.origin)
+      : normalizeBaseUrl(`${window.location.origin}${basepath}`);
   const url = new URL(httpBaseUrl);
   if (url.protocol === "http:") {
     url.protocol = "ws:";
@@ -141,8 +154,9 @@ export function resolvePrimaryEnvironmentHttpUrl(
     throw new Error("Unable to resolve the primary environment HTTP base URL.");
   }
 
-  const url = new URL(resolveHttpRequestBaseUrl(primaryTarget.target.httpBaseUrl));
-  url.pathname = pathname;
+  const url = new URL(
+    joinBaseUrlPath(resolveHttpRequestBaseUrl(primaryTarget.target.httpBaseUrl), pathname),
+  );
   if (searchParams) {
     url.search = new URLSearchParams(searchParams).toString();
   }

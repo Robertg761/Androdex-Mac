@@ -197,6 +197,17 @@ describe("WsTransport", () => {
     await transport.dispose();
   });
 
+  it("preserves path-prefixed websocket urls for tunneled backends", async () => {
+    const transport = createTransport("wss://relay.androdex.xyz/desktop/route-123?wsToken=dynamic");
+
+    await waitFor(() => {
+      expect(sockets).toHaveLength(1);
+    });
+
+    expect(getSocket().url).toBe("wss://relay.androdex.xyz/desktop/route-123/ws?wsToken=dynamic");
+    await transport.dispose();
+  });
+
   it("tracks initial connection failures for the app error state", async () => {
     const transport = createTransport("ws://localhost:3020");
 

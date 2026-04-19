@@ -58,6 +58,12 @@ it("builds a pairing URL that embeds the token in the hash", () => {
   );
 });
 
+it("builds a pairing URL that preserves a configured base path", () => {
+  expect(buildPairingUrl("https://remote.example.com/androdex", "PAIRCODE")).toBe(
+    "https://remote.example.com/androdex/pair#token=PAIRCODE",
+  );
+});
+
 it("renders terminal QR codes as a multi-line unicode block grid", () => {
   const qrCode = renderTerminalQrCode("http://192.168.1.42:3773/pair#token=PAIRCODE");
 

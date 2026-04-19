@@ -47,11 +47,13 @@ import {
   setDesktopServerExposurePreference,
   writeDesktopSettings,
 } from "./desktopSettings";
+import { buildDesktopTunnelPublicBaseUrl, DesktopTunnelClient } from "./desktopTunnelClient";
 import {
   isBackendReadinessAborted,
   waitForHttpReady,
   waitForHttpReadyWithGrace,
 } from "./backendReadiness";
+import { readOrCreateDesktopTunnelState } from "./desktopTunnelState";
 import { showDesktopConfirmDialog } from "./confirmDialog";
 import { resolveDesktopServerExposure } from "./serverExposure";
 import { syncShellEnvironment } from "./syncShellEnvironment";
@@ -97,6 +99,7 @@ const APP_USER_MODEL_ID = isDevelopment ? `${APP_BUNDLE_ID}.dev` : APP_BUNDLE_ID
 const BASE_DIR = resolveDesktopBaseDir();
 const STATE_DIR = Path.join(BASE_DIR, "userdata");
 const DESKTOP_SETTINGS_PATH = Path.join(STATE_DIR, "desktop-settings.json");
+const DESKTOP_TUNNEL_STATE_PATH = Path.join(STATE_DIR, "desktop-tunnel.json");
 const CLIENT_SETTINGS_PATH = Path.join(STATE_DIR, "client-settings.json");
 const SAVED_ENVIRONMENT_REGISTRY_PATH = Path.join(STATE_DIR, "saved-environments.json");
 const DESKTOP_SCHEME = APP_DESKTOP_SCHEME;
@@ -141,11 +144,13 @@ let backendHttpUrl = "";
 let backendWsUrl = "";
 let backendEndpointUrl: string | null = null;
 let backendAdvertisedHost: string | null = null;
+let backendPublicBaseUrl: string | undefined;
 let backendReadinessAbortController: AbortController | null = null;
 let restartAttempt = 0;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
 let isQuitting = false;
 let desktopProtocolRegistered = false;
+let desktopTunnelClient: DesktopTunnelClient | null = null;
 
 function readLinkedEnv(preferredName: string, legacyName: string): string | undefined {
   const preferredValue = process.env[preferredName]?.trim();
@@ -315,17 +320,77 @@ function resolveAdvertisedHostOverride(): string | undefined {
   return override && override.length > 0 ? override : undefined;
 }
 
+function resolvePublicBaseUrlOverride(): string | undefined {
+  const override = readLinkedEnv("ANDRODEX_PUBLIC_BASE_URL", "T3CODE_PUBLIC_BASE_URL");
+  return override && override.length > 0 ? override : undefined;
+}
+
+function resolveRemoteTunnelOrigin(): string | undefined {
+  const override = readLinkedEnv("ANDRODEX_REMOTE_TUNNEL_ORIGIN", "T3CODE_REMOTE_TUNNEL_ORIGIN");
+  const normalized = override?.trim().toLowerCase();
+  if (normalized && ["0", "false", "off", "none", "disabled"].includes(normalized)) {
+    return undefined;
+  }
+  return override ?? "https://relay.androdex.xyz";
+}
+
+function resolveDesktopTunnelPublicBaseUrl(): string | undefined {
+  const origin = resolveRemoteTunnelOrigin();
+  if (!origin) {
+    return undefined;
+  }
+  const state = readOrCreateDesktopTunnelState(DESKTOP_TUNNEL_STATE_PATH);
+  return buildDesktopTunnelPublicBaseUrl(origin, state.routeId);
+}
+
+function syncDesktopTunnelClient(): void {
+  const manualPublicBaseUrlOverride = resolvePublicBaseUrlOverride();
+  const origin = resolveRemoteTunnelOrigin();
+  const shouldRun =
+    desktopServerExposureMode === "network-accessible" &&
+    !manualPublicBaseUrlOverride &&
+    Boolean(origin) &&
+    backendPublicBaseUrl !== undefined;
+
+  if (!shouldRun || !origin) {
+    void desktopTunnelClient?.stop();
+    desktopTunnelClient = null;
+    return;
+  }
+
+  const state = readOrCreateDesktopTunnelState(DESKTOP_TUNNEL_STATE_PATH);
+  const nextPublicBaseUrl = buildDesktopTunnelPublicBaseUrl(origin, state.routeId);
+  if (desktopTunnelClient?.publicBaseUrl !== nextPublicBaseUrl) {
+    void desktopTunnelClient?.stop();
+    desktopTunnelClient = new DesktopTunnelClient({
+      origin,
+      routeId: state.routeId,
+      routeToken: state.routeToken,
+      localHttpUrl: backendHttpUrl,
+      logger: (message) => writeDesktopLogHeader(message),
+    });
+  } else {
+    desktopTunnelClient.updateLocalHttpUrl(backendHttpUrl);
+  }
+
+  desktopTunnelClient.start();
+}
+
 async function applyDesktopServerExposureMode(
   mode: DesktopServerExposureMode,
   options?: { readonly persist?: boolean; readonly rejectIfUnavailable?: boolean },
 ): Promise<DesktopServerExposureState> {
   const advertisedHostOverride = resolveAdvertisedHostOverride();
+  const publicBaseUrlOverride =
+    resolvePublicBaseUrlOverride() ??
+    (mode === "network-accessible" ? resolveDesktopTunnelPublicBaseUrl() : undefined);
   const requestedMode = mode;
   let exposure = resolveDesktopServerExposure({
     mode,
     port: backendPort,
     networkInterfaces: OS.networkInterfaces(),
     ...(advertisedHostOverride ? { advertisedHostOverride } : {}),
+    ...(publicBaseUrlOverride ? { publicBaseUrlOverride } : {}),
   });
 
   if (requestedMode === "network-accessible" && exposure.endpointUrl === null) {
@@ -337,6 +402,7 @@ async function applyDesktopServerExposureMode(
       port: backendPort,
       networkInterfaces: OS.networkInterfaces(),
       ...(advertisedHostOverride ? { advertisedHostOverride } : {}),
+      ...(publicBaseUrlOverride ? { publicBaseUrlOverride } : {}),
     });
   }
 
@@ -347,6 +413,7 @@ async function applyDesktopServerExposureMode(
   backendWsUrl = exposure.localWsUrl;
   backendEndpointUrl = exposure.endpointUrl;
   backendAdvertisedHost = exposure.advertisedHost;
+  backendPublicBaseUrl = publicBaseUrlOverride;
 
   if (options?.persist) {
     writeDesktopSettings(DESKTOP_SETTINGS_PATH, desktopSettings);
@@ -1451,6 +1518,7 @@ function startBackend(): void {
         t3Home: BASE_DIR,
         host: backendBindHost,
         desktopBootstrapToken: backendBootstrapToken,
+        ...(backendPublicBaseUrl ? { publicBaseUrl: backendPublicBaseUrl } : {}),
         ...(backendObservabilitySettings.otlpTracesUrl
           ? { otlpTracesUrl: backendObservabilitySettings.otlpTracesUrl }
           : {}),
@@ -1794,6 +1862,7 @@ async function bootstrap(): Promise<void> {
   registerIpcHandlers();
   writeDesktopLogHeader("bootstrap ipc handlers registered");
   startBackend();
+  syncDesktopTunnelClient();
   writeDesktopLogHeader("bootstrap backend start requested");
 
   if (isDevelopment) {
@@ -1827,6 +1896,7 @@ app.on("before-quit", () => {
   writeDesktopLogHeader("before-quit received");
   clearUpdatePollTimer();
   cancelBackendReadinessWait();
+  void desktopTunnelClient?.stop();
   stopBackend();
   restoreStdIoCapture?.();
 });
