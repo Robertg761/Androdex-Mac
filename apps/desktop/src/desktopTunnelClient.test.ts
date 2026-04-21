@@ -226,4 +226,87 @@ describe("desktopTunnelClient", () => {
       expect(localSocket.sent).toContain("queued-before-open");
     });
   });
+
+  it("backs off reconnect attempts after repeated abnormal control socket disconnects", () => {
+    vi.useFakeTimers();
+    const sockets: FakeWebSocket[] = [];
+    const client = new DesktopTunnelClient({
+      origin: "https://relay.example.com",
+      routeId: "route-1",
+      routeToken: "token-1",
+      localHttpUrl: "http://127.0.0.1:3773",
+      reconnectDelayMs: 100,
+      maxReconnectDelayMs: 400,
+      createWebSocket: (url) => {
+        const socket = new FakeWebSocket(url);
+        sockets.push(socket);
+        return socket as unknown as WebSocket;
+      },
+    });
+
+    client.start();
+    const firstSocket = sockets[0]!;
+    firstSocket.error();
+    firstSocket.close(1006, "");
+
+    vi.advanceTimersByTime(99);
+    expect(sockets).toHaveLength(1);
+
+    vi.advanceTimersByTime(1);
+    expect(sockets).toHaveLength(2);
+
+    const secondSocket = sockets[1]!;
+    secondSocket.error();
+    secondSocket.close(1006, "");
+
+    vi.advanceTimersByTime(199);
+    expect(sockets).toHaveLength(2);
+
+    vi.advanceTimersByTime(1);
+    expect(sockets).toHaveLength(3);
+
+    const thirdSocket = sockets[2]!;
+    thirdSocket.open();
+    thirdSocket.error();
+    thirdSocket.close(1006, "");
+
+    vi.advanceTimersByTime(99);
+    expect(sockets).toHaveLength(3);
+
+    vi.advanceTimersByTime(1);
+    expect(sockets).toHaveLength(4);
+
+    vi.useRealTimers();
+  });
+
+  it("uses a slower reconnect cadence after the relay reports a competing desktop tunnel", () => {
+    vi.useFakeTimers();
+    const sockets: FakeWebSocket[] = [];
+    const client = new DesktopTunnelClient({
+      origin: "https://relay.example.com",
+      routeId: "route-1",
+      routeToken: "token-1",
+      localHttpUrl: "http://127.0.0.1:3773",
+      reconnectDelayMs: 100,
+      collisionReconnectDelayMs: 500,
+      createWebSocket: (url) => {
+        const socket = new FakeWebSocket(url);
+        sockets.push(socket);
+        return socket as unknown as WebSocket;
+      },
+    });
+
+    client.start();
+    const firstSocket = sockets[0]!;
+    firstSocket.open();
+    firstSocket.close(4001, "Replaced by new desktop tunnel connection");
+
+    vi.advanceTimersByTime(499);
+    expect(sockets).toHaveLength(1);
+
+    vi.advanceTimersByTime(1);
+    expect(sockets).toHaveLength(2);
+
+    vi.useRealTimers();
+  });
 });

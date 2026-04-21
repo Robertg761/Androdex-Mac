@@ -1,7 +1,10 @@
 const DESKTOP_TUNNEL_CONTROL_PATH = "/desktop-tunnel/connect";
 const DESKTOP_TUNNEL_PUBLIC_PREFIX = "/desktop";
 const DEFAULT_RECONNECT_DELAY_MS = 3_000;
+const DEFAULT_MAX_RECONNECT_DELAY_MS = 60_000;
+const DEFAULT_COLLISION_RECONNECT_DELAY_MS = 30_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+const DESKTOP_TUNNEL_REPLACED_CLOSE_CODE = 4_001;
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "content-length",
@@ -106,6 +109,8 @@ export interface DesktopTunnelClientOptions {
   readonly fetchFn?: typeof fetch;
   readonly createWebSocket?: DesktopTunnelWebSocketFactory;
   readonly reconnectDelayMs?: number;
+  readonly maxReconnectDelayMs?: number;
+  readonly collisionReconnectDelayMs?: number;
   readonly requestTimeoutMs?: number;
 }
 
@@ -265,11 +270,17 @@ export class DesktopTunnelClient {
   private readonly fetchFn: typeof fetch;
   private readonly createWebSocket: DesktopTunnelWebSocketFactory;
   private readonly reconnectDelayMs: number;
+  private readonly maxReconnectDelayMs: number;
+  private readonly collisionReconnectDelayMs: number;
   private readonly requestTimeoutMs: number;
   private localHttpUrl: string;
   private shouldRun = false;
   private controlSocket: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private nextReconnectDelayMs: number;
+  private consecutiveReconnectFailures = 0;
+  private lastConnectedAt: number | null = null;
+  private lastControlActivityAt: number | null = null;
   private readonly localSockets = new Map<string, WebSocket>();
   private readonly pendingLocalSocketFrames = new Map<
     string,
@@ -285,7 +296,11 @@ export class DesktopTunnelClient {
     this.fetchFn = options.fetchFn ?? fetch;
     this.createWebSocket = options.createWebSocket ?? ((url) => new WebSocket(url));
     this.reconnectDelayMs = options.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS;
+    this.maxReconnectDelayMs = options.maxReconnectDelayMs ?? DEFAULT_MAX_RECONNECT_DELAY_MS;
+    this.collisionReconnectDelayMs =
+      options.collisionReconnectDelayMs ?? DEFAULT_COLLISION_RECONNECT_DELAY_MS;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.nextReconnectDelayMs = this.reconnectDelayMs;
   }
 
   get publicBaseUrl(): string {
@@ -313,20 +328,32 @@ export class DesktopTunnelClient {
     this.closeAllLocalSockets(1012, "Desktop tunnel stopped");
     const socket = this.controlSocket;
     this.controlSocket = null;
+    this.lastConnectedAt = null;
+    this.lastControlActivityAt = null;
+    this.consecutiveReconnectFailures = 0;
+    this.nextReconnectDelayMs = this.reconnectDelayMs;
     socket?.close(1000, "Desktop tunnel stopped");
   }
 
   private connect(): void {
     const controlUrl = buildDesktopTunnelControlUrl(this.origin, this.routeId, this.routeToken);
-    this.logger(`desktop tunnel connecting controlUrl=${controlUrl}`);
+    const reconnectAttempt = this.consecutiveReconnectFailures + 1;
+    this.logger(
+      `desktop tunnel connecting routeId=${this.routeId} attempt=${reconnectAttempt} controlUrl=${controlUrl}`,
+    );
     const socket = this.createWebSocket(controlUrl);
     this.controlSocket = socket;
 
     socket.addEventListener("open", () => {
+      this.lastConnectedAt = Date.now();
+      this.lastControlActivityAt = this.lastConnectedAt;
+      this.consecutiveReconnectFailures = 0;
+      this.nextReconnectDelayMs = this.reconnectDelayMs;
       this.logger(`desktop tunnel connected routeId=${this.routeId}`);
     });
 
     socket.addEventListener("message", (event) => {
+      this.lastControlActivityAt = Date.now();
       void this.handleControlMessage(event.data);
     });
 
@@ -335,30 +362,65 @@ export class DesktopTunnelClient {
         this.controlSocket = null;
       }
       this.closeAllLocalSockets(1012, "Desktop tunnel disconnected");
+      const connectedForMs =
+        this.lastConnectedAt === null ? null : Math.max(0, Date.now() - this.lastConnectedAt);
+      const idleForMs =
+        this.lastControlActivityAt === null
+          ? null
+          : Math.max(0, Date.now() - this.lastControlActivityAt);
+      this.lastConnectedAt = null;
+      this.lastControlActivityAt = null;
       this.logger(
-        `desktop tunnel disconnected routeId=${this.routeId} code=${event.code} reason=${event.reason || "none"}`,
+        `desktop tunnel disconnected routeId=${this.routeId} code=${event.code} reason=${event.reason || "none"} connectedForMs=${connectedForMs ?? "unknown"} idleForMs=${idleForMs ?? "unknown"}`,
       );
       if (this.shouldRun) {
-        this.scheduleReconnect();
+        const reconnectDelayMs =
+          event.code === DESKTOP_TUNNEL_REPLACED_CLOSE_CODE
+            ? this.collisionReconnectDelayMs
+            : this.nextReconnectDelayMs;
+        if (event.code !== DESKTOP_TUNNEL_REPLACED_CLOSE_CODE) {
+          this.consecutiveReconnectFailures += 1;
+          this.nextReconnectDelayMs = Math.min(
+            this.maxReconnectDelayMs,
+            this.nextReconnectDelayMs * 2,
+          );
+        }
+        this.scheduleReconnect(reconnectDelayMs, event.code);
       }
     });
 
-    socket.addEventListener("error", () => {
-      this.logger(`desktop tunnel socket error routeId=${this.routeId}`);
+    socket.addEventListener("error", (event) => {
+      const errorEvent = event as ErrorEvent;
+      const details = [
+        errorEvent.message ? `message=${errorEvent.message}` : null,
+        errorEvent.error instanceof Error
+          ? `error=${errorEvent.error.name}:${errorEvent.error.message}`
+          : errorEvent.error !== undefined
+            ? `error=${String(errorEvent.error)}`
+            : null,
+      ]
+        .filter((value): value is string => value !== null)
+        .join(" ");
+      this.logger(
+        `desktop tunnel socket error routeId=${this.routeId}${details ? ` ${details}` : ""}`,
+      );
     });
   }
 
-  private scheduleReconnect(): void {
+  private scheduleReconnect(delayMs: number, closeCode: number): void {
     if (this.reconnectTimer) {
       return;
     }
+    this.logger(
+      `desktop tunnel reconnect scheduled routeId=${this.routeId} delayMs=${delayMs} closeCode=${closeCode}`,
+    );
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       if (!this.shouldRun || this.controlSocket) {
         return;
       }
       this.connect();
-    }, this.reconnectDelayMs);
+    }, delayMs);
     this.reconnectTimer.unref?.();
   }
 
