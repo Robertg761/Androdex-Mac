@@ -17,13 +17,17 @@ export function NoActiveThreadState() {
         <header
           className={cn(
             "border-b border-border px-3 sm:px-5",
-            isElectron ? "drag-region flex items-center" : "py-2 sm:py-3",
+            isElectron
+              ? "drag-region flex h-[52px] items-center wco:h-[env(titlebar-area-height)]"
+              : "py-2 sm:py-3",
           )}
           data-androdex-role="thread-header"
           style={isElectron ? getDesktopTitlebarStyle() : undefined}
         >
           {isElectron ? (
-            <span className="text-xs text-muted-foreground/50">No active thread</span>
+            <span className="text-xs text-muted-foreground/50 wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]">
+              No active thread
+            </span>
           ) : (
             <div className="flex items-center gap-2">
               <SidebarTrigger className="size-7 shrink-0 md:hidden" />

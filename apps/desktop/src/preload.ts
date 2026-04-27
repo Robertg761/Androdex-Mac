@@ -3,6 +3,7 @@ import type { DesktopBridge } from "@t3tools/contracts";
 import {
   CONFIRM_CHANNEL,
   CONTEXT_MENU_CHANNEL,
+  GET_APP_BRANDING_CHANNEL,
   GET_CLIENT_SETTINGS_CHANNEL,
   GET_LOCAL_ENVIRONMENT_BOOTSTRAP_CHANNEL,
   GET_SAVED_ENVIRONMENT_REGISTRY_CHANNEL,
@@ -22,10 +23,18 @@ import {
   UPDATE_DOWNLOAD_CHANNEL,
   UPDATE_GET_STATE_CHANNEL,
   UPDATE_INSTALL_CHANNEL,
+  UPDATE_SET_CHANNEL_CHANNEL,
   UPDATE_STATE_CHANNEL,
 } from "./ipc/channels";
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  getAppBranding: () => {
+    const result = ipcRenderer.sendSync(GET_APP_BRANDING_CHANNEL);
+    if (typeof result !== "object" || result === null) {
+      return null;
+    }
+    return result as ReturnType<DesktopBridge["getAppBranding"]>;
+  },
   getLocalEnvironmentBootstrap: () => {
     const result = ipcRenderer.sendSync(GET_LOCAL_ENVIRONMENT_BOOTSTRAP_CHANNEL);
     if (typeof result !== "object" || result === null) {
@@ -46,7 +55,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(REMOVE_SAVED_ENVIRONMENT_SECRET_CHANNEL, environmentId),
   getServerExposureState: () => ipcRenderer.invoke(GET_SERVER_EXPOSURE_STATE_CHANNEL),
   setServerExposureMode: (mode) => ipcRenderer.invoke(SET_SERVER_EXPOSURE_MODE_CHANNEL, mode),
-  pickFolder: () => ipcRenderer.invoke(PICK_FOLDER_CHANNEL),
+  pickFolder: (options) => ipcRenderer.invoke(PICK_FOLDER_CHANNEL, options),
   confirm: (message) => ipcRenderer.invoke(CONFIRM_CHANNEL, message),
   setTheme: (theme) => ipcRenderer.invoke(SET_THEME_CHANNEL, theme),
   showContextMenu: (items, position) => ipcRenderer.invoke(CONTEXT_MENU_CHANNEL, items, position),
@@ -65,6 +74,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     };
   },
   getUpdateState: () => ipcRenderer.invoke(UPDATE_GET_STATE_CHANNEL),
+  setUpdateChannel: (channel) => ipcRenderer.invoke(UPDATE_SET_CHANNEL_CHANNEL, channel),
   checkForUpdate: () => ipcRenderer.invoke(UPDATE_CHECK_CHANNEL),
   downloadUpdate: () => ipcRenderer.invoke(UPDATE_DOWNLOAD_CHANNEL),
   installUpdate: () => ipcRenderer.invoke(UPDATE_INSTALL_CHANNEL),

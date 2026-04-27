@@ -582,11 +582,10 @@ const cliRuntimeLayer = Layer.mergeAll(
   NetService.layer,
 );
 
-const runtimeProgram = Command.run(devRunnerCli, { version: "0.0.0" }).pipe(
-  Effect.scoped,
-  Effect.provide(cliRuntimeLayer),
-);
-
 if (import.meta.main) {
-  NodeRuntime.runMain(runtimeProgram);
+  Command.run(devRunnerCli, { version: "0.0.0" }).pipe(
+    Effect.scoped,
+    Effect.provide(cliRuntimeLayer),
+    NodeRuntime.runMain,
+  );
 }

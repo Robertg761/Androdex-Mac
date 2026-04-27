@@ -1,9 +1,13 @@
 import * as FS from "node:fs";
 import * as Path from "node:path";
-import type { DesktopServerExposureMode } from "@t3tools/contracts";
+import type { DesktopServerExposureMode, DesktopUpdateChannel } from "@t3tools/contracts";
+
+import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
 
 export interface DesktopSettings {
   readonly serverExposureMode: DesktopServerExposureMode;
+  readonly updateChannel: DesktopUpdateChannel;
+  readonly updateChannelConfiguredByUser: boolean;
 }
 
 export type DesktopSettingsSource = "default" | "persisted";
@@ -15,21 +19,27 @@ export interface LoadedDesktopSettings {
 
 export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   serverExposureMode: "local-only",
+  updateChannel: "latest",
+  updateChannelConfiguredByUser: false,
 };
 
-function normalizeDesktopSettings(
-  parsed: {
-    readonly serverExposureMode?: unknown;
-  },
-  defaults: DesktopSettings,
-): DesktopSettings {
-  if (parsed.serverExposureMode === undefined) {
-    return defaults;
+type DesktopSettingsDefaultsInput = string | Partial<DesktopSettings> | DesktopSettings | undefined;
+
+export function resolveDefaultDesktopSettings(appVersion: string): DesktopSettings {
+  return {
+    ...DEFAULT_DESKTOP_SETTINGS,
+    updateChannel: resolveDefaultDesktopUpdateChannel(appVersion),
+  };
+}
+
+function resolveDesktopSettingsDefaults(input: DesktopSettingsDefaultsInput): DesktopSettings {
+  if (typeof input === "string") {
+    return resolveDefaultDesktopSettings(input);
   }
 
   return {
-    serverExposureMode:
-      parsed.serverExposureMode === "network-accessible" ? "network-accessible" : "local-only",
+    ...DEFAULT_DESKTOP_SETTINGS,
+    ...(input ?? {}),
   };
 }
 
@@ -45,10 +55,23 @@ export function setDesktopServerExposurePreference(
       };
 }
 
+export function setDesktopUpdateChannelPreference(
+  settings: DesktopSettings,
+  requestedChannel: DesktopUpdateChannel,
+): DesktopSettings {
+  return {
+    ...settings,
+    updateChannel: requestedChannel,
+    updateChannelConfiguredByUser: true,
+  };
+}
+
 export function loadDesktopSettings(
   settingsPath: string,
-  defaults: DesktopSettings = DEFAULT_DESKTOP_SETTINGS,
+  defaultsInput: DesktopSettingsDefaultsInput = DEFAULT_DESKTOP_SETTINGS,
 ): LoadedDesktopSettings {
+  const defaults = resolveDesktopSettingsDefaults(defaultsInput);
+
   try {
     if (!FS.existsSync(settingsPath)) {
       return {
@@ -60,10 +83,28 @@ export function loadDesktopSettings(
     const raw = FS.readFileSync(settingsPath, "utf8");
     const parsed = JSON.parse(raw) as {
       readonly serverExposureMode?: unknown;
+      readonly updateChannel?: unknown;
+      readonly updateChannelConfiguredByUser?: unknown;
     };
+    const parsedUpdateChannel =
+      parsed.updateChannel === "nightly" || parsed.updateChannel === "latest"
+        ? parsed.updateChannel
+        : null;
+    const isLegacySettings = parsed.updateChannelConfiguredByUser === undefined;
+    const updateChannelConfiguredByUser =
+      parsed.updateChannelConfiguredByUser === true ||
+      (isLegacySettings && parsedUpdateChannel === "nightly");
 
     return {
-      settings: normalizeDesktopSettings(parsed, defaults),
+      settings: {
+        serverExposureMode:
+          parsed.serverExposureMode === "network-accessible" ? "network-accessible" : "local-only",
+        updateChannel:
+          updateChannelConfiguredByUser && parsedUpdateChannel !== null
+            ? parsedUpdateChannel
+            : defaults.updateChannel,
+        updateChannelConfiguredByUser,
+      },
       source: "persisted",
     };
   } catch {
@@ -76,9 +117,9 @@ export function loadDesktopSettings(
 
 export function readDesktopSettings(
   settingsPath: string,
-  defaults: DesktopSettings = DEFAULT_DESKTOP_SETTINGS,
+  defaultsInput: DesktopSettingsDefaultsInput = DEFAULT_DESKTOP_SETTINGS,
 ): DesktopSettings {
-  return loadDesktopSettings(settingsPath, defaults).settings;
+  return loadDesktopSettings(settingsPath, defaultsInput).settings;
 }
 
 export function writeDesktopSettings(settingsPath: string, settings: DesktopSettings): void {

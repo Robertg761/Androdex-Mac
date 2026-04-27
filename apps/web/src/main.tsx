@@ -14,6 +14,7 @@ import { isElectron } from "./env";
 import { getRouter } from "./router";
 import { resolveRouterBasepath } from "./routerBasepath";
 import { APP_DISPLAY_NAME } from "./branding";
+import { syncDocumentWindowControlsOverlayClass } from "./lib/windowControlsOverlay";
 
 if (isElectron) {
   restoreInitialDesktopRoute();
@@ -27,6 +28,10 @@ const router = getRouter(
   history,
   isElectron ? "/" : resolveRouterBasepath(window.location.pathname),
 );
+
+if (isElectron) {
+  syncDocumentWindowControlsOverlayClass();
+}
 
 document.title = APP_DISPLAY_NAME;
 

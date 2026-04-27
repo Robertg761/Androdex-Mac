@@ -7,6 +7,7 @@ import * as Path from "node:path";
 import {
   app,
   BrowserWindow,
+  type BrowserWindowConstructorOptions,
   clipboard,
   dialog,
   Menu,
@@ -19,9 +20,11 @@ import {
 import type { MenuItemConstructorOptions } from "electron";
 import type {
   DesktopTheme,
+  DesktopAppBranding,
   DesktopServerExposureMode,
   DesktopServerExposureState,
   DesktopThreadNotification,
+  DesktopUpdateChannel,
   DesktopUpdateState,
 } from "@t3tools/contracts";
 import { autoUpdater } from "electron-updater";
@@ -36,16 +39,15 @@ import {
   LEGACY_BASE_DIR_NAME,
   LEGACY_USER_DATA_DIR_NAMES,
   PRODUCT_SLUG,
-  makeAppDisplayName,
   makeLegacyAppDisplayName,
 } from "@t3tools/shared/branding";
-import { DESKTOP_MAC_TRAFFIC_LIGHT_POSITION } from "@t3tools/shared/desktopShell";
 import { DEFAULT_DESKTOP_BACKEND_PORT, resolveDesktopBackendPort } from "./backendPort";
 import {
-  DEFAULT_DESKTOP_SETTINGS,
   type DesktopSettings,
   loadDesktopSettings,
+  resolveDefaultDesktopSettings as resolveDefaultDesktopSettingsValue,
   setDesktopServerExposurePreference,
+  setDesktopUpdateChannelPreference,
   writeDesktopSettings,
 } from "./desktopSettings";
 import { buildDesktopTunnelPublicBaseUrl, DesktopTunnelClient } from "./desktopTunnelClient";
@@ -59,6 +61,9 @@ import { showDesktopConfirmDialog } from "./confirmDialog";
 import { resolveDesktopServerExposure } from "./serverExposure";
 import { syncShellEnvironment } from "./syncShellEnvironment";
 import { getAutoUpdateDisabledReason, shouldBroadcastDownloadProgress } from "./updateState";
+import { waitForBackendStartupReady } from "./backendStartupReadiness.ts";
+import { doesVersionMatchDesktopUpdateChannel } from "./updateChannels.ts";
+import { ServerListeningDetector } from "./serverListeningDetector.ts";
 import {
   createInitialDesktopUpdateState,
   reduceDesktopUpdateStateOnCheckFailure,
@@ -88,14 +93,19 @@ import { triggerDownloadedUpdateInstall } from "./updateInstall";
 import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runtimeArch";
 import { registerDesktopIpcHandlers } from "./ipc";
 import { MENU_ACTION_CHANNEL } from "./ipc/channels";
+import { resolveDesktopAppBranding } from "./appBranding.ts";
+import { bindFirstRevealTrigger, type RevealSubscription } from "./windowReveal.ts";
 
 syncShellEnvironment();
 
 const UPDATE_STATE_CHANNEL = "desktop:update-state";
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
-const APP_STAGE = isDevelopment ? "Dev" : "Alpha";
-const APP_DISPLAY_NAME = makeAppDisplayName(APP_STAGE);
-const LEGACY_APP_DISPLAY_NAME = makeLegacyAppDisplayName(APP_STAGE);
+const desktopAppBranding: DesktopAppBranding = resolveDesktopAppBranding({
+  isDevelopment,
+  appVersion: app.getVersion(),
+});
+const APP_DISPLAY_NAME = desktopAppBranding.displayName;
+const LEGACY_APP_DISPLAY_NAME = makeLegacyAppDisplayName(desktopAppBranding.stageLabel);
 const APP_USER_MODEL_ID = isDevelopment ? `${APP_BUNDLE_ID}.dev` : APP_BUNDLE_ID;
 const BASE_DIR = resolveDesktopBaseDir();
 const STATE_DIR = Path.join(BASE_DIR, "userdata");
@@ -124,12 +134,44 @@ const APP_RUN_ID = Crypto.randomBytes(6).toString("hex");
 const SERVER_SETTINGS_PATH = Path.join(STATE_DIR, "settings.json");
 const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
 const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000;
-const DESKTOP_UPDATE_CHANNEL = "latest";
-const DESKTOP_UPDATE_ALLOW_PRERELEASE = false;
+
+function resolvePickFolderDefaultPath(rawOptions: unknown): string | undefined {
+  if (typeof rawOptions !== "object" || rawOptions === null) {
+    return undefined;
+  }
+
+  const { initialPath } = rawOptions as { initialPath?: unknown };
+  if (typeof initialPath !== "string") {
+    return undefined;
+  }
+
+  const trimmedPath = initialPath.trim();
+  if (trimmedPath.length === 0) {
+    return undefined;
+  }
+
+  if (trimmedPath === "~") {
+    return OS.homedir();
+  }
+
+  if (trimmedPath.startsWith("~/") || trimmedPath.startsWith("~\\")) {
+    return Path.join(OS.homedir(), trimmedPath.slice(2));
+  }
+
+  return Path.resolve(trimmedPath);
+}
 const DESKTOP_LOOPBACK_HOST = "127.0.0.1";
 const DESKTOP_REQUIRED_PORT_PROBE_HOSTS = ["0.0.0.0", "::"] as const;
 const DESKTOP_BACKEND_READINESS_TIMEOUT_MS = 10_000;
 const DESKTOP_PACKAGED_BACKEND_READINESS_GRACE_TIMEOUT_MS = 50_000;
+const TITLEBAR_HEIGHT = 40;
+const TITLEBAR_COLOR = "#01000000"; // #00000000 does not work correctly on Linux
+const TITLEBAR_LIGHT_SYMBOL_COLOR = "#1f2937";
+const TITLEBAR_DARK_SYMBOL_COLOR = "#f8fafc";
+
+type WindowTitleBarOptions = Partial<
+  Pick<BrowserWindowConstructorOptions, "titleBarOverlay" | "titleBarStyle" | "trafficLightPosition">
+>;
 
 type DesktopUpdateErrorContext = DesktopUpdateState["errorContext"];
 type LinuxDesktopNamedApp = Electron.App & {
@@ -147,6 +189,8 @@ let backendEndpointUrl: string | null = null;
 let backendAdvertisedHost: string | null = null;
 let backendPublicBaseUrl: string | undefined;
 let backendReadinessAbortController: AbortController | null = null;
+let backendInitialWindowOpenInFlight: Promise<void> | null = null;
+let backendListeningDetector: ServerListeningDetector | null = null;
 let restartAttempt = 0;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
 let isQuitting = false;
@@ -215,16 +259,12 @@ function resolveDesktopBaseDir(): string {
   return preferredBaseDir;
 }
 
-function resolveDefaultDesktopSettings(): DesktopSettings {
-  return DEFAULT_DESKTOP_SETTINGS;
-}
-
 let aboutCommitHashCache: string | null | undefined;
 let desktopLogSink: RotatingFileSink | null = null;
 let backendLogSink: RotatingFileSink | null = null;
 let restoreStdIoCapture: (() => void) | null = null;
 let backendObservabilitySettings = readPersistedBackendObservabilitySettings();
-const defaultDesktopSettings = resolveDefaultDesktopSettings();
+const defaultDesktopSettings = resolveDefaultDesktopSettingsValue(app.getVersion());
 const initialDesktopSettings = loadDesktopSettings(DESKTOP_SETTINGS_PATH, defaultDesktopSettings);
 let desktopSettings = initialDesktopSettings.settings;
 let desktopSettingsSource = initialDesktopSettings.source;
@@ -238,7 +278,11 @@ const desktopRuntimeInfo = resolveDesktopRuntimeInfo({
   runningUnderArm64Translation: app.runningUnderARM64Translation === true,
 });
 const initialUpdateState = (): DesktopUpdateState =>
-  createInitialDesktopUpdateState(app.getVersion(), desktopRuntimeInfo);
+  createInitialDesktopUpdateState(
+    app.getVersion(),
+    desktopRuntimeInfo,
+    desktopSettings.updateChannel,
+  );
 
 function logTimestamp(): string {
   return new Date().toISOString();
@@ -506,7 +550,10 @@ function getSafeTheme(rawTheme: unknown): DesktopTheme | null {
   return null;
 }
 
-async function waitForBackendHttpReady(baseUrl: string): Promise<void> {
+async function waitForBackendHttpReady(
+  baseUrl: string,
+  options?: Parameters<typeof waitForHttpReady>[1],
+): Promise<void> {
   cancelBackendReadinessWait();
   const controller = new AbortController();
   backendReadinessAbortController = controller;
@@ -514,15 +561,17 @@ async function waitForBackendHttpReady(baseUrl: string): Promise<void> {
   try {
     if (isDevelopment) {
       await waitForHttpReady(baseUrl, {
+        ...options,
         signal: controller.signal,
-        timeoutMs: DESKTOP_BACKEND_READINESS_TIMEOUT_MS,
+        timeoutMs: options?.timeoutMs ?? DESKTOP_BACKEND_READINESS_TIMEOUT_MS,
       });
       return;
     }
 
     await waitForHttpReadyWithGrace(baseUrl, {
+      ...options,
       signal: controller.signal,
-      initialTimeoutMs: DESKTOP_BACKEND_READINESS_TIMEOUT_MS,
+      initialTimeoutMs: options?.timeoutMs ?? DESKTOP_BACKEND_READINESS_TIMEOUT_MS,
       graceTimeoutMs: DESKTOP_PACKAGED_BACKEND_READINESS_GRACE_TIMEOUT_MS,
       shouldExtendWait: () =>
         backendProcess !== null &&
@@ -544,6 +593,50 @@ async function waitForBackendHttpReady(baseUrl: string): Promise<void> {
 function cancelBackendReadinessWait(): void {
   backendReadinessAbortController?.abort();
   backendReadinessAbortController = null;
+}
+
+async function waitForBackendWindowReady(baseUrl: string): Promise<"listening" | "http"> {
+  return await waitForBackendStartupReady({
+    listeningPromise: backendListeningDetector?.promise ?? null,
+    waitForHttpReady: () =>
+      waitForBackendHttpReady(baseUrl, {
+        timeoutMs: 60_000,
+      }),
+    cancelHttpWait: cancelBackendReadinessWait,
+  });
+}
+
+function ensureInitialBackendWindowOpen(): void {
+  const existingWindow = mainWindow ?? BrowserWindow.getAllWindows()[0] ?? null;
+  if (isDevelopment || existingWindow !== null || backendInitialWindowOpenInFlight !== null) {
+    return;
+  }
+
+  const nextOpen = waitForBackendWindowReady(backendHttpUrl)
+    .then((source) => {
+      writeDesktopLogHeader(`bootstrap backend ready source=${source}`);
+      if (mainWindow ?? BrowserWindow.getAllWindows()[0]) {
+        return;
+      }
+      mainWindow = createWindow();
+      writeDesktopLogHeader("bootstrap main window created");
+    })
+    .catch((error) => {
+      if (isBackendReadinessAborted(error)) {
+        return;
+      }
+      writeDesktopLogHeader(
+        `bootstrap backend readiness warning message=${formatErrorMessage(error)}`,
+      );
+      console.warn("[desktop] backend readiness check timed out during packaged bootstrap", error);
+    })
+    .finally(() => {
+      if (backendInitialWindowOpenInFlight === nextOpen) {
+        backendInitialWindowOpenInFlight = null;
+      }
+    });
+
+  backendInitialWindowOpenInFlight = nextOpen;
 }
 
 function writeDesktopStreamChunk(
@@ -623,14 +716,16 @@ function initializePackagedLogging(): void {
 }
 
 function captureBackendOutput(child: ChildProcess.ChildProcess): void {
-  if (!app.isPackaged || backendLogSink === null) return;
-  const writeChunk = (chunk: unknown): void => {
-    if (!backendLogSink) return;
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), "utf8");
-    backendLogSink.write(buffer);
+  const attachStream = (stream: NodeJS.ReadableStream | null | undefined): void => {
+    stream?.on("data", (chunk: unknown) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), "utf8");
+      backendLogSink?.write(buffer);
+      backendListeningDetector?.push(buffer);
+    });
   };
-  child.stdout?.on("data", writeChunk);
-  child.stderr?.on("data", writeChunk);
+
+  attachStream(child.stdout);
+  attachStream(child.stderr);
 }
 
 initializePackagedLogging();
@@ -1054,6 +1149,18 @@ function resolveResourcePath(fileName: string): string | null {
 }
 
 function resolveIconPath(ext: "ico" | "icns" | "png"): string | null {
+  if (isDevelopment && process.platform === "darwin" && ext === "png") {
+    const developmentDockIconPath = Path.join(
+      ROOT_DIR,
+      "assets",
+      "dev",
+      "blueprint-macos-1024.png",
+    );
+    if (FS.existsSync(developmentDockIconPath)) {
+      return developmentDockIconPath;
+    }
+  }
+
   return resolveResourcePath(`icon.${ext}`);
 }
 
@@ -1153,6 +1260,26 @@ function emitUpdateState(): void {
 function setUpdateState(patch: Partial<DesktopUpdateState>): void {
   updateState = { ...updateState, ...patch };
   emitUpdateState();
+}
+
+function createBaseUpdateState(
+  channel: DesktopUpdateChannel,
+  enabled: boolean,
+): DesktopUpdateState {
+  return {
+    ...createInitialDesktopUpdateState(app.getVersion(), desktopRuntimeInfo, channel),
+    enabled,
+    status: enabled ? "idle" : "disabled",
+  };
+}
+
+function applyAutoUpdaterChannel(channel: DesktopUpdateChannel): void {
+  autoUpdater.channel = channel;
+  autoUpdater.allowPrerelease = channel === "nightly";
+  autoUpdater.allowDowngrade = channel === "nightly";
+  console.info(
+    `[desktop-updater] Using update channel '${channel}' (allowPrerelease=${channel === "nightly"}, allowDowngrade=${channel === "nightly"}).`,
+  );
 }
 
 function shouldEnableAutoUpdates(): boolean {
@@ -1369,11 +1496,7 @@ function configureAutoUpdater(): void {
 
   const enabled =
     shouldEnableAutoUpdates() && (!shouldUseMacManualUpdater() || macManualUpdateConfig !== null);
-  setUpdateState({
-    ...createInitialDesktopUpdateState(app.getVersion(), desktopRuntimeInfo),
-    enabled,
-    status: enabled ? "idle" : "disabled",
-  });
+  setUpdateState(createBaseUpdateState(desktopSettings.updateChannel, enabled));
   if (!enabled) {
     return;
   }
@@ -1397,10 +1520,7 @@ function configureAutoUpdater(): void {
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
-  // Keep alpha branding, but force all installs onto the stable update track.
-  autoUpdater.channel = DESKTOP_UPDATE_CHANNEL;
-  autoUpdater.allowPrerelease = DESKTOP_UPDATE_ALLOW_PRERELEASE;
-  autoUpdater.allowDowngrade = false;
+  applyAutoUpdaterChannel(desktopSettings.updateChannel);
   autoUpdater.disableDifferentialDownload = isArm64HostRunningIntelBuild(desktopRuntimeInfo);
   let lastLoggedDownloadMilestone = -1;
 
@@ -1414,6 +1534,15 @@ function configureAutoUpdater(): void {
     console.info("[desktop-updater] Looking for updates...");
   });
   autoUpdater.on("update-available", (info) => {
+    if (!doesVersionMatchDesktopUpdateChannel(info.version, updateState.channel)) {
+      console.info(
+        `[desktop-updater] Ignoring ${info.version} because it does not match the selected '${updateState.channel}' channel.`,
+      );
+      setUpdateState(reduceDesktopUpdateStateOnNoUpdate(updateState, new Date().toISOString()));
+      lastLoggedDownloadMilestone = -1;
+      return;
+    }
+
     setUpdateState(
       reduceDesktopUpdateStateOnUpdateAvailable(
         updateState,
@@ -1505,7 +1634,7 @@ function startBackend(): void {
     return;
   }
 
-  const captureBackendLogs = app.isPackaged && backendLogSink !== null;
+  const captureBackendLogs = !isDevelopment;
   const child = ChildProcess.spawn(process.execPath, [backendEntry, "--bootstrap-fd", "3"], {
     cwd: resolveBackendCwd(),
     // In Electron main, process.execPath points to the Electron binary.
@@ -1543,6 +1672,8 @@ function startBackend(): void {
     scheduleBackendRestart("missing desktop bootstrap pipe");
     return;
   }
+  const listeningDetector = new ServerListeningDetector();
+  backendListeningDetector = listeningDetector;
   backendProcess = child;
   let backendSessionClosed = false;
   const closeBackendSession = (details: string) => {
@@ -1561,6 +1692,10 @@ function startBackend(): void {
   });
 
   child.on("error", (error) => {
+    if (backendListeningDetector === listeningDetector) {
+      listeningDetector.fail(error);
+      backendListeningDetector = null;
+    }
     const wasExpected = expectedBackendExitChildren.has(child);
     if (backendProcess === child) {
       backendProcess = null;
@@ -1573,6 +1708,14 @@ function startBackend(): void {
   });
 
   child.on("exit", (code, signal) => {
+    if (backendListeningDetector === listeningDetector) {
+      listeningDetector.fail(
+        new Error(
+          `backend exited before logging readiness (code=${code ?? "null"} signal=${signal ?? "null"})`,
+        ),
+      );
+      backendListeningDetector = null;
+    }
     const wasExpected = expectedBackendExitChildren.has(child);
     if (backendProcess === child) {
       backendProcess = null;
@@ -1584,10 +1727,13 @@ function startBackend(): void {
     const reason = `code=${code ?? "null"} signal=${signal ?? "null"}`;
     scheduleBackendRestart(reason);
   });
+
+  ensureInitialBackendWindowOpen();
 }
 
 function stopBackend(): void {
   cancelBackendReadinessWait();
+  backendListeningDetector = null;
   if (restartTimer) {
     clearTimeout(restartTimer);
     restartTimer = null;
@@ -1661,10 +1807,43 @@ async function stopBackendAndWaitForExit(timeoutMs = 5_000): Promise<void> {
   });
 }
 
+async function setDesktopUpdateChannel(channel: DesktopUpdateChannel): Promise<DesktopUpdateState> {
+  if (updateCheckInFlight || updateDownloadInFlight || updateInstallInFlight) {
+    throw new Error("Cannot change update tracks while an update action is in progress.");
+  }
+
+  desktopSettings = setDesktopUpdateChannelPreference(desktopSettings, channel);
+  desktopSettingsSource = "persisted";
+  writeDesktopSettings(DESKTOP_SETTINGS_PATH, desktopSettings);
+
+  if (channel === updateState.channel) {
+    return updateState;
+  }
+
+  const enabled =
+    shouldEnableAutoUpdates() && (!shouldUseMacManualUpdater() || macManualUpdateConfig !== null);
+  setUpdateState(createBaseUpdateState(channel, enabled));
+
+  if (!enabled || !updaterConfigured) {
+    return updateState;
+  }
+
+  applyAutoUpdaterChannel(channel);
+  const allowDowngrade = autoUpdater.allowDowngrade;
+  autoUpdater.allowDowngrade = true;
+  try {
+    await checkForUpdates("channel-change");
+  } finally {
+    autoUpdater.allowDowngrade = allowDowngrade;
+  }
+  return updateState;
+}
+
 function registerIpcHandlers(): void {
   registerDesktopIpcHandlers({
     clientSettingsPath: CLIENT_SETTINGS_PATH,
     savedEnvironmentRegistryPath: SAVED_ENVIRONMENT_REGISTRY_PATH,
+    getAppBranding: () => desktopAppBranding,
     getBootstrapPayload: () => ({
       label: "Local environment",
       httpBaseUrl: backendHttpUrl || null,
@@ -1679,12 +1858,14 @@ function registerIpcHandlers(): void {
     getMainWindow: () => mainWindow,
     showConfirmDialog: (message, owner) =>
       Promise.resolve(showDesktopConfirmDialog(message, owner)),
+    resolvePickFolderDefaultPath,
     getSafeTheme,
     getSafeExternalUrl,
     getDesktopThreadNotification,
     revealWindow,
     getDestructiveMenuIcon,
     getUpdateState: () => updateState,
+    setDesktopUpdateChannel,
     downloadAvailableUpdate,
     installDownloadedUpdate,
     isQuitting: () => isQuitting,
@@ -1704,21 +1885,60 @@ function getInitialWindowBackgroundColor(): string {
   return nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff";
 }
 
+function getWindowTitleBarOptions(): WindowTitleBarOptions {
+  if (process.platform === "darwin") {
+    return {
+      titleBarStyle: "hiddenInset",
+      trafficLightPosition: { x: 16, y: 18 },
+    };
+  }
+
+  return {
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: TITLEBAR_COLOR,
+      height: TITLEBAR_HEIGHT,
+      symbolColor: nativeTheme.shouldUseDarkColors
+        ? TITLEBAR_DARK_SYMBOL_COLOR
+        : TITLEBAR_LIGHT_SYMBOL_COLOR,
+    },
+  };
+}
+
+function syncWindowAppearance(window: BrowserWindow): void {
+  if (window.isDestroyed()) {
+    return;
+  }
+
+  window.setBackgroundColor(getInitialWindowBackgroundColor());
+  const { titleBarOverlay } = getWindowTitleBarOptions();
+  if (typeof titleBarOverlay === "object") {
+    window.setTitleBarOverlay(titleBarOverlay);
+  }
+}
+
+function syncAllWindowAppearance(): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    syncWindowAppearance(window);
+  }
+}
+
+nativeTheme.on("updated", syncAllWindowAppearance);
+
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1100,
     height: 780,
     minWidth: 840,
     minHeight: 620,
-    show: isDevelopment,
+    show: false,
     autoHideMenuBar: true,
     backgroundColor: getInitialWindowBackgroundColor(),
     ...getIconOption(),
     title: APP_DISPLAY_NAME,
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: DESKTOP_MAC_TRAFFIC_LIGHT_POSITION,
+    ...getWindowTitleBarOptions(),
     webPreferences: {
-      preload: Path.join(__dirname, "preload.js"),
+      preload: Path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -1785,20 +2005,24 @@ function createWindow(): BrowserWindow {
     window.setTitle(APP_DISPLAY_NAME);
     emitUpdateState();
   });
-  if (!isDevelopment) {
-    window.once("ready-to-show", () => {
-      revealWindow(window);
-    });
+
+  // On Linux/Wayland with `show: false`, Electron's `ready-to-show` only
+  // fires after `show()` is called, deadlocking the standard "wait for
+  // ready, then show" pattern. Add `did-finish-load` as a Linux-only
+  // fallback so the window still surfaces once the renderer has loaded
+  // the page. Other platforms keep the no-flash `ready-to-show` path,
+  // since `did-finish-load` typically fires before the first paint there.
+  const revealSubscribers: RevealSubscription[] = [(fire) => window.once("ready-to-show", fire)];
+  if (process.platform === "linux") {
+    revealSubscribers.push((fire) => window.webContents.once("did-finish-load", fire));
   }
+  bindFirstRevealTrigger(revealSubscribers, () => revealWindow(window));
 
   if (isDevelopment) {
     void window.loadURL(resolveDesktopDevServerUrl());
     window.webContents.openDevTools({ mode: "detach" });
-    setImmediate(() => {
-      revealWindow(window);
-    });
   } else {
-    void window.loadURL(resolveDesktopWindowUrl());
+    void window.loadURL(backendHttpUrl);
   }
 
   window.on("closed", () => {
@@ -1808,14 +2032,6 @@ function createWindow(): BrowserWindow {
   });
 
   return window;
-}
-
-function resolveDesktopWindowUrl(): string {
-  if (backendHttpUrl) {
-    return backendHttpUrl;
-  }
-
-  return `${DESKTOP_SCHEME}://app`;
 }
 
 // Override Electron's userData path before the `ready` event so that
@@ -1883,9 +2099,9 @@ async function bootstrap(): Promise<void> {
   if (isDevelopment) {
     mainWindow = createWindow();
     writeDesktopLogHeader("bootstrap main window created");
-    void waitForBackendHttpReady(backendHttpUrl)
-      .then(() => {
-        writeDesktopLogHeader("bootstrap backend ready");
+    void waitForBackendWindowReady(backendHttpUrl)
+      .then((source) => {
+        writeDesktopLogHeader(`bootstrap backend ready source=${source}`);
       })
       .catch((error) => {
         if (isBackendReadinessAborted(error)) {
@@ -1899,10 +2115,7 @@ async function bootstrap(): Promise<void> {
     return;
   }
 
-  await waitForBackendHttpReady(backendHttpUrl);
-  writeDesktopLogHeader("bootstrap backend ready");
-  mainWindow = createWindow();
-  writeDesktopLogHeader("bootstrap main window created");
+  ensureInitialBackendWindowOpen();
 }
 
 app.on("before-quit", () => {
@@ -1937,7 +2150,11 @@ app
         revealWindow(existingWindow);
         return;
       }
-      mainWindow = createWindow();
+      if (isDevelopment) {
+        mainWindow = createWindow();
+        return;
+      }
+      ensureInitialBackendWindowOpen();
     });
   })
   .catch((error) => {

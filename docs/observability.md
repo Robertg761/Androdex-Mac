@@ -69,11 +69,11 @@ npx androdex
 ```
 
 ```bash
-bun dev
+node --run dev
 ```
 
 ```bash
-bun dev:desktop
+node --run dev:desktop
 ```
 
 ### Option 2: Run With A Local LGTM Stack
@@ -122,13 +122,13 @@ npx androdex
 Monorepo web/server dev:
 
 ```bash
-bun dev
+node --run dev
 ```
 
 Monorepo desktop dev:
 
 ```bash
-bun dev:desktop
+node --run dev:desktop
 ```
 
 Packaged desktop app:

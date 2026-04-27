@@ -3,10 +3,12 @@ import type { MenuItemConstructorOptions } from "electron";
 import type {
   ClientSettings,
   ContextMenuItem,
+  DesktopAppBranding,
   DesktopServerExposureMode,
   DesktopServerExposureState,
   DesktopThreadNotification,
   DesktopTheme,
+  DesktopUpdateChannel,
   DesktopUpdateActionResult,
   DesktopUpdateCheckResult,
   DesktopUpdateState,
@@ -25,6 +27,7 @@ import { showDesktopThreadNotification } from "../threadNotifications";
 import {
   CONFIRM_CHANNEL,
   CONTEXT_MENU_CHANNEL,
+  GET_APP_BRANDING_CHANNEL,
   GET_CLIENT_SETTINGS_CHANNEL,
   GET_LOCAL_ENVIRONMENT_BOOTSTRAP_CHANNEL,
   GET_SAVED_ENVIRONMENT_REGISTRY_CHANNEL,
@@ -43,6 +46,7 @@ import {
   UPDATE_DOWNLOAD_CHANNEL,
   UPDATE_GET_STATE_CHANNEL,
   UPDATE_INSTALL_CHANNEL,
+  UPDATE_SET_CHANNEL_CHANNEL,
 } from "./channels";
 
 interface DesktopSecretStorage {
@@ -54,6 +58,7 @@ interface DesktopSecretStorage {
 export interface DesktopIpcRuntime {
   readonly clientSettingsPath: string;
   readonly savedEnvironmentRegistryPath: string;
+  readonly getAppBranding: () => DesktopAppBranding;
   readonly getBootstrapPayload: () => {
     readonly label: string;
     readonly httpBaseUrl: string | null;
@@ -70,6 +75,7 @@ export interface DesktopIpcRuntime {
   readonly relaunchDesktopApp: (reason: string) => void;
   readonly getMainWindow: () => BrowserWindow | null;
   readonly showConfirmDialog: (message: string, owner: BrowserWindow | null) => Promise<boolean>;
+  readonly resolvePickFolderDefaultPath: (rawOptions: unknown) => string | undefined;
   readonly getSafeTheme: (rawTheme: unknown) => DesktopTheme | null;
   readonly getSafeExternalUrl: (rawUrl: unknown) => string | null;
   readonly getDesktopThreadNotification: (
@@ -78,6 +84,9 @@ export interface DesktopIpcRuntime {
   readonly revealWindow: (window: BrowserWindow) => void;
   readonly getDestructiveMenuIcon: () => Electron.NativeImage | undefined;
   readonly getUpdateState: () => DesktopUpdateState;
+  readonly setDesktopUpdateChannel: (
+    channel: DesktopUpdateChannel,
+  ) => Promise<DesktopUpdateState>;
   readonly downloadAvailableUpdate: () => Promise<{ accepted: boolean; completed: boolean }>;
   readonly installDownloadedUpdate: () => Promise<{ accepted: boolean; completed: boolean }>;
   readonly isQuitting: () => boolean;
@@ -86,6 +95,11 @@ export interface DesktopIpcRuntime {
 }
 
 export function registerDesktopIpcHandlers(runtime: DesktopIpcRuntime): void {
+  ipcMain.removeAllListeners(GET_APP_BRANDING_CHANNEL);
+  ipcMain.on(GET_APP_BRANDING_CHANNEL, (event) => {
+    event.returnValue = runtime.getAppBranding();
+  });
+
   ipcMain.removeAllListeners(GET_LOCAL_ENVIRONMENT_BOOTSTRAP_CHANNEL);
   ipcMain.on(GET_LOCAL_ENVIRONMENT_BOOTSTRAP_CHANNEL, (event) => {
     event.returnValue = runtime.getBootstrapPayload();
@@ -196,14 +210,17 @@ export function registerDesktopIpcHandlers(runtime: DesktopIpcRuntime): void {
   });
 
   ipcMain.removeHandler(PICK_FOLDER_CHANNEL);
-  ipcMain.handle(PICK_FOLDER_CHANNEL, async () => {
+  ipcMain.handle(PICK_FOLDER_CHANNEL, async (_event, rawOptions: unknown) => {
     const owner = BrowserWindow.getFocusedWindow() ?? runtime.getMainWindow();
+    const defaultPath = runtime.resolvePickFolderDefaultPath(rawOptions);
     const result = owner
       ? await dialog.showOpenDialog(owner, {
           properties: ["openDirectory", "createDirectory"],
+          ...(defaultPath ? { defaultPath } : {}),
         })
       : await dialog.showOpenDialog({
           properties: ["openDirectory", "createDirectory"],
+          ...(defaultPath ? { defaultPath } : {}),
         });
     if (result.canceled) return null;
     return result.filePaths[0] ?? null;
@@ -233,14 +250,30 @@ export function registerDesktopIpcHandlers(runtime: DesktopIpcRuntime): void {
   ipcMain.handle(
     CONTEXT_MENU_CHANNEL,
     async (_event, items: ContextMenuItem[], position?: { x: number; y: number }) => {
-      const normalizedItems = items
-        .filter((item) => typeof item.id === "string" && typeof item.label === "string")
-        .map((item) => ({
-          id: item.id,
-          label: item.label,
-          destructive: item.destructive === true,
-          disabled: item.disabled === true,
-        }));
+      const normalizeItems = (source: readonly ContextMenuItem[]): ContextMenuItem[] => {
+        const normalizedItems: ContextMenuItem[] = [];
+        for (const item of source) {
+          if (typeof item.id !== "string" || typeof item.label !== "string") {
+            continue;
+          }
+          const normalizedItem: ContextMenuItem = {
+            id: item.id,
+            label: item.label,
+            destructive: item.destructive === true,
+            disabled: item.disabled === true,
+          };
+          if (item.children) {
+            const normalizedChildren = normalizeItems(item.children);
+            if (normalizedChildren.length === 0) {
+              continue;
+            }
+            normalizedItem.children = normalizedChildren;
+          }
+          normalizedItems.push(normalizedItem);
+        }
+        return normalizedItems;
+      };
+      const normalizedItems = normalizeItems(items);
       if (normalizedItems.length === 0) {
         return null;
       }
@@ -261,28 +294,37 @@ export function registerDesktopIpcHandlers(runtime: DesktopIpcRuntime): void {
       if (!window) return null;
 
       return new Promise<string | null>((resolve) => {
-        const template: MenuItemConstructorOptions[] = [];
-        let hasInsertedDestructiveSeparator = false;
-        for (const item of normalizedItems) {
-          if (item.destructive && !hasInsertedDestructiveSeparator && template.length > 0) {
-            template.push({ type: "separator" });
-            hasInsertedDestructiveSeparator = true;
-          }
-          const itemOption: MenuItemConstructorOptions = {
-            label: item.label,
-            enabled: !item.disabled,
-            click: () => resolve(item.id),
-          };
-          if (item.destructive) {
-            const destructiveIcon = runtime.getDestructiveMenuIcon();
-            if (destructiveIcon) {
-              itemOption.icon = destructiveIcon;
+        const buildTemplate = (
+          entries: readonly ContextMenuItem[],
+        ): MenuItemConstructorOptions[] => {
+          const template: MenuItemConstructorOptions[] = [];
+          let hasInsertedDestructiveSeparator = false;
+          for (const item of entries) {
+            if (item.destructive && !hasInsertedDestructiveSeparator && template.length > 0) {
+              template.push({ type: "separator" });
+              hasInsertedDestructiveSeparator = true;
             }
+            const itemOption: MenuItemConstructorOptions = {
+              label: item.label,
+              enabled: !item.disabled,
+            };
+            if (item.children && item.children.length > 0) {
+              itemOption.submenu = buildTemplate(item.children);
+            } else {
+              itemOption.click = () => resolve(item.id);
+            }
+            if (item.destructive && (!item.children || item.children.length === 0)) {
+              const destructiveIcon = runtime.getDestructiveMenuIcon();
+              if (destructiveIcon) {
+                itemOption.icon = destructiveIcon;
+              }
+            }
+            template.push(itemOption);
           }
-          template.push(itemOption);
-        }
+          return template;
+        };
 
-        const menu = Menu.buildFromTemplate(template);
+        const menu = Menu.buildFromTemplate(buildTemplate(normalizedItems));
         menu.popup({
           window,
           ...popupPosition,
@@ -330,6 +372,14 @@ export function registerDesktopIpcHandlers(runtime: DesktopIpcRuntime): void {
 
   ipcMain.removeHandler(UPDATE_GET_STATE_CHANNEL);
   ipcMain.handle(UPDATE_GET_STATE_CHANNEL, async () => runtime.getUpdateState());
+
+  ipcMain.removeHandler(UPDATE_SET_CHANNEL_CHANNEL);
+  ipcMain.handle(UPDATE_SET_CHANNEL_CHANNEL, async (_event, rawChannel: unknown) => {
+    if (rawChannel !== "latest" && rawChannel !== "nightly") {
+      throw new Error("Invalid desktop update channel input.");
+    }
+    return runtime.setDesktopUpdateChannel(rawChannel);
+  });
 
   ipcMain.removeHandler(UPDATE_DOWNLOAD_CHANNEL);
   ipcMain.handle(UPDATE_DOWNLOAD_CHANNEL, async () => {

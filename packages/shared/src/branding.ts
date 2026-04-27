@@ -23,7 +23,7 @@ export const LEGACY_USER_DATA_DIR_NAMES = [
   `${LEGACY_APP_BASE_NAME} (Dev)`,
 ] as const;
 
-export type AppStageLabel = "Alpha" | "Dev";
+export type AppStageLabel = "Alpha" | "Dev" | "Nightly";
 
 export function makeAppDisplayName(stage: AppStageLabel): string {
   return `${APP_BASE_NAME} (${stage})`;
