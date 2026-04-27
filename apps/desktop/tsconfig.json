@@ -2,6 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "erasableSyntaxOnly": false,
+    "verbatimModuleSyntax": false,
     "types": ["node", "electron"],
     "lib": ["ESNext", "DOM", "esnext.disposable"]
   },

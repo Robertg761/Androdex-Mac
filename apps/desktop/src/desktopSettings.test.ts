@@ -45,9 +45,13 @@ describe("desktopSettings", () => {
     expect(
       readDesktopSettings(makeSettingsPath(), {
         serverExposureMode: "network-accessible",
+        updateChannel: "latest",
+        updateChannelConfiguredByUser: false,
       }),
     ).toEqual({
       serverExposureMode: "network-accessible",
+      updateChannel: "latest",
+      updateChannelConfiguredByUser: false,
     });
   });
 
@@ -57,25 +61,35 @@ describe("desktopSettings", () => {
     expect(
       loadDesktopSettings(settingsPath, {
         serverExposureMode: "network-accessible",
+        updateChannel: "latest",
+        updateChannelConfiguredByUser: false,
       }),
     ).toEqual({
       settings: {
         serverExposureMode: "network-accessible",
+        updateChannel: "latest",
+        updateChannelConfiguredByUser: false,
       },
       source: "default",
     });
 
     writeDesktopSettings(settingsPath, {
       serverExposureMode: "local-only",
+      updateChannel: "latest",
+      updateChannelConfiguredByUser: false,
     });
 
     expect(
       loadDesktopSettings(settingsPath, {
         serverExposureMode: "network-accessible",
+        updateChannel: "latest",
+        updateChannelConfiguredByUser: false,
       }),
     ).toEqual({
       settings: {
         serverExposureMode: "local-only",
+        updateChannel: "latest",
+        updateChannelConfiguredByUser: false,
       },
       source: "persisted",
     });

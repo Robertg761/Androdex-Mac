@@ -353,12 +353,12 @@ export function findFirstAppBundle(rootPath: string): string | null {
 }
 
 export function resolveCurrentAppBundlePath(executablePath: string): string | null {
-  let currentPath = Path.resolve(executablePath);
-  while (currentPath !== Path.dirname(currentPath)) {
+  let currentPath = Path.posix.resolve(executablePath);
+  while (currentPath !== Path.posix.dirname(currentPath)) {
     if (currentPath.endsWith(".app")) {
       return currentPath;
     }
-    currentPath = Path.dirname(currentPath);
+    currentPath = Path.posix.dirname(currentPath);
   }
   return null;
 }
@@ -367,8 +367,8 @@ export function resolveTargetAppBundlePath(currentBundlePath: string | null): st
   if (currentBundlePath && !currentBundlePath.startsWith("/Volumes/")) {
     return currentBundlePath;
   }
-  const appBundleName = currentBundlePath ? Path.basename(currentBundlePath) : "Androdex.app";
-  return Path.join("/Applications", appBundleName);
+  const appBundleName = currentBundlePath ? Path.posix.basename(currentBundlePath) : "Androdex.app";
+  return Path.posix.join("/Applications", appBundleName);
 }
 
 export async function prepareMacDownloadedUpdate(args: {
