@@ -1,14 +1,14 @@
 import { assert, describe, it } from "@effect/vitest";
 
 import {
-  mergeMacUpdateManifests,
-  parseMacUpdateManifest,
-  serializeMacUpdateManifest,
-} from "./merge-mac-update-manifests.ts";
+  mergeUpdateManifests,
+  parseUpdateManifest,
+  serializeUpdateManifest,
+} from "./lib/update-manifest.ts";
 
 describe("merge-mac-update-manifests", () => {
   it("merges arm64 and x64 macOS update manifests into one multi-arch manifest", () => {
-    const arm64 = parseMacUpdateManifest(
+    const arm64 = parseUpdateManifest(
       `version: 0.0.4
 files:
   - url: Androdex-0.0.4-arm64.zip
@@ -22,9 +22,10 @@ sha512: arm64zip
 releaseDate: '2026-03-07T10:32:14.587Z'
 `,
       "latest-mac.yml",
+      "macOS",
     );
 
-    const x64 = parseMacUpdateManifest(
+    const x64 = parseUpdateManifest(
       `version: 0.0.4
 files:
   - url: Androdex-0.0.4-x64.zip
@@ -38,9 +39,10 @@ sha512: x64zip
 releaseDate: '2026-03-07T10:36:07.540Z'
 `,
       "latest-mac-x64.yml",
+      "macOS",
     );
 
-    const merged = mergeMacUpdateManifests(arm64, x64);
+    const merged = mergeUpdateManifests(arm64, x64, "macOS");
 
     assert.equal(merged.version, "0.0.4");
     assert.equal(merged.releaseDate, "2026-03-07T10:36:07.540Z");
@@ -54,13 +56,13 @@ releaseDate: '2026-03-07T10:36:07.540Z'
       ],
     );
 
-    const serialized = serializeMacUpdateManifest(merged);
+    const serialized = serializeUpdateManifest(merged, { platformLabel: "macOS" });
     assert.ok(!serialized.includes("path:"));
     assert.equal((serialized.match(/- url:/g) ?? []).length, 4);
   });
 
   it("rejects mismatched manifest versions", () => {
-    const arm64 = parseMacUpdateManifest(
+    const arm64 = parseUpdateManifest(
       `version: 0.0.4
 files:
   - url: Androdex-0.0.4-arm64.zip
@@ -69,9 +71,10 @@ files:
 releaseDate: '2026-03-07T10:32:14.587Z'
 `,
       "latest-mac.yml",
+      "macOS",
     );
 
-    const x64 = parseMacUpdateManifest(
+    const x64 = parseUpdateManifest(
       `version: 0.0.5
 files:
   - url: Androdex-0.0.5-x64.zip
@@ -80,13 +83,14 @@ files:
 releaseDate: '2026-03-07T10:36:07.540Z'
 `,
       "latest-mac-x64.yml",
+      "macOS",
     );
 
-    assert.throws(() => mergeMacUpdateManifests(arm64, x64), /different versions/);
+    assert.throws(() => mergeUpdateManifests(arm64, x64, "macOS"), /different versions/);
   });
 
   it("preserves quoted scalars as strings", () => {
-    const manifest = parseMacUpdateManifest(
+    const manifest = parseUpdateManifest(
       `version: '1.0'
 files:
   - url: Androdex-1.0-x64.zip
@@ -98,6 +102,7 @@ stagingPercentage: 50
 releaseDate: '2026-03-07T10:36:07.540Z'
 `,
       "latest-mac.yml",
+      "macOS",
     );
 
     assert.equal(manifest.version, "1.0");
