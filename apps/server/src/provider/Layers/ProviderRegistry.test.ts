@@ -304,8 +304,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
             status.message,
             "Codex CLI (`codex`) is not installed or not on PATH.",
           );
-        }),
-      ).pipe(Effect.provide(failingSpawnerLayer("spawn codex ENOENT"))),
+        }).pipe(Effect.provide(failingSpawnerLayer("spawn codex ENOENT"))),
+      );
 
       it.effect("returns unavailable when codex is below the minimum supported version", () =>
         Effect.gen(function* () {

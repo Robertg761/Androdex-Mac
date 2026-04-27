@@ -16,14 +16,8 @@ function linkEnvAlias(preferredName: string, legacyName: string): void {
   process.env[legacyName] = resolved;
 }
 
-linkEnvAlias(
-  "ANDRODEX_DESKTOP_MOCK_UPDATE_SERVER_PORT",
-  "T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT",
-);
-linkEnvAlias(
-  "ANDRODEX_DESKTOP_MOCK_UPDATE_SERVER_ROOT",
-  "T3CODE_DESKTOP_MOCK_UPDATE_SERVER_ROOT",
-);
+linkEnvAlias("ANDRODEX_DESKTOP_MOCK_UPDATE_SERVER_PORT", "T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT");
+linkEnvAlias("ANDRODEX_DESKTOP_MOCK_UPDATE_SERVER_ROOT", "T3CODE_DESKTOP_MOCK_UPDATE_SERVER_ROOT");
 
 interface MockUpdateServerConfig {
   readonly port: number;

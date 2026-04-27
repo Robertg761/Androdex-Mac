@@ -84,9 +84,7 @@ export interface DesktopIpcRuntime {
   readonly revealWindow: (window: BrowserWindow) => void;
   readonly getDestructiveMenuIcon: () => Electron.NativeImage | undefined;
   readonly getUpdateState: () => DesktopUpdateState;
-  readonly setDesktopUpdateChannel: (
-    channel: DesktopUpdateChannel,
-  ) => Promise<DesktopUpdateState>;
+  readonly setDesktopUpdateChannel: (channel: DesktopUpdateChannel) => Promise<DesktopUpdateState>;
   readonly downloadAvailableUpdate: () => Promise<{ accepted: boolean; completed: boolean }>;
   readonly installDownloadedUpdate: () => Promise<{ accepted: boolean; completed: boolean }>;
   readonly isQuitting: () => boolean;

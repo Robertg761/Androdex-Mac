@@ -170,7 +170,10 @@ const TITLEBAR_LIGHT_SYMBOL_COLOR = "#1f2937";
 const TITLEBAR_DARK_SYMBOL_COLOR = "#f8fafc";
 
 type WindowTitleBarOptions = Partial<
-  Pick<BrowserWindowConstructorOptions, "titleBarOverlay" | "titleBarStyle" | "trafficLightPosition">
+  Pick<
+    BrowserWindowConstructorOptions,
+    "titleBarOverlay" | "titleBarStyle" | "trafficLightPosition"
+  >
 >;
 
 type DesktopUpdateErrorContext = DesktopUpdateState["errorContext"];

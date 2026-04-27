@@ -40,6 +40,7 @@ import {
   type ContextMenuItem,
   type DesktopUpdateState,
   ProjectId,
+  type ScopedProjectRef,
   type ScopedThreadRef,
   type SidebarProjectGroupingMode,
   type ThreadEnvMode,
@@ -1720,7 +1721,12 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         createThreadForProjectMember(targetMember);
       })();
     },
-    [closeMobileSidebar, createThreadForProjectMember, project.groupedProjectCount, project.memberProjects],
+    [
+      closeMobileSidebar,
+      createThreadForProjectMember,
+      project.groupedProjectCount,
+      project.memberProjects,
+    ],
   );
 
   const attemptArchiveThread = useCallback(
