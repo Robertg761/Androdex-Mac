@@ -4,7 +4,7 @@ import {
   DESKTOP_MAC_TRAFFIC_LIGHT_POSITION,
   DESKTOP_MAC_TRAFFIC_LIGHT_SAFE_AREA_LEFT_PX,
   DESKTOP_TITLEBAR_HEIGHT_PX,
-} from "./desktopShell";
+} from "./desktopShell.ts";
 
 describe("desktopShell metrics", () => {
   it("keeps the shared titlebar height aligned to the desktop shell chrome", () => {

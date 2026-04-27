@@ -7,7 +7,7 @@ import {
   resolvePairingPathname,
   setPairingTokenOnUrl,
   stripPairingTokenFromUrl,
-} from "./pairingUrl";
+} from "./pairingUrl.ts";
 
 describe("resolvePairingPathname", () => {
   it("targets the root pairing route for root-hosted backends", () => {
