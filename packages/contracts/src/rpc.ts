@@ -14,7 +14,7 @@ import {
   CodexAccountsSnapshot,
   CodexSwitchAccountInput,
   CodexSwitchAccountResult,
-} from "./codexAccounts";
+} from "./codexAccounts.ts";
 import {
   GitActionProgressEvent,
   GitCheckoutInput,

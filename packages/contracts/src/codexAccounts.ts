@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas";
+import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 export const CodexAccountPlanType = Schema.Literals([
   "free",

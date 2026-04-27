@@ -29,7 +29,7 @@ import type {
   CodexAccountsSnapshot,
   CodexSwitchAccountResult,
   CodexSwitchAccountInput,
-} from "./codexAccounts";
+} from "./codexAccounts.ts";
 import type {
   ServerConfig,
   ServerProviderUpdatedPayload,
