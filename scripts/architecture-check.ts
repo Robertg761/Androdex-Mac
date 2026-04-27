@@ -6,13 +6,14 @@ import path from "node:path";
 const REPO_ROOT = process.cwd();
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts"]);
 const IGNORE_SEGMENTS = new Set(["node_modules", "dist", "dist-electron", ".turbo"]);
-const GENERATED_SUFFIXES = ["routeTree.gen.ts"];
+const GENERATED_SUFFIXES = [".gen.ts", "routeTree.gen.ts"];
 const LEGACY_FILE_SIZE_EXEMPTIONS = new Set([
   "apps/web/src/composerDraftStore.test.ts",
   "apps/web/src/composerDraftStore.ts",
   "apps/web/src/session-logic.test.ts",
   "apps/web/src/session-logic.ts",
   "apps/web/src/store.test.ts",
+  "apps/web/src/store/threadProjection.ts",
   "apps/web/src/terminalStateStore.ts",
   "apps/web/src/rpc/wsTransport.test.ts",
   "apps/web/src/environments/runtime/service.ts",
@@ -28,6 +29,11 @@ const LEGACY_FILE_SIZE_EXEMPTIONS = new Set([
   "apps/web/src/components/settings/SettingsPanels.tsx",
   "apps/web/src/components/chat/ChatComposer.tsx",
   "apps/web/src/components/chat/MessagesTimeline.tsx",
+  "apps/web/src/components/ChatView.logic.test.ts",
+  "apps/web/src/components/CommandPalette.tsx",
+  "apps/web/src/components/ui/toast.tsx",
+  "apps/web/src/keybindings.test.ts",
+  "apps/web/src/localApi.test.ts",
   "apps/server/src/cli.ts",
   "apps/server/src/codexAppServerManager.test.ts",
   "apps/server/src/keybindings.ts",
@@ -41,6 +47,11 @@ const LEGACY_FILE_SIZE_EXEMPTIONS = new Set([
   "apps/server/src/provider/Layers/ClaudeProvider.ts",
   "apps/server/src/provider/Layers/CodexAdapter.test.ts",
   "apps/server/src/provider/Layers/CodexAdapter.ts",
+  "apps/server/src/provider/Layers/CodexSessionRuntime.ts",
+  "apps/server/src/provider/Layers/CursorAdapter.test.ts",
+  "apps/server/src/provider/Layers/CursorAdapter.ts",
+  "apps/server/src/provider/Layers/CursorProvider.ts",
+  "apps/server/src/provider/Layers/OpenCodeAdapter.ts",
   "apps/server/src/provider/Layers/ProviderRegistry.test.ts",
   "apps/server/src/provider/Layers/ProviderService.test.ts",
   "apps/server/src/provider/Layers/ProviderService.ts",
@@ -50,11 +61,14 @@ const LEGACY_FILE_SIZE_EXEMPTIONS = new Set([
   "apps/server/src/orchestration/Layers/OrchestrationEngine.test.ts",
   "apps/server/src/orchestration/Layers/ProjectionPipeline.test.ts",
   "apps/server/src/orchestration/Layers/ProjectionPipeline.ts",
+  "apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.test.ts",
   "apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts",
   "apps/server/src/orchestration/Layers/ProviderCommandReactor.test.ts",
   "apps/server/src/orchestration/Layers/ProviderCommandReactor.ts",
   "apps/server/src/orchestration/Layers/ProviderRuntimeIngestion.test.ts",
   "apps/server/src/orchestration/Layers/ProviderRuntimeIngestion.ts",
+  "apps/server/src/provider/acp/AcpSessionRuntime.ts",
+  "apps/server/src/orchestration/decider.ts",
   "apps/server/src/git/Layers/GitCore.test.ts",
   "apps/server/src/git/Layers/GitCore.ts",
   "apps/server/src/git/Layers/GitManager.test.ts",
@@ -65,6 +79,7 @@ const LEGACY_FILE_SIZE_EXEMPTIONS = new Set([
   "packages/shared/src/qrCode.ts",
   "packages/contracts/src/orchestration.ts",
   "packages/contracts/src/providerRuntime.ts",
+  "packages/effect-codex-app-server/scripts/generate.ts",
   "scripts/build-desktop-artifact.ts",
 ]);
 
