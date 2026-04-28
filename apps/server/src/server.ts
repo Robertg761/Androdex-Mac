@@ -51,8 +51,10 @@ export const makeServerLayer = Layer.unwrap(
       ),
     );
 
+    const routeLayer = makeRoutesLayer.pipe(HttpRouter.provideRequest(RuntimeServicesLive));
+
     const serverApplicationLayer = Layer.mergeAll(
-      HttpRouter.serve(makeRoutesLayer, {
+      HttpRouter.serve(routeLayer, {
         disableLogger: !config.logWebSocketEvents,
       }),
       httpListeningLayer,

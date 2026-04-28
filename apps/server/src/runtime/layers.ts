@@ -50,12 +50,17 @@ export const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(ProviderRuntimeIngestionLive),
   Layer.provideMerge(ProviderCommandReactorLive),
   Layer.provideMerge(CheckpointReactorLive),
+  Layer.provideMerge(ThreadDeletionReactorLive),
   Layer.provideMerge(RuntimeReceiptBusLive),
 );
 
 export const CheckpointingLayerLive = Layer.empty.pipe(
   Layer.provideMerge(CheckpointDiffQueryLive),
   Layer.provideMerge(CheckpointStoreLive),
+);
+
+export const ProviderSessionDirectoryLayerLive = ProviderSessionDirectoryLive.pipe(
+  Layer.provide(ProviderSessionRuntimeRepositoryLive),
 );
 
 export const ProviderLayerLive = Layer.unwrap(
@@ -67,9 +72,6 @@ export const ProviderLayerLive = Layer.unwrap(
     const canonicalEventLogger = yield* makeEventNdjsonLogger(providerEventLogPath, {
       stream: "canonical",
     });
-    const providerSessionDirectoryLayer = ProviderSessionDirectoryLive.pipe(
-      Layer.provide(ProviderSessionRuntimeRepositoryLive),
-    );
     const codexAdapterLayer = makeCodexAdapterLive(
       nativeEventLogger ? { nativeEventLogger } : undefined,
     );
@@ -87,11 +89,11 @@ export const ProviderLayerLive = Layer.unwrap(
       Layer.provide(claudeAdapterLayer),
       Layer.provide(openCodeAdapterLayer),
       Layer.provide(cursorAdapterLayer),
-      Layer.provideMerge(providerSessionDirectoryLayer),
+      Layer.provideMerge(ProviderSessionDirectoryLayerLive),
     );
     return makeProviderServiceLive(
       canonicalEventLogger ? { canonicalEventLogger } : undefined,
-    ).pipe(Layer.provide(adapterRegistryLayer), Layer.provide(providerSessionDirectoryLayer));
+    ).pipe(Layer.provide(adapterRegistryLayer), Layer.provide(ProviderSessionDirectoryLayerLive));
   }),
 );
 
@@ -135,11 +137,12 @@ export const CodexAccountLayerLive = CodexAccountManagerLive.pipe(
 );
 
 export const RuntimeDependenciesLive = ReactorLayerLive.pipe(
+  Layer.provideMerge(ProviderSessionReaperLive),
   Layer.provideMerge(CheckpointingLayerLive),
   Layer.provideMerge(GitLayerLive),
   Layer.provideMerge(OrchestrationLayerLive),
   Layer.provideMerge(ProviderLayerLive),
-  Layer.provideMerge(ProviderSessionReaperLive),
+  Layer.provideMerge(ProviderSessionDirectoryLayerLive),
   Layer.provideMerge(TerminalLayerLive),
   Layer.provideMerge(PersistenceLayerLive),
   Layer.provideMerge(KeybindingsLive),
@@ -152,11 +155,10 @@ export const RuntimeDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(ServerEnvironmentLive),
   Layer.provideMerge(AuthLayerLive),
   Layer.provideMerge(AnalyticsServiceLayerLive),
-  Layer.provideMerge(ThreadDeletionReactorLive),
   Layer.provideMerge(OpenLive),
   Layer.provideMerge(ServerLifecycleEventsLive),
 );
 
 export const RuntimeServicesLive = ServerRuntimeStartupLive.pipe(
-  Layer.provide(RuntimeDependenciesLive),
+  Layer.provideMerge(RuntimeDependenciesLive),
 );
