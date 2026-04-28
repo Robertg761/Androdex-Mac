@@ -112,6 +112,16 @@ function createBaseServerConfig(): ServerConfig {
   };
 }
 
+function createEmptyCodexAccountsSnapshot() {
+  return {
+    codexHomePath: "/repo/.codex",
+    accounts: [],
+    currentAuthMode: "unknown" as const,
+    managedCurrentAuth: false,
+    runningCodexSessionCount: 0,
+  };
+}
+
 function createMinimalSnapshot(): OrchestrationReadModel {
   return {
     snapshotSequence: 1,
@@ -237,6 +247,12 @@ function buildFixture(): TestFixture {
 function resolveWsRpc(tag: string): unknown {
   if (tag === WS_METHODS.serverGetConfig) {
     return fixture.serverConfig;
+  }
+  if (tag === WS_METHODS.serverListCodexAccounts) {
+    return createEmptyCodexAccountsSnapshot();
+  }
+  if (tag === WS_METHODS.serverSwitchCodexAccount) {
+    return { snapshot: createEmptyCodexAccountsSnapshot() };
   }
   if (tag === WS_METHODS.gitListBranches) {
     return {

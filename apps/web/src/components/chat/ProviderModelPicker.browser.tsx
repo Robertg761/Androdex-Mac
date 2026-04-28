@@ -9,6 +9,7 @@ import { ProviderModelPicker } from "./ProviderModelPicker";
 import { getCustomModelOptionsByProvider } from "../../modelSelection";
 import { DEFAULT_CLIENT_SETTINGS, DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { __resetLocalApiForTests } from "../../localApi";
+import { writeBrowserClientSettings } from "../../clientPersistenceStorage";
 
 // Mock the environments/runtime module to provide a mock primary environment connection
 vi.mock("../../environments/runtime", () => {
@@ -577,14 +578,6 @@ describe("ProviderModelPicker", () => {
           '[data-slot="combobox-item"][data-highlighted]',
         );
         expect(highlightedItem).not.toBeNull();
-        expect(highlightedItem?.textContent).toContain("Claude Opus 4.6");
-      });
-      await userEvent.keyboard("{ArrowDown}");
-      await vi.waitFor(() => {
-        const highlightedItem = document.querySelector<HTMLElement>(
-          '[data-slot="combobox-item"][data-highlighted]',
-        );
-        expect(highlightedItem).not.toBeNull();
         expect(highlightedItem?.textContent).toContain("Claude Sonnet 4.6");
       });
       await userEvent.keyboard("{Enter}");
@@ -881,13 +874,10 @@ describe("ProviderModelPicker", () => {
   });
 
   it("shows favorited models first within the selected provider list", async () => {
-    localStorage.setItem(
-      "t3code:client-settings:v1",
-      JSON.stringify({
-        ...DEFAULT_CLIENT_SETTINGS,
-        favorites: [{ provider: "codex", model: "gpt-5.3-codex" }],
-      }),
-    );
+    writeBrowserClientSettings({
+      ...DEFAULT_CLIENT_SETTINGS,
+      favorites: [{ provider: "codex", model: "gpt-5.3-codex" }],
+    });
 
     const mounted = await mountPicker({
       provider: "codex",
@@ -937,7 +927,7 @@ describe("ProviderModelPicker", () => {
     }
   });
 
-  it("only shows codex spark when the server reports it", async () => {
+  it("hides codex spark when the server does not report it", async () => {
     const providersWithoutSpark: ReadonlyArray<ServerProvider> = [
       buildCodexProvider([
         {
@@ -958,6 +948,28 @@ describe("ProviderModelPicker", () => {
       ]),
       TEST_PROVIDERS[1]!,
     ];
+
+    const hidden = await mountPicker({
+      provider: "codex",
+      model: "gpt-5.3-codex",
+      lockedProvider: null,
+      providers: providersWithoutSpark,
+    });
+
+    try {
+      await page.getByRole("button").click();
+
+      await vi.waitFor(() => {
+        const text = document.body.textContent ?? "";
+        expect(text).toContain("GPT-5.3 Codex");
+        expect(text).not.toContain("GPT-5.3 Codex Spark");
+      });
+    } finally {
+      await hidden.cleanup();
+    }
+  });
+
+  it("shows codex spark when the server reports it", async () => {
     const providersWithSpark: ReadonlyArray<ServerProvider> = [
       buildCodexProvider([
         {
@@ -993,25 +1005,6 @@ describe("ProviderModelPicker", () => {
       ]),
       TEST_PROVIDERS[1]!,
     ];
-
-    const hidden = await mountPicker({
-      provider: "codex",
-      model: "gpt-5.3-codex",
-      lockedProvider: null,
-      providers: providersWithoutSpark,
-    });
-
-    try {
-      await page.getByRole("button").click();
-
-      await vi.waitFor(() => {
-        const text = document.body.textContent ?? "";
-        expect(text).toContain("GPT-5.3 Codex");
-        expect(text).not.toContain("GPT-5.3 Codex Spark");
-      });
-    } finally {
-      await hidden.cleanup();
-    }
 
     const visible = await mountPicker({
       provider: "codex",

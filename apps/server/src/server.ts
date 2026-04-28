@@ -60,18 +60,14 @@ export const makeServerLayer = Layer.unwrap(
     );
 
     return serverApplicationLayer.pipe(
-      Layer.provideMerge(RuntimeServicesLive),
-      Layer.provideMerge(HttpServerLive),
+      Layer.provide(RuntimeServicesLive),
+      Layer.provide(HttpServerLive),
       Layer.provide(ObservabilityLive),
-      Layer.provideMerge(FetchHttpClient.layer),
-      Layer.provideMerge(PlatformServicesLive),
+      Layer.provide(FetchHttpClient.layer),
+      Layer.provide(PlatformServicesLive),
     );
   }),
 );
 
 // Important: Only `ServerConfig` should be provided by the CLI layer!!! Don't let other requirements leak into the launch layer.
-export const runServer = Layer.launch(makeServerLayer) satisfies Effect.Effect<
-  never,
-  any,
-  ServerConfig
->;
+export const runServer = Layer.launch(makeServerLayer).pipe(Effect.orDie);

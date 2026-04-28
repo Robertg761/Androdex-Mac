@@ -21,6 +21,7 @@ export default mergeConfig(
     },
     test: {
       include: ["src/components/**/*.browser.tsx"],
+      fileParallelism: false,
       browser: {
         enabled: true,
         provider: playwright(),

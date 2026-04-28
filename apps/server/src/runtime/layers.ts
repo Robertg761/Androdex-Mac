@@ -6,8 +6,11 @@ import { ProviderSessionDirectoryLive } from "../provider/Layers/ProviderSession
 import { ProviderSessionRuntimeRepositoryLive } from "../persistence/Layers/ProviderSessionRuntime";
 import { makeCodexAdapterLive } from "../provider/Layers/CodexAdapter";
 import { makeClaudeAdapterLive } from "../provider/Layers/ClaudeAdapter";
+import { makeCursorAdapterLive } from "../provider/Layers/CursorAdapter";
+import { makeOpenCodeAdapterLive } from "../provider/Layers/OpenCodeAdapter";
 import { ProviderAdapterRegistryLive } from "../provider/Layers/ProviderAdapterRegistry";
 import { makeProviderServiceLive } from "../provider/Layers/ProviderService";
+import { ProviderSessionReaperLive } from "../provider/Layers/ProviderSessionReaper";
 import { CheckpointDiffQueryLive } from "../checkpointing/Layers/CheckpointDiffQuery";
 import { CheckpointStoreLive } from "../checkpointing/Layers/CheckpointStore";
 import { GitCoreLive } from "../git/Layers/GitCore";
@@ -23,6 +26,7 @@ import { RuntimeReceiptBusLive } from "../orchestration/Layers/RuntimeReceiptBus
 import { ProviderRuntimeIngestionLive } from "../orchestration/Layers/ProviderRuntimeIngestion";
 import { ProviderCommandReactorLive } from "../orchestration/Layers/ProviderCommandReactor";
 import { CheckpointReactorLive } from "../orchestration/Layers/CheckpointReactor";
+import { ThreadDeletionReactorLive } from "../orchestration/Layers/ThreadDeletionReactor";
 import { ProviderRegistryLive } from "../provider/Layers/ProviderRegistry";
 import { ServerSettingsLive } from "../serverSettings";
 import { ProjectFaviconResolverLive } from "../project/Layers/ProjectFaviconResolver";
@@ -72,9 +76,17 @@ export const ProviderLayerLive = Layer.unwrap(
     const claudeAdapterLayer = makeClaudeAdapterLive(
       nativeEventLogger ? { nativeEventLogger } : undefined,
     );
+    const cursorAdapterLayer = makeCursorAdapterLive(
+      nativeEventLogger ? { nativeEventLogger } : undefined,
+    );
+    const openCodeAdapterLayer = makeOpenCodeAdapterLive(
+      nativeEventLogger ? { nativeEventLogger } : undefined,
+    );
     const adapterRegistryLayer = ProviderAdapterRegistryLive.pipe(
       Layer.provide(codexAdapterLayer),
       Layer.provide(claudeAdapterLayer),
+      Layer.provide(openCodeAdapterLayer),
+      Layer.provide(cursorAdapterLayer),
       Layer.provideMerge(providerSessionDirectoryLayer),
     );
     return makeProviderServiceLive(
@@ -127,6 +139,7 @@ export const RuntimeDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(GitLayerLive),
   Layer.provideMerge(OrchestrationLayerLive),
   Layer.provideMerge(ProviderLayerLive),
+  Layer.provideMerge(ProviderSessionReaperLive),
   Layer.provideMerge(TerminalLayerLive),
   Layer.provideMerge(PersistenceLayerLive),
   Layer.provideMerge(KeybindingsLive),
@@ -139,10 +152,11 @@ export const RuntimeDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(ServerEnvironmentLive),
   Layer.provideMerge(AuthLayerLive),
   Layer.provideMerge(AnalyticsServiceLayerLive),
+  Layer.provideMerge(ThreadDeletionReactorLive),
   Layer.provideMerge(OpenLive),
   Layer.provideMerge(ServerLifecycleEventsLive),
 );
 
 export const RuntimeServicesLive = ServerRuntimeStartupLive.pipe(
-  Layer.provideMerge(RuntimeDependenciesLive),
+  Layer.provide(RuntimeDependenciesLive),
 );

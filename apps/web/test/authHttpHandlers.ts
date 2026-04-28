@@ -37,5 +37,11 @@ export function createAuthenticatedSessionHandlers(getAuthDescriptor: () => Serv
         expiresAt: TEST_SESSION_EXPIRES_AT,
       }),
     ),
+    http.post("*/api/auth/ws-token", () =>
+      HttpResponse.json({
+        token: "test-websocket-token",
+        expiresAt: TEST_SESSION_EXPIRES_AT,
+      }),
+    ),
   ] as const;
 }

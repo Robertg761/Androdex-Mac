@@ -37,9 +37,21 @@ import { ServerAuthLive } from "./auth/Layers/ServerAuth.ts";
 
 const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
 
-const runCli = (args: ReadonlyArray<string>) => Command.runWith(cli, { version: "0.0.0" })(args);
+const normalizeCliErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  effect.pipe(
+    Effect.catchIf(
+      (_error): _error is E => true,
+      (error) => (CliError.isCliError(error) ? Effect.fail(error) : Effect.die(error)),
+    ),
+  );
+
+const runCli = (args: ReadonlyArray<string>) =>
+  Command.runWith(cli, { version: "0.0.0" })(args).pipe(normalizeCliErrors) as Effect.Effect<
+    void,
+    CliError.CliError
+  >;
 const runCliWithRuntime = (args: ReadonlyArray<string>) =>
-  runCli(args).pipe(Effect.provide(CliRuntimeLayer));
+  runCli(args).pipe(Effect.provide(CliRuntimeLayer)) as Effect.Effect<void, CliError.CliError>;
 
 const captureStdout = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {

@@ -28,7 +28,7 @@ import {
   formatCodexCliUpgradeMessage,
   isCodexCliVersionSupported,
   parseCodexCliVersion,
-} from "../codexCliVersion";
+} from "../cliVersion";
 import {
   readCodexAccountSnapshot,
   resolveCodexModelForAccount,

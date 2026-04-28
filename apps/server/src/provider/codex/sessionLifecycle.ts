@@ -4,7 +4,7 @@ import {
   formatCodexCliUpgradeMessage,
   isCodexCliVersionSupported,
   parseCodexCliVersion,
-} from "../codexCliVersion";
+} from "../cliVersion";
 import { killCodexChildProcess } from "../codexAppServer";
 
 const CODEX_VERSION_CHECK_TIMEOUT_MS = 4_000;

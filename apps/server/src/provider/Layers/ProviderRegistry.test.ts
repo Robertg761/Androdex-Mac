@@ -307,100 +307,42 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
         }).pipe(Effect.provide(failingSpawnerLayer("spawn codex ENOENT"))),
       );
 
-      it.effect("returns unavailable when codex is below the minimum supported version", () =>
+      it.effect("returns an error when the codex app-server probe fails", () =>
         Effect.gen(function* () {
-          const status = yield* checkCodexProviderStatus();
+          const status = yield* checkCodexProviderStatus(() =>
+            Effect.fail(CodexErrors.CodexAppServerRequestError.internalError("Probe exploded")),
+          );
           assert.strictEqual(status.provider, "codex");
           assert.strictEqual(status.status, "error");
           assert.strictEqual(status.installed, true);
           assert.strictEqual(status.auth.status, "unknown");
           assert.strictEqual(
             status.message,
-            "Codex CLI v0.36.0 is too old for Androdex. Upgrade to v0.37.0 or newer and restart Androdex.",
+            "Codex app-server provider probe failed: Probe exploded.",
           );
-        }).pipe(
-          Effect.provide(
-            mockSpawnerLayer((args) => {
-              const joined = args.join(" ");
-              if (joined === "--version") return { stdout: "codex 0.36.0\n", stderr: "", code: 0 };
-              throw new Error(`Unexpected args: ${joined}`);
-            }),
-          ),
-        ),
+        }),
       );
 
-      it.effect("returns unauthenticated when auth probe reports login required", () =>
-        Effect.gen(function* () {
-          const status = yield* checkCodexProviderStatus();
-          assert.strictEqual(status.provider, "codex");
-          assert.strictEqual(status.status, "error");
-          assert.strictEqual(status.installed, true);
-          assert.strictEqual(status.auth.status, "unauthenticated");
-          assert.strictEqual(
-            status.message,
-            "Codex CLI is not authenticated. Run `codex login` and try again.",
-          );
-        }).pipe(
-          Effect.provide(
-            mockSpawnerLayer((args) => {
-              const joined = args.join(" ");
-              if (joined === "--version") return { stdout: "codex 1.0.0\n", stderr: "", code: 0 };
-              if (joined === "login status") {
-                return { stdout: "", stderr: "Not logged in. Run codex login.", code: 1 };
-              }
-              throw new Error(`Unexpected args: ${joined}`);
-            }),
-          ),
-        ),
-      );
-
-      it.effect("returns unauthenticated when login status output includes 'not logged in'", () =>
-        Effect.gen(function* () {
-          const status = yield* checkCodexProviderStatus();
-          assert.strictEqual(status.provider, "codex");
-          assert.strictEqual(status.status, "error");
-          assert.strictEqual(status.installed, true);
-          assert.strictEqual(status.auth.status, "unauthenticated");
-          assert.strictEqual(
-            status.message,
-            "Codex CLI is not authenticated. Run `codex login` and try again.",
-          );
-        }).pipe(
-          Effect.provide(
-            mockSpawnerLayer((args) => {
-              const joined = args.join(" ");
-              if (joined === "--version") return { stdout: "codex 1.0.0\n", stderr: "", code: 0 };
-              if (joined === "login status")
-                return { stdout: "Not logged in\n", stderr: "", code: 1 };
-              throw new Error(`Unexpected args: ${joined}`);
-            }),
-          ),
-        ),
-      );
-
-      it.effect("returns warning when login status command is unsupported", () =>
-        Effect.gen(function* () {
-          const status = yield* checkCodexProviderStatus();
-          assert.strictEqual(status.provider, "codex");
-          assert.strictEqual(status.status, "warning");
-          assert.strictEqual(status.installed, true);
-          assert.strictEqual(status.auth.status, "unknown");
-          assert.strictEqual(
-            status.message,
-            "Codex CLI authentication status command is unavailable in this Codex version.",
-          );
-        }).pipe(
-          Effect.provide(
-            mockSpawnerLayer((args) => {
-              const joined = args.join(" ");
-              if (joined === "--version") return { stdout: "codex 1.0.0\n", stderr: "", code: 0 };
-              if (joined === "login status") {
-                return { stdout: "", stderr: "error: unknown command 'login'", code: 2 };
-              }
-              throw new Error(`Unexpected args: ${joined}`);
-            }),
-          ),
-        ),
+      it.effect(
+        "returns ready when the app-server exposes no account but does not require auth",
+        () =>
+          Effect.gen(function* () {
+            const status = yield* checkCodexProviderStatus(() =>
+              Effect.succeed(
+                makeCodexProbeSnapshot({
+                  account: {
+                    account: null,
+                    requiresOpenaiAuth: false,
+                  },
+                }),
+              ),
+            );
+            assert.strictEqual(status.provider, "codex");
+            assert.strictEqual(status.status, "ready");
+            assert.strictEqual(status.installed, true);
+            assert.strictEqual(status.auth.status, "unknown");
+            assert.strictEqual(status.message, undefined);
+          }),
       );
     });
 

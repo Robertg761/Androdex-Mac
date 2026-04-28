@@ -113,6 +113,16 @@ const authAccessHarness = vi.hoisted(() => {
   };
 });
 
+function createEmptyCodexAccountsSnapshot() {
+  return {
+    codexHomePath: "/repo/.codex",
+    accounts: [],
+    currentAuthMode: "unknown" as const,
+    managedCurrentAuth: false,
+    runningCodexSessionCount: 0,
+  };
+}
+
 vi.mock("../../environments/runtime", () => {
   const primaryConnection = {
     kind: "primary" as const,
@@ -129,6 +139,8 @@ vi.mock("../../environments/runtime", () => {
     environmentId: EnvironmentId.make("environment-local"),
     client: {
       server: {
+        listCodexAccounts: async () => createEmptyCodexAccountsSnapshot(),
+        switchCodexAccount: async () => ({ snapshot: createEmptyCodexAccountsSnapshot() }),
         subscribeAuthAccess: (listener: Parameters<typeof authAccessHarness.subscribe>[0]) =>
           authAccessHarness.subscribe(listener),
       },
@@ -540,6 +552,50 @@ describe("GeneralSettingsPanel observability", () => {
             },
           );
         }
+        if (url.endsWith("/api/auth/pairing-links") && method === "GET") {
+          return new Response(
+            JSON.stringify(
+              pairingLinks.map((pairingLink) => ({
+                id: pairingLink.id,
+                credential: pairingLink.credential,
+                role: pairingLink.role,
+                subject: pairingLink.subject,
+                label: pairingLink.label,
+                createdAt: DateTime.formatIso(pairingLink.createdAt),
+                expiresAt: DateTime.formatIso(pairingLink.expiresAt),
+              })),
+            ),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        if (url.endsWith("/api/auth/clients") && method === "GET") {
+          return new Response(
+            JSON.stringify(
+              clientSessions.map((clientSession) => ({
+                sessionId: clientSession.sessionId,
+                subject: clientSession.subject,
+                role: clientSession.role,
+                method: clientSession.method,
+                client: clientSession.client,
+                issuedAt: DateTime.formatIso(clientSession.issuedAt),
+                expiresAt: DateTime.formatIso(clientSession.expiresAt),
+                lastConnectedAt:
+                  clientSession.lastConnectedAt === null
+                    ? null
+                    : DateTime.formatIso(clientSession.lastConnectedAt),
+                connected: clientSession.connected,
+                current: clientSession.current,
+              })),
+            ),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
 
         throw new Error(`Unhandled fetch ${method} ${url}`);
       }),
@@ -556,11 +612,13 @@ describe("GeneralSettingsPanel observability", () => {
     await expect.element(page.getByText("Authorized clients")).toBeInTheDocument();
     await expect.element(page.getByText("Revoke others")).toBeInTheDocument();
     await expect.element(page.getByText("This Mac")).toBeInTheDocument();
-    await page.getByRole("button", { name: "Create link", exact: true }).click();
+    await page.getByRole("button", { name: "Create link", exact: true }).last().click();
     await expect.element(page.getByText("Create pairing link")).toBeInTheDocument();
-    await page.getByRole("button", { name: "Create link", exact: true }).click();
-    authAccessHarness.emitPairingLinkUpserted(pairingLinks[0]!);
-    authAccessHarness.emitClientUpserted(clientSessions[1]!);
+    const dialogCreateButton = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'),
+    ).find((button) => button.textContent?.trim() === "Create link");
+    expect(dialogCreateButton).toBeTruthy();
+    dialogCreateButton!.click();
     await expect
       .element(page.getByText("Client · Mobile · iOS · Safari · 192.168.1.88"))
       .toBeInTheDocument();
@@ -686,6 +744,14 @@ describe("GeneralSettingsPanel observability", () => {
     window.nativeApi = {
       shell: {
         openInEditor,
+      },
+      server: {
+        listCodexAccounts: async () => createEmptyCodexAccountsSnapshot(),
+        switchCodexAccount: async () => ({ snapshot: createEmptyCodexAccountsSnapshot() }),
+      },
+      persistence: {
+        getClientSettings: async () => null,
+        setClientSettings: async () => undefined,
       },
     } as unknown as LocalApi;
 

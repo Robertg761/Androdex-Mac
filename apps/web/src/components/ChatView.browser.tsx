@@ -193,6 +193,16 @@ function createBaseServerConfig(): ServerConfig {
   };
 }
 
+function createEmptyCodexAccountsSnapshot() {
+  return {
+    codexHomePath: "/repo/.codex",
+    accounts: [],
+    currentAuthMode: "unknown" as const,
+    managedCurrentAuth: false,
+    runningCodexSessionCount: 0,
+  };
+}
+
 function createMockEnvironmentApi(input: {
   browse: EnvironmentApi["filesystem"]["browse"];
   dispatchCommand: EnvironmentApi["orchestration"]["dispatchCommand"];
@@ -947,6 +957,12 @@ function resolveWsRpc(body: NormalizedWsRpcRequestBody): unknown {
   const tag = body._tag;
   if (tag === WS_METHODS.serverGetConfig) {
     return fixture.serverConfig;
+  }
+  if (tag === WS_METHODS.serverListCodexAccounts) {
+    return createEmptyCodexAccountsSnapshot();
+  }
+  if (tag === WS_METHODS.serverSwitchCodexAccount) {
+    return { snapshot: createEmptyCodexAccountsSnapshot() };
   }
   if (tag === WS_METHODS.gitListBranches) {
     return {
@@ -2413,7 +2429,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
               prepareWorktree: {
                 projectCwd: "/repo/project",
                 baseBranch: "main",
-                branch: expect.stringMatching(/^t3code\/[0-9a-f]{8}$/),
+                branch: expect.stringMatching(/^androdex\/[0-9a-f]{8}$/),
               },
               runSetupScript: true,
             },
@@ -2517,7 +2533,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
               prepareWorktree: {
                 projectCwd: "/repo/project",
                 baseBranch: "main",
-                branch: expect.stringMatching(/^t3code\/[0-9a-f]{8}$/),
+                branch: expect.stringMatching(/^androdex\/[0-9a-f]{8}$/),
               },
               runSetupScript: true,
             },
