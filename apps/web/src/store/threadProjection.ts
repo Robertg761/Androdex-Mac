@@ -2,11 +2,21 @@ import type {
   EnvironmentId,
   OrchestrationEvent,
   OrchestrationReadModel,
+  OrchestrationShellSnapshot,
+  OrchestrationShellStreamEvent,
+  OrchestrationThread,
   ScopedThreadRef,
   ThreadId,
 } from "@t3tools/contracts";
 import { getThreadFromEnvironmentState } from "../threadDerivation";
-import type { Project, Thread } from "../types";
+import type {
+  Project,
+  SidebarThreadSummary,
+  Thread,
+  ThreadSession,
+  ThreadShell,
+  ThreadTurnState,
+} from "../types";
 import { sanitizeThreadErrorMessage } from "../rpc/transportError";
 import { compareActivities, retainThreadActivitiesAfterRevert } from "./activityProjection";
 import {
@@ -35,6 +45,7 @@ import {
   buildThreadState,
   removeThreadState,
   updateThreadState,
+  writeThreadShellState,
   writeThreadState,
 } from "./threadState";
 
@@ -85,6 +96,113 @@ function syncEnvironmentReadModel(
   };
 }
 
+function mapThreadShell(
+  thread: OrchestrationShellSnapshot["threads"][number],
+  environmentId: EnvironmentId,
+): {
+  shell: ThreadShell;
+  session: ThreadSession | null;
+  turnState: ThreadTurnState;
+  summary: SidebarThreadSummary;
+} {
+  const shell: ThreadShell = {
+    id: thread.id,
+    environmentId,
+    codexThreadId: null,
+    projectId: thread.projectId,
+    title: thread.title,
+    modelSelection: normalizeModelSelection(thread.modelSelection),
+    runtimeMode: thread.runtimeMode,
+    interactionMode: thread.interactionMode,
+    error: sanitizeThreadErrorMessage(thread.session?.lastError),
+    createdAt: thread.createdAt,
+    archivedAt: thread.archivedAt,
+    updatedAt: thread.updatedAt,
+    branch: thread.branch,
+    worktreePath: thread.worktreePath,
+  };
+  const session = thread.session ? mapSession(thread.session) : null;
+  const turnState: ThreadTurnState = {
+    latestTurn: thread.latestTurn,
+    pendingSourceProposedPlan: thread.latestTurn?.sourceProposedPlan,
+  };
+  const summary: SidebarThreadSummary = {
+    id: thread.id,
+    environmentId,
+    projectId: thread.projectId,
+    title: thread.title,
+    interactionMode: thread.interactionMode,
+    session,
+    createdAt: thread.createdAt,
+    archivedAt: thread.archivedAt,
+    updatedAt: thread.updatedAt,
+    latestTurn: thread.latestTurn,
+    branch: thread.branch,
+    worktreePath: thread.worktreePath,
+    latestUserMessageAt: thread.latestUserMessageAt,
+    hasPendingApprovals: thread.hasPendingApprovals,
+    hasPendingUserInput: thread.hasPendingUserInput,
+    hasActionableProposedPlan: thread.hasActionableProposedPlan,
+  };
+  return {
+    shell,
+    session,
+    turnState,
+    summary,
+  };
+}
+
+function retainThreadScopedRecord<T>(
+  record: Record<ThreadId, T>,
+  nextThreadIds: ReadonlySet<ThreadId>,
+): Record<ThreadId, T> {
+  return Object.fromEntries(
+    Object.entries(record).flatMap(([threadId, value]) =>
+      nextThreadIds.has(threadId as ThreadId) ? [[threadId, value] as const] : [],
+    ),
+  ) as Record<ThreadId, T>;
+}
+
+function syncEnvironmentShellSnapshot(
+  state: EnvironmentState,
+  snapshot: OrchestrationShellSnapshot,
+  environmentId: EnvironmentId,
+): EnvironmentState {
+  const nextProjects = snapshot.projects.map((project) => mapProject(project, environmentId));
+  const nextThreadIds = new Set(snapshot.threads.map((thread) => thread.id));
+  let nextState: EnvironmentState = {
+    ...state,
+    ...buildProjectState(nextProjects),
+    threadIds: [],
+    threadIdsByProjectId: {},
+    threadShellById: {},
+    threadSessionById: {},
+    threadTurnStateById: {},
+    sidebarThreadSummaryById: {},
+    messageIdsByThreadId: retainThreadScopedRecord(state.messageIdsByThreadId, nextThreadIds),
+    messageByThreadId: retainThreadScopedRecord(state.messageByThreadId, nextThreadIds),
+    activityIdsByThreadId: retainThreadScopedRecord(state.activityIdsByThreadId, nextThreadIds),
+    activityByThreadId: retainThreadScopedRecord(state.activityByThreadId, nextThreadIds),
+    proposedPlanIdsByThreadId: retainThreadScopedRecord(
+      state.proposedPlanIdsByThreadId,
+      nextThreadIds,
+    ),
+    proposedPlanByThreadId: retainThreadScopedRecord(state.proposedPlanByThreadId, nextThreadIds),
+    turnDiffIdsByThreadId: retainThreadScopedRecord(state.turnDiffIdsByThreadId, nextThreadIds),
+    turnDiffSummaryByThreadId: retainThreadScopedRecord(
+      state.turnDiffSummaryByThreadId,
+      nextThreadIds,
+    ),
+    bootstrapComplete: true,
+  };
+
+  for (const thread of snapshot.threads) {
+    nextState = writeThreadShellState(nextState, mapThreadShell(thread, environmentId));
+  }
+
+  return nextState;
+}
+
 export function syncServerReadModel(
   state: AppState,
   readModel: OrchestrationReadModel,
@@ -97,6 +215,62 @@ export function syncServerReadModel(
       getStoredEnvironmentState(state, environmentId),
       readModel,
       environmentId,
+    ),
+  );
+}
+
+export function syncServerShellSnapshot(
+  state: AppState,
+  snapshot: OrchestrationShellSnapshot,
+  environmentId: EnvironmentId,
+): AppState {
+  return commitEnvironmentState(
+    state,
+    environmentId,
+    syncEnvironmentShellSnapshot(
+      getStoredEnvironmentState(state, environmentId),
+      snapshot,
+      environmentId,
+    ),
+  );
+}
+
+export function syncServerThreadDetail(
+  state: AppState,
+  thread: OrchestrationThread,
+  environmentId: EnvironmentId,
+): AppState {
+  const environmentState = getStoredEnvironmentState(state, environmentId);
+  const previousThread = getThreadFromEnvironmentState(environmentState, thread.id);
+  return commitEnvironmentState(
+    state,
+    environmentId,
+    writeThreadState(
+      environmentState,
+      {
+        id: thread.id,
+        environmentId,
+        codexThreadId: null,
+        projectId: thread.projectId,
+        title: thread.title,
+        modelSelection: normalizeModelSelection(thread.modelSelection),
+        runtimeMode: thread.runtimeMode,
+        interactionMode: thread.interactionMode,
+        session: thread.session ? mapSession(thread.session) : null,
+        messages: thread.messages.map((message) => mapMessage(environmentId, message)),
+        proposedPlans: thread.proposedPlans.map(mapProposedPlan),
+        error: sanitizeThreadErrorMessage(thread.session?.lastError),
+        createdAt: thread.createdAt,
+        archivedAt: thread.archivedAt,
+        updatedAt: thread.updatedAt,
+        latestTurn: thread.latestTurn,
+        pendingSourceProposedPlan: thread.latestTurn?.sourceProposedPlan,
+        branch: thread.branch,
+        worktreePath: thread.worktreePath,
+        turnDiffSummaries: thread.checkpoints.map(mapTurnDiffSummary),
+        activities: thread.activities.map((activity) => ({ ...activity })),
+      },
+      previousThread,
     ),
   );
 }
@@ -590,6 +764,67 @@ function applyEnvironmentOrchestrationEvent(
   return state;
 }
 
+function applyEnvironmentShellEvent(
+  state: EnvironmentState,
+  event: OrchestrationShellStreamEvent,
+  environmentId: EnvironmentId,
+): EnvironmentState {
+  switch (event.kind) {
+    case "project-upserted": {
+      const nextProject = mapProject(event.project, environmentId);
+      const existingProjectId =
+        state.projectIds.find(
+          (projectId) =>
+            projectId === event.project.id ||
+            state.projectById[projectId]?.cwd === event.project.workspaceRoot,
+        ) ?? null;
+      let projectById = state.projectById;
+      let projectIds = state.projectIds;
+
+      if (existingProjectId !== null && existingProjectId !== nextProject.id) {
+        const { [existingProjectId]: _removedProject, ...restProjectById } = state.projectById;
+        projectById = {
+          ...restProjectById,
+          [nextProject.id]: nextProject,
+        };
+        projectIds = state.projectIds.map((projectId) =>
+          projectId === existingProjectId ? nextProject.id : projectId,
+        );
+      } else {
+        projectById = {
+          ...state.projectById,
+          [nextProject.id]: nextProject,
+        };
+        projectIds =
+          existingProjectId === null && !state.projectIds.includes(nextProject.id)
+            ? [...state.projectIds, nextProject.id]
+            : state.projectIds;
+      }
+
+      return {
+        ...state,
+        projectById,
+        projectIds,
+      };
+    }
+    case "project-removed": {
+      if (!state.projectById[event.projectId]) {
+        return state;
+      }
+      const { [event.projectId]: _removedProject, ...projectById } = state.projectById;
+      return {
+        ...state,
+        projectById,
+        projectIds: removeId(state.projectIds, event.projectId),
+      };
+    }
+    case "thread-upserted":
+      return writeThreadShellState(state, mapThreadShell(event.thread, environmentId));
+    case "thread-removed":
+      return removeThreadState(state, event.threadId);
+  }
+}
+
 export function applyOrchestrationEvents(
   state: AppState,
   events: ReadonlyArray<OrchestrationEvent>,
@@ -615,6 +850,22 @@ export function applyOrchestrationEvent(
     state,
     environmentId,
     applyEnvironmentOrchestrationEvent(
+      getStoredEnvironmentState(state, environmentId),
+      event,
+      environmentId,
+    ),
+  );
+}
+
+export function applyShellEvent(
+  state: AppState,
+  event: OrchestrationShellStreamEvent,
+  environmentId: EnvironmentId,
+): AppState {
+  return commitEnvironmentState(
+    state,
+    environmentId,
+    applyEnvironmentShellEvent(
       getStoredEnvironmentState(state, environmentId),
       event,
       environmentId,

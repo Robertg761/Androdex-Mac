@@ -1,6 +1,7 @@
 import type {
   EnvironmentId,
   OrchestrationReadModel,
+  OrchestrationShellSnapshot,
   OrchestrationSession,
   OrchestrationSessionStatus,
   ProjectId,
@@ -10,9 +11,9 @@ import { resolveModelSlugForProvider } from "@t3tools/shared/model";
 import type { Project, ThreadSession } from "../types";
 import type { EnvironmentState } from "./environmentState";
 
-export function normalizeModelSelection<
-  T extends { provider: "codex" | "claudeAgent"; model: string },
->(selection: T): T {
+export function normalizeModelSelection<T extends { provider: ProviderKind; model: string }>(
+  selection: T,
+): T {
   return {
     ...selection,
     model: resolveModelSlugForProvider(selection.provider, selection.model),
@@ -64,7 +65,9 @@ export function mapSession(session: OrchestrationSession): ThreadSession {
 }
 
 export function mapProject(
-  project: OrchestrationReadModel["projects"][number],
+  project:
+    | OrchestrationReadModel["projects"][number]
+    | OrchestrationShellSnapshot["projects"][number],
   environmentId: EnvironmentId,
 ): Project {
   return {

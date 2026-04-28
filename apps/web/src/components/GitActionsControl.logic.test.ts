@@ -1,4 +1,5 @@
 import type { GitStatusResult } from "@t3tools/contracts";
+import { WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
 import { assert, describe, it } from "vitest";
 import {
   buildGitActionProgressStages,
@@ -1023,8 +1024,8 @@ describe("resolveLiveThreadBranchUpdate", () => {
 
   it("does not regress a semantic thread branch back to a temporary worktree branch", () => {
     const update = resolveLiveThreadBranchUpdate({
-      threadBranch: "t3code/github-query-rate-limit",
-      gitStatus: status({ branch: "t3code/bda76797" }),
+      threadBranch: `${WORKTREE_BRANCH_PREFIX}/github-query-rate-limit`,
+      gitStatus: status({ branch: `${WORKTREE_BRANCH_PREFIX}/bda76797` }),
     });
 
     assert.equal(update, null);

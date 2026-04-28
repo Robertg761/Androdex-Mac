@@ -1,5 +1,6 @@
 import type {
   MessageId,
+  OrchestrationLatestTurn,
   OrchestrationThreadActivity,
   ProjectId,
   ThreadId,
@@ -111,6 +112,49 @@ export function buildSidebarThreadSummary(thread: Thread): SidebarThreadSummary 
   };
 }
 
+function sourceProposedPlansEqual(
+  left: OrchestrationLatestTurn["sourceProposedPlan"] | undefined,
+  right: OrchestrationLatestTurn["sourceProposedPlan"] | undefined,
+): boolean {
+  if (left === right) return true;
+  if (left === undefined || right === undefined) return false;
+  return left.threadId === right.threadId && left.planId === right.planId;
+}
+
+function latestTurnsEqual(
+  left: OrchestrationLatestTurn | null | undefined,
+  right: OrchestrationLatestTurn | null | undefined,
+): boolean {
+  if (left === right) return true;
+  if (left == null || right == null) return false;
+  return (
+    left.turnId === right.turnId &&
+    left.state === right.state &&
+    left.requestedAt === right.requestedAt &&
+    left.startedAt === right.startedAt &&
+    left.completedAt === right.completedAt &&
+    left.assistantMessageId === right.assistantMessageId &&
+    sourceProposedPlansEqual(left.sourceProposedPlan, right.sourceProposedPlan)
+  );
+}
+
+function threadSessionsEqual(
+  left: ThreadSession | null | undefined,
+  right: ThreadSession | null | undefined,
+): boolean {
+  if (left === right) return true;
+  if (left == null || right == null) return false;
+  return (
+    left.provider === right.provider &&
+    left.status === right.status &&
+    left.orchestrationStatus === right.orchestrationStatus &&
+    left.activeTurnId === right.activeTurnId &&
+    left.createdAt === right.createdAt &&
+    left.updatedAt === right.updatedAt &&
+    left.lastError === right.lastError
+  );
+}
+
 function sidebarThreadSummariesEqual(
   left: SidebarThreadSummary | undefined,
   right: SidebarThreadSummary,
@@ -121,11 +165,11 @@ function sidebarThreadSummariesEqual(
     left.projectId === right.projectId &&
     left.title === right.title &&
     left.interactionMode === right.interactionMode &&
-    left.session === right.session &&
+    threadSessionsEqual(left.session, right.session) &&
     left.createdAt === right.createdAt &&
     left.archivedAt === right.archivedAt &&
     left.updatedAt === right.updatedAt &&
-    left.latestTurn === right.latestTurn &&
+    latestTurnsEqual(left.latestTurn, right.latestTurn) &&
     left.branch === right.branch &&
     left.worktreePath === right.worktreePath &&
     left.latestUserMessageAt === right.latestUserMessageAt &&
@@ -158,9 +202,114 @@ function threadShellsEqual(left: ThreadShell | undefined, right: ThreadShell): b
 function threadTurnStatesEqual(left: ThreadTurnState | undefined, right: ThreadTurnState): boolean {
   return (
     left !== undefined &&
-    left.latestTurn === right.latestTurn &&
-    left.pendingSourceProposedPlan === right.pendingSourceProposedPlan
+    latestTurnsEqual(left.latestTurn, right.latestTurn) &&
+    sourceProposedPlansEqual(left.pendingSourceProposedPlan, right.pendingSourceProposedPlan)
   );
+}
+
+export function writeThreadShellState(
+  state: EnvironmentState,
+  nextThread: {
+    shell: ThreadShell;
+    session: ThreadSession | null;
+    turnState: ThreadTurnState;
+    summary: SidebarThreadSummary;
+  },
+): EnvironmentState {
+  const previousShell = state.threadShellById[nextThread.shell.id];
+
+  let nextState = state;
+
+  if (!state.threadIds.includes(nextThread.shell.id)) {
+    nextState = {
+      ...nextState,
+      threadIds: [...nextState.threadIds, nextThread.shell.id],
+    };
+  }
+
+  const previousProjectId = previousShell?.projectId;
+  const nextProjectId = nextThread.shell.projectId;
+  if (previousProjectId !== nextProjectId) {
+    let threadIdsByProjectId = nextState.threadIdsByProjectId;
+    if (previousProjectId) {
+      const previousIds = threadIdsByProjectId[previousProjectId] ?? EMPTY_THREAD_IDS;
+      const nextIds = removeId(previousIds, nextThread.shell.id);
+      if (nextIds.length === 0) {
+        const { [previousProjectId]: _removed, ...rest } = threadIdsByProjectId;
+        threadIdsByProjectId = rest as Record<ProjectId, ThreadId[]>;
+      } else if (!arraysEqual(previousIds, nextIds)) {
+        threadIdsByProjectId = {
+          ...threadIdsByProjectId,
+          [previousProjectId]: nextIds,
+        };
+      }
+    }
+    const projectThreadIds = threadIdsByProjectId[nextProjectId] ?? EMPTY_THREAD_IDS;
+    const nextProjectThreadIds = appendId(projectThreadIds, nextThread.shell.id);
+    if (!arraysEqual(projectThreadIds, nextProjectThreadIds)) {
+      threadIdsByProjectId = {
+        ...threadIdsByProjectId,
+        [nextProjectId]: nextProjectThreadIds,
+      };
+    }
+    if (threadIdsByProjectId !== nextState.threadIdsByProjectId) {
+      nextState = {
+        ...nextState,
+        threadIdsByProjectId,
+      };
+    }
+  }
+
+  if (!threadShellsEqual(previousShell, nextThread.shell)) {
+    nextState = {
+      ...nextState,
+      threadShellById: {
+        ...nextState.threadShellById,
+        [nextThread.shell.id]: nextThread.shell,
+      },
+    };
+  }
+
+  if (
+    !threadSessionsEqual(state.threadSessionById[nextThread.shell.id] ?? null, nextThread.session)
+  ) {
+    nextState = {
+      ...nextState,
+      threadSessionById: {
+        ...nextState.threadSessionById,
+        [nextThread.shell.id]: nextThread.session,
+      },
+    };
+  }
+
+  if (
+    !threadTurnStatesEqual(state.threadTurnStateById[nextThread.shell.id], nextThread.turnState)
+  ) {
+    nextState = {
+      ...nextState,
+      threadTurnStateById: {
+        ...nextState.threadTurnStateById,
+        [nextThread.shell.id]: nextThread.turnState,
+      },
+    };
+  }
+
+  if (
+    !sidebarThreadSummariesEqual(
+      state.sidebarThreadSummaryById[nextThread.shell.id],
+      nextThread.summary,
+    )
+  ) {
+    nextState = {
+      ...nextState,
+      sidebarThreadSummaryById: {
+        ...nextState.sidebarThreadSummaryById,
+        [nextThread.shell.id]: nextThread.summary,
+      },
+    };
+  }
+
+  return nextState;
 }
 
 export function buildThreadState(

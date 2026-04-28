@@ -7,7 +7,7 @@ import {
   type ThreadId,
   type TurnId,
 } from "@t3tools/contracts";
-import { makeStorageKey, PRODUCT_SLUG } from "@t3tools/shared/branding";
+import { makeStorageKey } from "@t3tools/shared/branding";
 import { type ChatMessage, type SessionPhase, type Thread, type ThreadSession } from "../types";
 import { type ComposerImageAttachment, type DraftThreadState } from "../composerDraftStore";
 import { Schema } from "effect";
@@ -18,10 +18,10 @@ import {
   type TerminalContextDraft,
 } from "../lib/terminalContext";
 import type { DraftThreadEnvMode } from "../composerDraftStore";
+export { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 
 export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = makeStorageKey("last-invoked-script-by-project");
 export const MAX_HIDDEN_MOUNTED_TERMINAL_THREADS = 10;
-const WORKTREE_BRANCH_PREFIX = PRODUCT_SLUG;
 
 export const LastInvokedScriptByProjectSchema = Schema.Record(ProjectId, Schema.String);
 
