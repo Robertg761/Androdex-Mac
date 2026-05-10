@@ -321,11 +321,13 @@ function getSidebarProviderOrder() {
 describe("ProviderModelPicker", () => {
   beforeEach(async () => {
     // Reset test environment before each test
+    localStorage.clear();
     await __resetLocalApiForTests();
   });
 
   afterEach(async () => {
     document.body.innerHTML = "";
+    localStorage.clear();
     await __resetLocalApiForTests();
   });
 
