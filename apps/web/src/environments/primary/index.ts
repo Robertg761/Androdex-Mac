@@ -20,7 +20,6 @@ export {
   listServerClientSessions,
   listServerPairingLinks,
   peekPairingTokenFromUrl,
-  resolvePrimaryWebSocketConnectionUrl,
   resolveInitialServerAuthGateState,
   revokeOtherServerClientSessions,
   revokeServerClientSession,
@@ -33,8 +32,4 @@ export {
   __resetServerAuthBootstrapForTests,
 } from "./auth";
 
-export {
-  resolvePrimaryEnvironmentHttpUrl,
-  resolvePrimaryEnvironmentHttpUrlFromBase,
-  isLoopbackHostname,
-} from "./target";
+export { resolvePrimaryEnvironmentHttpUrl, isLoopbackHostname } from "./target";

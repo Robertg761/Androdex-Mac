@@ -1,7 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
-import { SESSION_COOKIE_BASENAME } from "@t3tools/shared/branding";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import type { ServerConfigShape } from "../../config.ts";
 import { ServerConfig } from "../../config.ts";
@@ -35,7 +35,7 @@ const makeCookieRequest = (
 ): Parameters<ServerAuthShape["authenticateHttpRequest"]>[0] =>
   ({
     cookies: {
-      [SESSION_COOKIE_BASENAME]: sessionToken,
+      t3_session: sessionToken,
     },
     headers: {},
   }) as unknown as Parameters<ServerAuthShape["authenticateHttpRequest"]>[0];
@@ -93,31 +93,6 @@ it.layer(NodeServices.layer)("ServerAuthLive", (it) => {
       expect(verified.sessionId.length).toBeGreaterThan(0);
       expect(verified.role).toBe("client");
       expect(verified.subject).toBe("one-time-token");
-    }).pipe(Effect.provide(makeServerAuthLayer())),
-  );
-
-  it.effect("issues owner pairing credentials that remain visible in pairing links", () =>
-    Effect.gen(function* () {
-      const serverAuth = yield* ServerAuth;
-
-      const pairingCredential = yield* serverAuth.issuePairingCredential({
-        role: "owner",
-        label: "Androdex Pixel",
-      });
-      const listedPairingLinks = yield* serverAuth.listPairingLinks();
-      const exchanged = yield* serverAuth.exchangeBootstrapCredential(
-        pairingCredential.credential,
-        requestMetadata,
-      );
-      const verified = yield* serverAuth.authenticateHttpRequest(
-        makeCookieRequest(exchanged.sessionToken),
-      );
-
-      expect(verified.role).toBe("owner");
-      expect(verified.subject).toBe("owner-pairing-token");
-      expect(listedPairingLinks.find((entry) => entry.id === pairingCredential.id)?.label).toBe(
-        "Androdex Pixel",
-      );
     }).pipe(Effect.provide(makeServerAuthLayer())),
   );
 

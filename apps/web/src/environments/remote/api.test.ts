@@ -48,15 +48,16 @@ describe("remote environment api", () => {
     });
   });
 
-  it("preserves path-prefixed pairing targets for tunneled backends", () => {
+  it("derives backend urls and token from a hosted app pairing link", () => {
     expect(
       resolveRemotePairingTarget({
-        pairingUrl: "https://remote.example.com/desktop/route-123/pair#token=pairing-token",
+        pairingUrl:
+          "https://app.t3.codes/pair?host=https%3A%2F%2Fdesktop.tailnet.ts.net%3A44342%2F#token=pairing-token",
       }),
     ).toEqual({
       credential: "pairing-token",
-      httpBaseUrl: "https://remote.example.com/desktop/route-123",
-      wsBaseUrl: "wss://remote.example.com/desktop/route-123",
+      httpBaseUrl: "https://desktop.tailnet.ts.net:44342/",
+      wsBaseUrl: "wss://desktop.tailnet.ts.net:44342/",
     });
   });
 
@@ -120,32 +121,6 @@ describe("remote environment api", () => {
         credential: "pairing-token",
       }),
     });
-  });
-
-  it("preserves path prefixes when fetching remote auth endpoints", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          authenticated: true,
-          role: "client",
-          sessionMethod: "bearer-session-token",
-          expiresAt: "2026-05-01T12:00:00.000Z",
-          sessionToken: "bearer-token",
-        }),
-        { status: 200 },
-      ),
-    );
-    globalThis.fetch = fetchMock as typeof fetch;
-
-    await bootstrapRemoteBearerSession({
-      httpBaseUrl: "https://remote.example.com/desktop/route-123",
-      credential: "pairing-token",
-    });
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://remote.example.com/desktop/route-123/api/auth/bootstrap/bearer",
-      expect.any(Object),
-    );
   });
 
   it("loads remote session state and websocket tokens over bearer auth", async () => {

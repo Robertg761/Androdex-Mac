@@ -1,5 +1,5 @@
 import { expect, it } from "@effect/vitest";
-import { DateTime } from "effect";
+import * as DateTime from "effect/DateTime";
 
 import {
   formatIssuedPairingCredential,
@@ -15,8 +15,8 @@ it("formats issued pairing credentials with the secret and optional pair URL", (
       credential: "secret-pairing-token",
       role: "client",
       subject: "one-time-token",
-      createdAt: DateTime.fromDateUnsafe(new Date("2026-04-08T09:00:00.000Z")),
-      expiresAt: DateTime.fromDateUnsafe(new Date("2026-04-08T10:00:00.000Z")),
+      createdAt: DateTime.makeUnsafe("2026-04-08T09:00:00.000Z"),
+      expiresAt: DateTime.makeUnsafe("2026-04-08T10:00:00.000Z"),
     },
     { baseUrl: "https://example.com", json: false },
   );
@@ -32,8 +32,8 @@ it("formats issued pairing credentials with a base-path-aware pair URL", () => {
       credential: "secret-pairing-token",
       role: "client",
       subject: "one-time-token",
-      createdAt: DateTime.fromDateUnsafe(new Date("2026-04-08T09:00:00.000Z")),
-      expiresAt: DateTime.fromDateUnsafe(new Date("2026-04-08T10:00:00.000Z")),
+      createdAt: DateTime.makeUnsafe("2026-04-08T09:00:00.000Z"),
+      expiresAt: DateTime.makeUnsafe("2026-04-08T10:00:00.000Z"),
     },
     { baseUrl: "https://example.com/androdex", json: false },
   );
@@ -50,8 +50,8 @@ it("formats pairing listings without exposing the secret token", () => {
         subject: "one-time-token",
         label: "Phone",
         role: "client",
-        createdAt: DateTime.fromDateUnsafe(new Date("2026-04-08T09:00:00.000Z")),
-        expiresAt: DateTime.fromDateUnsafe(new Date("2026-04-08T10:00:00.000Z")),
+        createdAt: DateTime.makeUnsafe("2026-04-08T09:00:00.000Z"),
+        expiresAt: DateTime.makeUnsafe("2026-04-08T10:00:00.000Z"),
       },
     ],
     { json: false },
@@ -73,7 +73,7 @@ it("formats issued sessions with the bearer token but omits tokens from listings
         label: "deploy-bot",
         deviceType: "bot",
       },
-      expiresAt: DateTime.fromDateUnsafe(new Date("2026-04-08T10:00:00.000Z")),
+      expiresAt: DateTime.makeUnsafe("2026-04-08T10:00:00.000Z"),
     },
     { json: false },
   );
@@ -91,8 +91,8 @@ it("formats issued sessions with the bearer token but omits tokens from listings
         },
         connected: false,
         current: false,
-        issuedAt: DateTime.fromDateUnsafe(new Date("2026-04-08T09:00:00.000Z")),
-        expiresAt: DateTime.fromDateUnsafe(new Date("2026-04-08T10:00:00.000Z")),
+        issuedAt: DateTime.makeUnsafe("2026-04-08T09:00:00.000Z"),
+        expiresAt: DateTime.makeUnsafe("2026-04-08T10:00:00.000Z"),
         lastConnectedAt: null,
       },
     ],

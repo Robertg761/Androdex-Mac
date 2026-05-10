@@ -2,26 +2,27 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { CliError, Command } from "effect/unstable/cli";
+import { Command } from "effect/unstable/cli";
 
-import { NetService } from "@t3tools/shared/Net";
-import { cli } from "./cli.ts";
+import * as NetService from "@t3tools/shared/Net";
 import packageJson from "../package.json" with { type: "json" };
+import { authCommand } from "./cli/auth.ts";
+import { sharedServerCommandFlags } from "./cli/config.ts";
+import { projectCommand } from "./cli/project.ts";
+import { runServerCommand, serveCommand, startCommand } from "./cli/server.ts";
 
 const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
 
-const normalizeCliErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(
-    Effect.catchIf(
-      (_error): _error is E => true,
-      (error) => (CliError.isCliError(error) ? Effect.fail(error) : Effect.die(error)),
-    ),
+export const cli = Command.make("t3", { ...sharedServerCommandFlags }).pipe(
+  Command.withDescription("Run the T3 Code server."),
+  Command.withHandler((flags) => runServerCommand(flags)),
+  Command.withSubcommands([startCommand, serveCommand, authCommand, projectCommand]),
+);
+
+if (import.meta.main) {
+  Command.run(cli, { version: packageJson.version }).pipe(
+    Effect.scoped,
+    Effect.provide(CliRuntimeLayer),
+    NodeRuntime.runMain,
   );
-
-const program = Command.run(cli, { version: packageJson.version }).pipe(
-  normalizeCliErrors,
-  Effect.scoped,
-  Effect.provide(CliRuntimeLayer),
-) as Effect.Effect<void, CliError.CliError>;
-
-NodeRuntime.runMain(program);
+}

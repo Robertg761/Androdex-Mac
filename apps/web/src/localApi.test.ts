@@ -3,9 +3,11 @@ import {
   DEFAULT_SERVER_SETTINGS,
   type DesktopBridge,
   EnvironmentId,
-  type GitStatusResult,
+  type VcsStatusResult,
   ProjectId,
   type OrchestrationShellStreamItem,
+  ProviderDriverKind,
+  ProviderInstanceId,
   type ServerConfig,
   type ServerProvider,
   type TerminalEvent,
@@ -32,7 +34,7 @@ function registerListener<T>(listeners: Set<(event: T) => void>, listener: (even
 
 const terminalEventListeners = new Set<(event: TerminalEvent) => void>();
 const shellStreamListeners = new Set<(event: OrchestrationShellStreamItem) => void>();
-const gitStatusListeners = new Set<(event: GitStatusResult) => void>();
+const gitStatusListeners = new Set<(event: VcsStatusResult) => void>();
 
 const rpcClientMock = {
   dispose: vi.fn(),
@@ -54,30 +56,36 @@ const rpcClientMock = {
   filesystem: {
     browse: vi.fn(),
   },
+  sourceControl: {
+    lookupRepository: vi.fn(),
+    cloneRepository: vi.fn(),
+    publishRepository: vi.fn(),
+  },
   shell: {
     openInEditor: vi.fn(),
   },
-  git: {
+  vcs: {
     pull: vi.fn(),
     refreshStatus: vi.fn(),
-    onStatus: vi.fn((input: { cwd: string }, listener: (event: GitStatusResult) => void) =>
+    onStatus: vi.fn((input: { cwd: string }, listener: (event: VcsStatusResult) => void) =>
       registerListener(gitStatusListeners, listener),
     ),
-    runStackedAction: vi.fn(),
-    listBranches: vi.fn(),
+    listRefs: vi.fn(),
     createWorktree: vi.fn(),
     removeWorktree: vi.fn(),
-    createBranch: vi.fn(),
-    checkout: vi.fn(),
+    createRef: vi.fn(),
+    switchRef: vi.fn(),
     init: vi.fn(),
+  },
+  git: {
+    runStackedAction: vi.fn(),
     resolvePullRequest: vi.fn(),
     preparePullRequestThread: vi.fn(),
   },
   server: {
     getConfig: vi.fn(),
     refreshProviders: vi.fn(),
-    listCodexAccounts: vi.fn(),
-    switchCodexAccount: vi.fn(),
+    updateProvider: vi.fn(),
     upsertKeybinding: vi.fn(),
     getSettings: vi.fn(),
     updateSettings: vi.fn(),
@@ -171,22 +179,52 @@ function makeDesktopBridge(overrides: Partial<DesktopBridge> = {}): DesktopBridg
     getSavedEnvironmentSecret: async () => null,
     setSavedEnvironmentSecret: async () => true,
     removeSavedEnvironmentSecret: async () => undefined,
+    discoverSshHosts: async () => [],
+    ensureSshEnvironment: async () => {
+      throw new Error("ensureSshEnvironment not implemented in test");
+    },
+    disconnectSshEnvironment: async () => undefined,
+    fetchSshEnvironmentDescriptor: async () => {
+      throw new Error("fetchSshEnvironmentDescriptor not implemented in test");
+    },
+    bootstrapSshBearerSession: async () => {
+      throw new Error("bootstrapSshBearerSession not implemented in test");
+    },
+    fetchSshSessionState: async () => {
+      throw new Error("fetchSshSessionState not implemented in test");
+    },
+    issueSshWebSocketToken: async () => {
+      throw new Error("issueSshWebSocketToken not implemented in test");
+    },
+    onSshPasswordPrompt: () => () => undefined,
+    resolveSshPasswordPrompt: async () => undefined,
     getServerExposureState: async () => ({
       mode: "local-only",
       endpointUrl: null,
       advertisedHost: null,
+      tailscaleServeEnabled: false,
+      tailscaleServePort: 443,
     }),
     setServerExposureMode: async () => ({
       mode: "local-only",
       endpointUrl: null,
       advertisedHost: null,
+      tailscaleServeEnabled: false,
+      tailscaleServePort: 443,
     }),
+    setTailscaleServeEnabled: async (input) => ({
+      mode: "local-only",
+      endpointUrl: null,
+      advertisedHost: null,
+      tailscaleServeEnabled: input.enabled,
+      tailscaleServePort: input.port ?? 443,
+    }),
+    getAdvertisedEndpoints: async () => [],
     pickFolder: async () => null,
     confirm: async () => true,
     setTheme: async () => undefined,
     showContextMenu: async () => null,
     openExternal: async () => true,
-    showThreadNotification: async () => false,
     onMenuAction: () => () => undefined,
     getUpdateState: async () => {
       throw new Error("getUpdateState not implemented in test");
@@ -210,7 +248,8 @@ function makeDesktopBridge(overrides: Partial<DesktopBridge> = {}): DesktopBridg
 
 const defaultProviders: ReadonlyArray<ServerProvider> = [
   {
-    provider: "codex",
+    instanceId: ProviderInstanceId.make("codex"),
+    driver: ProviderDriverKind.make("codex"),
     enabled: true,
     installed: true,
     version: "0.116.0",
@@ -259,11 +298,11 @@ const baseServerConfig: ServerConfig = {
   settings: DEFAULT_SERVER_SETTINGS,
 };
 
-const baseGitStatus: GitStatusResult = {
+const baseGitStatus: VcsStatusResult = {
   isRepo: true,
-  hasOriginRemote: true,
-  isDefaultBranch: false,
-  branch: "feature/streamed",
+  hasPrimaryRemote: true,
+  isDefaultRef: false,
+  refName: "feature/streamed",
   hasWorkingTreeChanges: false,
   workingTree: { files: [], insertions: 0, deletions: 0 },
   hasUpstream: true,
@@ -331,7 +370,7 @@ describe("wsApi", () => {
         title: "Project",
         workspaceRoot: "/tmp/workspace",
         defaultModelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.make("codex"),
           model: "gpt-5-codex",
         },
         scripts: [],
@@ -351,24 +390,24 @@ describe("wsApi", () => {
     const api = createEnvironmentApi(rpcClientMock as never);
     const onStatus = vi.fn();
 
-    api.git.onStatus({ cwd: "/repo" }, onStatus);
+    api.vcs.onStatus({ cwd: "/repo" }, onStatus);
 
     const gitStatus = baseGitStatus;
     emitEvent(gitStatusListeners, gitStatus);
 
-    expect(rpcClientMock.git.onStatus).toHaveBeenCalledWith({ cwd: "/repo" }, onStatus, undefined);
+    expect(rpcClientMock.vcs.onStatus).toHaveBeenCalledWith({ cwd: "/repo" }, onStatus, undefined);
     expect(onStatus).toHaveBeenCalledWith(gitStatus);
   });
 
   it("forwards git status refreshes directly to the RPC client", async () => {
-    rpcClientMock.git.refreshStatus.mockResolvedValue(baseGitStatus);
+    rpcClientMock.vcs.refreshStatus.mockResolvedValue(baseGitStatus);
     const { createEnvironmentApi } = await import("./environmentApi");
 
     const api = createEnvironmentApi(rpcClientMock as never);
 
-    await api.git.refreshStatus({ cwd: "/repo" });
+    await api.vcs.refreshStatus({ cwd: "/repo" });
 
-    expect(rpcClientMock.git.refreshStatus).toHaveBeenCalledWith({ cwd: "/repo" });
+    expect(rpcClientMock.vcs.refreshStatus).toHaveBeenCalledWith({ cwd: "/repo" });
   });
 
   it("forwards shell stream subscription options to the RPC client", async () => {
@@ -397,7 +436,7 @@ describe("wsApi", () => {
       title: "Project",
       workspaceRoot: "/tmp/project",
       defaultModelSelection: {
-        provider: "codex",
+        instanceId: ProviderInstanceId.make("codex"),
         model: "gpt-5-codex",
       },
       createdAt: "2026-02-24T00:00:00.000Z",
@@ -476,46 +515,31 @@ describe("wsApi", () => {
     expect(rpcClientMock.server.refreshProviders).toHaveBeenCalledWith();
   });
 
-  it("forwards codex account reads and switches directly to the RPC client", async () => {
-    const snapshot = {
-      codexHomePath: "/Users/test/.codex",
-      accounts: [],
-      currentAuthMode: "unknown" as const,
-      managedCurrentAuth: false,
-      runningCodexSessionCount: 0,
-      message: "No managed Codex accounts were found in the current CODEX_HOME.",
-    };
-    const switchResult = {
-      snapshot: {
-        ...snapshot,
-        accounts: [
-          {
-            accountKey: "acct-1",
-            alias: "Work",
-            authMode: "chatgpt" as const,
-            hasSnapshot: true,
-            isActive: true,
-            planType: "pro" as const,
-          },
-        ],
-        activeAccountKey: "acct-1",
-        currentAuthMode: "chatgpt" as const,
-        managedCurrentAuth: true,
+  it("forwards provider updates directly to the RPC client", async () => {
+    const nextProviders: ReadonlyArray<ServerProvider> = [
+      {
+        ...defaultProviders[0]!,
+        updateState: {
+          status: "succeeded",
+          startedAt: "2026-01-03T00:00:00.000Z",
+          finishedAt: "2026-01-03T00:00:01.000Z",
+          message: "Provider updated.",
+          output: null,
+        },
       },
-    };
-    rpcClientMock.server.listCodexAccounts.mockResolvedValue(snapshot);
-    rpcClientMock.server.switchCodexAccount.mockResolvedValue(switchResult);
+    ];
+    rpcClientMock.server.updateProvider.mockResolvedValue({ providers: nextProviders });
     const { createLocalApi } = await import("./localApi");
 
     const api = createLocalApi(rpcClientMock as never);
 
-    await expect(api.server.listCodexAccounts()).resolves.toEqual(snapshot);
-    await expect(api.server.switchCodexAccount({ accountKey: "acct-1" })).resolves.toEqual(
-      switchResult,
-    );
-    expect(rpcClientMock.server.listCodexAccounts).toHaveBeenCalledWith();
-    expect(rpcClientMock.server.switchCodexAccount).toHaveBeenCalledWith({
-      accountKey: "acct-1",
+    await expect(
+      api.server.updateProvider({ provider: ProviderDriverKind.make("codex") }),
+    ).resolves.toEqual({
+      providers: nextProviders,
+    });
+    expect(rpcClientMock.server.updateProvider).toHaveBeenCalledWith({
+      provider: ProviderDriverKind.make("codex"),
     });
   });
 
@@ -549,39 +573,6 @@ describe("wsApi", () => {
     expect(showContextMenu).toHaveBeenCalledWith(items, undefined);
   });
 
-  it("forwards thread notifications to the desktop bridge", async () => {
-    const showThreadNotification = vi.fn().mockResolvedValue(true);
-    getWindowForTest().desktopBridge = makeDesktopBridge({ showThreadNotification });
-
-    const { createLocalApi } = await import("./localApi");
-    const api = createLocalApi(rpcClientMock as never);
-    const notification = {
-      kind: "thread-input-required" as const,
-      environmentId: EnvironmentId.make("environment-local"),
-      threadId: ThreadId.make("thread-1"),
-      title: "Thread needs input",
-      body: "Implement notifications in Local environment",
-    };
-
-    await expect(api.notifications.showThreadNotification(notification)).resolves.toBe(true);
-    expect(showThreadNotification).toHaveBeenCalledWith(notification);
-  });
-
-  it("no-ops thread notifications in the browser fallback", async () => {
-    const { createLocalApi } = await import("./localApi");
-    const api = createLocalApi(rpcClientMock as never);
-
-    await expect(
-      api.notifications.showThreadNotification({
-        kind: "thread-finished",
-        environmentId: EnvironmentId.make("environment-local"),
-        threadId: ThreadId.make("thread-1"),
-        title: "Thread finished",
-        body: "Implement notifications in Local environment",
-      }),
-    ).resolves.toBe(false);
-  });
-
   it("forwards folder picker options to the desktop bridge", async () => {
     const pickFolder = vi.fn().mockResolvedValue("/tmp/project");
     getWindowForTest().desktopBridge = makeDesktopBridge({ pickFolder });
@@ -611,14 +602,18 @@ describe("wsApi", () => {
       autoOpenPlanSidebar: false,
       confirmThreadArchive: true,
       confirmThreadDelete: false,
+      dismissedProviderUpdateNotificationKeys: [],
+      diffIgnoreWhitespace: true,
       diffWordWrap: true,
       favorites: [],
+      providerModelPreferences: {},
       sidebarProjectGroupingMode: "repository_path" as const,
       sidebarProjectGroupingOverrides: {
         "environment-local:/tmp/project": "separate" as const,
       },
       sidebarProjectSortOrder: "manual" as const,
       sidebarThreadSortOrder: "created_at" as const,
+      sidebarThreadPreviewCount: 6,
       timestampFormat: "24-hour" as const,
     };
     const getClientSettings = vi.fn().mockResolvedValue({
@@ -670,14 +665,18 @@ describe("wsApi", () => {
       autoOpenPlanSidebar: false,
       confirmThreadArchive: true,
       confirmThreadDelete: false,
+      dismissedProviderUpdateNotificationKeys: [],
+      diffIgnoreWhitespace: true,
       diffWordWrap: true,
       favorites: [],
+      providerModelPreferences: {},
       sidebarProjectGroupingMode: "repository_path" as const,
       sidebarProjectGroupingOverrides: {
         "environment-local:/tmp/project": "separate" as const,
       },
       sidebarProjectSortOrder: "manual" as const,
       sidebarThreadSortOrder: "created_at" as const,
+      sidebarThreadPreviewCount: 6,
       timestampFormat: "24-hour" as const,
     };
 

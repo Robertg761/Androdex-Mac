@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// @effect-diagnostics nodeBuiltinImport:off
+// @effect-diagnostics globalConsole:off
+
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
@@ -13,12 +16,15 @@ const LEGACY_FILE_SIZE_EXEMPTIONS = new Set([
   "apps/web/src/session-logic.test.ts",
   "apps/web/src/session-logic.ts",
   "apps/web/src/store.test.ts",
+  "apps/web/src/store.ts",
   "apps/web/src/store/threadProjection.ts",
   "apps/web/src/terminalStateStore.ts",
   "apps/web/src/rpc/wsTransport.test.ts",
   "apps/web/src/environments/runtime/service.ts",
+  "apps/web/src/environments/runtime/service.addSavedEnvironment.test.ts",
   "apps/web/src/components/ChatView.tsx",
   "apps/web/src/components/ComposerPromptEditor.tsx",
+  "apps/web/src/components/DiffPanel.tsx",
   "apps/web/src/components/GitActionsControl.logic.test.ts",
   "apps/web/src/components/GitActionsControl.tsx",
   "apps/web/src/components/Sidebar.logic.test.ts",
@@ -26,6 +32,9 @@ const LEGACY_FILE_SIZE_EXEMPTIONS = new Set([
   "apps/web/src/components/ThreadTerminalDrawer.tsx",
   "apps/web/src/components/ui/sidebar.tsx",
   "apps/web/src/components/settings/ConnectionsSettings.tsx",
+  "apps/web/src/components/settings/DiagnosticsSettings.tsx",
+  "apps/web/src/components/settings/KeybindingsSettings.tsx",
+  "apps/web/src/components/settings/ProviderInstanceCard.tsx",
   "apps/web/src/components/settings/SettingsPanels.tsx",
   "apps/web/src/components/chat/ChatComposer.tsx",
   "apps/web/src/components/chat/MessagesTimeline.tsx",
@@ -73,9 +82,17 @@ const LEGACY_FILE_SIZE_EXEMPTIONS = new Set([
   "apps/server/src/git/Layers/GitCore.ts",
   "apps/server/src/git/Layers/GitManager.test.ts",
   "apps/server/src/git/Layers/GitManager.ts",
+  "apps/server/src/git/GitManager.test.ts",
+  "apps/server/src/git/GitManager.ts",
+  "apps/server/src/provider/Layers/CursorProvider.test.ts",
+  "apps/server/src/provider/Layers/OpenCodeAdapter.test.ts",
+  "apps/server/src/sourceControl/BitbucketApi.ts",
+  "apps/server/src/vcs/GitVcsDriverCore.ts",
   "apps/server/src/codexAccounts/Layers/CodexAccountManager.ts",
   "apps/server/integration/orchestrationEngine.integration.test.ts",
   "apps/desktop/src/main.ts",
+  "packages/ssh/src/tunnel.ts",
+  "packages/contracts/src/orchestration.test.ts",
   "packages/shared/src/qrCode.ts",
   "packages/contracts/src/orchestration.ts",
   "packages/contracts/src/providerRuntime.ts",

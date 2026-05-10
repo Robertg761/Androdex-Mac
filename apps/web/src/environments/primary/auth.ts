@@ -8,7 +8,6 @@ import type {
   AuthRevokePairingLinkInput,
   AuthSessionId,
   AuthSessionState,
-  AuthWebSocketTokenResult,
 } from "@t3tools/contracts";
 
 import {
@@ -16,11 +15,9 @@ import {
   stripPairingTokenFromUrl as stripPairingTokenUrl,
 } from "../../pairingUrl";
 
-import {
-  resolvePrimaryEnvironmentHttpUrl,
-  resolvePrimaryEnvironmentHttpUrlFromBase,
-} from "./target";
-import { Data, Predicate } from "effect";
+import { resolvePrimaryEnvironmentHttpUrl } from "./target";
+import * as Data from "effect/Data";
+import * as Predicate from "effect/Predicate";
 
 export class BootstrapHttpError extends Data.TaggedError("BootstrapHttpError")<{
   readonly message: string;
@@ -114,6 +111,40 @@ async function readErrorMessage(response: Response, fallbackMessage: string): Pr
   return text || fallbackMessage;
 }
 
+const INVALID_BOOTSTRAP_CREDENTIAL_MESSAGES = new Set([
+  "Invalid bootstrap credential.",
+  "Unknown bootstrap credential.",
+]);
+
+function parseBootstrapErrorMessage(message: string): string {
+  const trimmed = message.trim();
+  if (trimmed.length === 0) {
+    return "";
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      error?: unknown;
+    };
+    if (typeof parsed.error === "string" && parsed.error.trim().length > 0) {
+      return parsed.error.trim();
+    }
+  } catch {
+    // Not JSON; fall back to plain text.
+  }
+
+  return trimmed;
+}
+
+function toFriendlyBootstrapErrorMessage(status: number, message: string): string {
+  const parsedMessage = parseBootstrapErrorMessage(message);
+  if (status === 401 && INVALID_BOOTSTRAP_CREDENTIAL_MESSAGES.has(parsedMessage)) {
+    return "Invalid pairing token. Check the token and try again.";
+  }
+
+  return parsedMessage;
+}
+
 async function exchangeBootstrapCredential(credential: string): Promise<AuthBootstrapResult> {
   return retryTransientBootstrap(async () => {
     const payload: AuthBootstrapInput = { credential };
@@ -127,7 +158,7 @@ async function exchangeBootstrapCredential(credential: string): Promise<AuthBoot
     });
 
     if (!response.ok) {
-      const message = await response.text();
+      const message = toFriendlyBootstrapErrorMessage(response.status, await response.text());
       throw new BootstrapHttpError({
         message: message || `Failed to bootstrap auth session (${response.status}).`,
         status: response.status,
@@ -136,30 +167,6 @@ async function exchangeBootstrapCredential(credential: string): Promise<AuthBoot
 
     return (await response.json()) as AuthBootstrapResult;
   });
-}
-
-export async function resolvePrimaryWebSocketConnectionUrl(input: {
-  readonly httpBaseUrl: string;
-  readonly wsBaseUrl: string;
-}): Promise<string> {
-  const response = await fetch(
-    resolvePrimaryEnvironmentHttpUrlFromBase(input.httpBaseUrl, "/api/auth/ws-token"),
-    {
-      credentials: "include",
-      method: "POST",
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      await readErrorMessage(response, `Failed to issue websocket token (${response.status}).`),
-    );
-  }
-
-  const issued = (await response.json()) as AuthWebSocketTokenResult;
-  const url = new URL(input.wsBaseUrl, window.location.origin);
-  url.searchParams.set("wsToken", issued.token);
-  return url.toString();
 }
 
 async function waitForAuthenticatedSessionAfterBootstrap(): Promise<AuthSessionState> {
@@ -261,13 +268,9 @@ export async function submitServerAuthCredential(credential: string): Promise<vo
 
 export async function createServerPairingCredential(
   label?: string,
-  role: "owner" | "client" = "client",
 ): Promise<AuthPairingCredentialResult> {
   const trimmedLabel = label?.trim();
-  const payload: AuthCreatePairingCredentialInput = {
-    ...(trimmedLabel ? { label: trimmedLabel } : {}),
-    ...(role === "owner" ? { role } : {}),
-  };
+  const payload: AuthCreatePairingCredentialInput = trimmedLabel ? { label: trimmedLabel } : {};
   const response = await fetch(resolvePrimaryEnvironmentHttpUrl("/api/auth/pairing-token"), {
     body: JSON.stringify(payload),
     credentials: "include",
@@ -288,7 +291,6 @@ export async function createServerPairingCredential(
 
 export async function listServerPairingLinks(): Promise<ReadonlyArray<ServerPairingLinkRecord>> {
   const response = await fetch(resolvePrimaryEnvironmentHttpUrl("/api/auth/pairing-links"), {
-    cache: "no-store",
     credentials: "include",
   });
 
@@ -323,7 +325,6 @@ export async function listServerClientSessions(): Promise<
   ReadonlyArray<ServerClientSessionRecord>
 > {
   const response = await fetch(resolvePrimaryEnvironmentHttpUrl("/api/auth/clients"), {
-    cache: "no-store",
     credentials: "include",
   });
 

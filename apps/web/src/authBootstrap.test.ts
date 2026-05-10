@@ -30,7 +30,7 @@ function installTestBrowser(url: string) {
   };
 
   vi.stubGlobal("window", testWindow);
-  vi.stubGlobal("document", { title: "Androdex" });
+  vi.stubGlobal("document", { title: "T3 Code" });
 
   return testWindow;
 }
@@ -353,6 +353,34 @@ describe("resolveInitialServerAuthGateState", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it("surfaces a friendly error message when an invalid pairing token is submitted", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse(
+        {
+          error: "Invalid bootstrap credential.",
+        },
+        {
+          status: 401,
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { submitServerAuthCredential } = await import("./environments/primary");
+
+    await expect(submitServerAuthCredential("bad-token")).rejects.toThrow(
+      "Invalid pairing token. Check the token and try again.",
+    );
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost/api/auth/bootstrap", {
+      body: JSON.stringify({ credential: "bad-token" }),
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+      },
+      method: "POST",
+    });
+  });
+
   it("waits for the authenticated session to become observable after silent desktop bootstrap", async () => {
     vi.useFakeTimers();
     const fetchMock = vi
@@ -490,170 +518,6 @@ describe("resolveInitialServerAuthGateState", () => {
         "content-type": "application/json",
       },
       method: "POST",
-    });
-  });
-
-  it("creates an owner pairing credential when requested", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
-      jsonResponse({
-        id: "pairing-link-owner",
-        credential: "owner-token",
-        label: "Androdex Pixel",
-        expiresAt: "2026-04-05T00:00:00.000Z",
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { createServerPairingCredential } = await import("./environments/primary");
-
-    await expect(createServerPairingCredential("Androdex Pixel", "owner")).resolves.toEqual({
-      id: "pairing-link-owner",
-      credential: "owner-token",
-      label: "Androdex Pixel",
-      expiresAt: "2026-04-05T00:00:00.000Z",
-    });
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost/api/auth/pairing-token", {
-      body: JSON.stringify({ label: "Androdex Pixel", role: "owner" }),
-      credentials: "include",
-      headers: {
-        "content-type": "application/json",
-      },
-      method: "POST",
-    });
-  });
-
-  it("mints a primary websocket url with a short-lived ws token", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
-      jsonResponse({
-        token: "ws-token",
-        expiresAt: "2026-04-05T00:05:00.000Z",
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { resolvePrimaryWebSocketConnectionUrl } = await import("./environments/primary");
-
-    await expect(
-      resolvePrimaryWebSocketConnectionUrl({
-        httpBaseUrl: "http://localhost:3773",
-        wsBaseUrl: "ws://localhost:3773",
-      }),
-    ).resolves.toBe("ws://localhost:3773/?wsToken=ws-token");
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:3773/api/auth/ws-token",
-      expect.objectContaining({
-        credentials: "include",
-        method: "POST",
-      }),
-    );
-  });
-
-  it("preserves tunneled desktop route prefixes when minting primary websocket urls", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
-      jsonResponse({
-        token: "ws-token",
-        expiresAt: "2026-04-05T00:05:00.000Z",
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-    installTestBrowser("https://relay.androdex.xyz/desktop/route-123/pair");
-
-    const { resolvePrimaryWebSocketConnectionUrl } = await import("./environments/primary");
-
-    await expect(
-      resolvePrimaryWebSocketConnectionUrl({
-        httpBaseUrl: "https://relay.androdex.xyz/desktop/route-123",
-        wsBaseUrl: "wss://relay.androdex.xyz/desktop/route-123",
-      }),
-    ).resolves.toBe("wss://relay.androdex.xyz/desktop/route-123?wsToken=ws-token");
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://relay.androdex.xyz/desktop/route-123/api/auth/ws-token",
-      expect.objectContaining({
-        credentials: "include",
-        method: "POST",
-      }),
-    );
-  });
-
-  it("loads pairing links without using a cached auth-access snapshot", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
-      jsonResponse([
-        {
-          id: "pairing-link-owner",
-          credential: "owner-token",
-          role: "owner",
-          subject: "owner-pairing-token",
-          createdAt: "2026-04-05T00:00:00.000Z",
-          expiresAt: "2026-04-05T00:05:00.000Z",
-        },
-      ]),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { listServerPairingLinks } = await import("./environments/primary");
-
-    await expect(listServerPairingLinks()).resolves.toEqual([
-      {
-        id: "pairing-link-owner",
-        credential: "owner-token",
-        role: "owner",
-        subject: "owner-pairing-token",
-        createdAt: "2026-04-05T00:00:00.000Z",
-        expiresAt: "2026-04-05T00:05:00.000Z",
-      },
-    ]);
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost/api/auth/pairing-links", {
-      cache: "no-store",
-      credentials: "include",
-    });
-  });
-
-  it("loads paired clients without using a cached auth-access snapshot", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
-      jsonResponse([
-        {
-          sessionId: "session-1",
-          subject: "owner-pairing-token",
-          role: "owner",
-          method: "browser-session-cookie",
-          client: {
-            deviceType: "mobile",
-            label: "Androdex Pixel",
-          },
-          issuedAt: "2026-04-05T00:00:00.000Z",
-          expiresAt: "2026-04-06T00:00:00.000Z",
-          lastConnectedAt: null,
-          connected: true,
-          current: false,
-        },
-      ]),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { listServerClientSessions } = await import("./environments/primary");
-
-    await expect(listServerClientSessions()).resolves.toEqual([
-      {
-        sessionId: "session-1",
-        subject: "owner-pairing-token",
-        role: "owner",
-        method: "browser-session-cookie",
-        client: {
-          deviceType: "mobile",
-          label: "Androdex Pixel",
-        },
-        issuedAt: "2026-04-05T00:00:00.000Z",
-        expiresAt: "2026-04-06T00:00:00.000Z",
-        lastConnectedAt: null,
-        connected: true,
-        current: false,
-      },
-    ]);
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost/api/auth/clients", {
-      cache: "no-store",
-      credentials: "include",
     });
   });
 });
