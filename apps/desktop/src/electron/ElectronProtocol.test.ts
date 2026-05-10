@@ -46,7 +46,7 @@ describe("ElectronProtocol", () => {
               [
                 [
                   {
-                    scheme: "t3",
+                    scheme: "androdex",
                     privileges: {
                       standard: true,
                       secure: true,

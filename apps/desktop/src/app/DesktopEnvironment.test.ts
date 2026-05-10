@@ -42,31 +42,34 @@ describe("DesktopEnvironment", () => {
       const environment = yield* makeEnvironment(
         {},
         {
-          T3CODE_HOME: " /tmp/t3 ",
-          T3CODE_COMMIT_HASH: " 0123456789abcdef ",
-          T3CODE_PORT: "4949",
+          ANDRODEX_HOME: " /tmp/androdex ",
+          ANDRODEX_COMMIT_HASH: " 0123456789abcdef ",
+          ANDRODEX_PORT: "4949",
           VITE_DEV_SERVER_URL: "http://localhost:5173",
-          T3CODE_DEV_REMOTE_T3_SERVER_ENTRY_PATH: " /remote/server.mjs ",
-          T3CODE_OTLP_TRACES_URL: " http://127.0.0.1:4318/v1/traces ",
-          T3CODE_OTLP_EXPORT_INTERVAL_MS: "2500",
+          ANDRODEX_DEV_REMOTE_T3_SERVER_ENTRY_PATH: " /remote/server.mjs ",
+          ANDRODEX_OTLP_TRACES_URL: " http://127.0.0.1:4318/v1/traces ",
+          ANDRODEX_OTLP_EXPORT_INTERVAL_MS: "2500",
         },
       );
 
       assert.equal(environment.isDevelopment, true);
       assert.equal(environment.appDataDirectory, "/Users/alice/Library/Application Support");
-      assert.equal(environment.baseDir, "/tmp/t3");
-      assert.equal(environment.stateDir, "/tmp/t3/dev");
-      assert.equal(environment.desktopSettingsPath, "/tmp/t3/dev/desktop-settings.json");
-      assert.equal(environment.clientSettingsPath, "/tmp/t3/dev/client-settings.json");
-      assert.equal(environment.savedEnvironmentRegistryPath, "/tmp/t3/dev/saved-environments.json");
-      assert.equal(environment.serverSettingsPath, "/tmp/t3/dev/settings.json");
-      assert.equal(environment.logDir, "/tmp/t3/dev/logs");
+      assert.equal(environment.baseDir, "/tmp/androdex");
+      assert.equal(environment.stateDir, "/tmp/androdex/dev");
+      assert.equal(environment.desktopSettingsPath, "/tmp/androdex/dev/desktop-settings.json");
+      assert.equal(environment.clientSettingsPath, "/tmp/androdex/dev/client-settings.json");
+      assert.equal(
+        environment.savedEnvironmentRegistryPath,
+        "/tmp/androdex/dev/saved-environments.json",
+      );
+      assert.equal(environment.serverSettingsPath, "/tmp/androdex/dev/settings.json");
+      assert.equal(environment.logDir, "/tmp/androdex/dev/logs");
       assert.equal(environment.rootDir, "/repo");
       assert.equal(environment.appRoot, "/repo");
       assert.equal(environment.backendEntryPath, "/repo/apps/server/dist/bin.mjs");
       assert.equal(environment.backendCwd, "/repo");
-      assert.equal(environment.appUserModelId, "com.t3tools.t3code.dev");
-      assert.equal(environment.linuxWmClass, "t3code-dev");
+      assert.equal(environment.appUserModelId, "xyz.androdex.desktop.dev");
+      assert.equal(environment.linuxWmClass, "androdex-dev");
       assert.deepEqual(
         Option.map(environment.devServerUrl, (url) => url.href),
         Option.some("http://localhost:5173/"),
@@ -84,14 +87,14 @@ describe("DesktopEnvironment", () => {
       const environment = yield* makeEnvironment(
         {},
         {
-          T3CODE_HOME: "/tmp/t3",
+          ANDRODEX_HOME: "/tmp/androdex",
         },
       );
 
       assert.equal(environment.isDevelopment, false);
-      assert.equal(environment.stateDir, "/tmp/t3/userdata");
-      assert.equal(environment.logDir, "/tmp/t3/userdata/logs");
-      assert.equal(environment.serverSettingsPath, "/tmp/t3/userdata/settings.json");
+      assert.equal(environment.stateDir, "/tmp/androdex/userdata");
+      assert.equal(environment.logDir, "/tmp/androdex/userdata/logs");
+      assert.equal(environment.serverSettingsPath, "/tmp/androdex/userdata/settings.json");
     }),
   );
 

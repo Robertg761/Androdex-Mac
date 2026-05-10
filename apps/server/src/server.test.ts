@@ -1074,7 +1074,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         "browser-session-cookie",
         "bearer-session-token",
       ]);
-      assert.isTrue(body.auth.sessionCookieName.startsWith("t3_session_"));
+      assert.isTrue(body.auth.sessionCookieName.startsWith("androdex_session"));
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

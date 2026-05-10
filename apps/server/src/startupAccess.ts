@@ -91,7 +91,8 @@ export const resolveListeningPort = (address: unknown, fallbackPort: number): nu
 
 export const buildPairingUrl = (connectionString: string, token: string): string => {
   const url = new URL(connectionString);
-  url.pathname = "/pair";
+  const basePath = url.pathname.replace(/\/+$/, "");
+  url.pathname = `${basePath}/pair`;
   url.searchParams.delete("token");
   url.hash = new URLSearchParams([["token", token]]).toString();
   return url.toString();
