@@ -98,10 +98,10 @@ function selectRemoteUrl(
   protocol: SourceControlCloneProtocol | undefined,
 ): string {
   switch (protocol ?? "auto") {
+    case "auto":
     case "https":
       return urls.url;
     case "ssh":
-    case "auto":
       return urls.sshUrl;
   }
 }

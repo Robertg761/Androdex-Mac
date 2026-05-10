@@ -216,6 +216,39 @@ it.effect("publishes by creating the repository, adding a remote, and pushing up
   );
 });
 
+it.effect("publishes with the HTTPS remote URL when protocol is automatic", () => {
+  const remoteCalls: Array<{ cwd: string; preferredName: string; url: string }> = [];
+
+  return Effect.gen(function* () {
+    const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
+    const result = yield* service.publishRepository({
+      cwd: "/workspace",
+      provider: "github",
+      repository: "octocat/androdex",
+      visibility: "private",
+      remoteName: "origin",
+      protocol: "auto",
+    });
+
+    assert.equal(result.remoteUrl, CLONE_URLS.url);
+    assert.deepStrictEqual(remoteCalls, [
+      { cwd: "/workspace", preferredName: "origin", url: CLONE_URLS.url },
+    ]);
+  }).pipe(
+    Effect.provide(
+      makeLayer({
+        git: {
+          ensureRemote: (input) =>
+            Effect.sync(() => {
+              remoteCalls.push(input);
+              return "origin";
+            }),
+        },
+      }),
+    ),
+  );
+});
+
 it.effect("publishes to the remote name returned by ensureRemote", () => {
   const pushCalls: Array<{ cwd: string; remoteName: string | null | undefined }> = [];
 

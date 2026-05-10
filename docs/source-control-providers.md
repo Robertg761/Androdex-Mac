@@ -63,9 +63,13 @@ Run a quick **Rescan** after setting up a new machine or changing credentials.
    ```bash
    gh auth login
    ```
-3. Open **Settings → Source Control** in Androdex and verify GitHub shows as authenticated
+3. Ensure Git can use those credentials for HTTPS push/pull:
+   ```bash
+   gh auth setup-git
+   ```
+4. Open **Settings → Source Control** in Androdex and verify GitHub shows as authenticated
 
-That's it—you can now clone, publish, and create pull requests.
+That's it—you can now clone, publish, push, and create pull requests. Androdex uses HTTPS by default when publishing repositories so GitHub CLI credentials work without requiring an SSH key.
 
 ### For GitLab
 
@@ -118,7 +122,7 @@ Bitbucket uses API tokens instead of a CLI tool:
 
 - **Provider shows "Not authenticated"** – Run the login command for that provider (e.g., `gh auth login`) in a terminal on the server, then rescan in Settings
 - **Bitbucket not connecting** – Double-check your environment variables are set in the correct shell profile and the server was restarted
-- **Can't push to a remote** – Verify your Git remote URL matches the provider you've authenticated with (SSH vs HTTPS remotes may need different credentials)
+- **Can't push to a remote** – Verify your Git remote URL matches the provider you've authenticated with. For GitHub HTTPS remotes, run `gh auth setup-git`; for SSH remotes, make sure your SSH key is configured with GitHub.
 
 **Need more help?** Check your provider's CLI documentation:
 
