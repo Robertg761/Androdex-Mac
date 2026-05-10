@@ -450,7 +450,16 @@ jobs:
         run: bun --filter=androdex run build
 
       - name: Publish CLI package
-        run: node apps/server/scripts/cli.ts publish --tag "${{ needs.preflight.outputs.cli_dist_tag }}" --app-version "${{ needs.preflight.outputs.version }}" --verbose
+        shell: bash
+        run: |
+          package_name="$(node -p "require('./apps/server/package.json').name")"
+          version="${{ needs.preflight.outputs.version }}"
+          if npm view "$package_name@$version" version >/dev/null 2>&1; then
+            echo "$package_name@$version is already published; skipping npm publish."
+            exit 0
+          fi
+
+          node apps/server/scripts/cli.ts publish --tag "${{ needs.preflight.outputs.cli_dist_tag }}" --app-version "$version" --verbose
 
   release:
     name: Publish GitHub Release
@@ -459,14 +468,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - id: app_token
-        name: Mint release app token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -551,7 +552,7 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: true
-          token: ${{ steps.app_token.outputs.token }}
+          token: ${{ github.token }}
 
       - name: Publish first release
         if: needs.preflight.outputs.previous_tag == ''
@@ -571,7 +572,7 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: true
-          token: ${{ steps.app_token.outputs.token }}
+          token: ${{ github.token }}
 
   deploy_web:
     name: Deploy hosted web app
@@ -617,11 +618,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ -z "${VERCEL_TOKEN:-}" || -z "${VERCEL_ORG_ID:-}" || -z "${VERCEL_PROJECT_ID:-}" ]]; then
-            echo "Missing one or more required Vercel secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID." >&2
-            exit 1
-          fi
-
           router_url="${T3CODE_WEB_ROUTER_URL:-https://app.t3.codes}"
           latest_domain="${T3CODE_WEB_LATEST_DOMAIN:-latest.app.t3.codes}"
           nightly_domain="${T3CODE_WEB_NIGHTLY_DOMAIN:-nightly.app.t3.codes}"
@@ -638,6 +634,11 @@ jobs:
           vercel_scope_args=(--scope "$vercel_scope")
 
           echo "Deploying hosted web app for $channel_name channel."
+          if [[ -z "${VERCEL_TOKEN:-}" || -z "${VERCEL_ORG_ID:-}" || -z "${VERCEL_PROJECT_ID:-}" ]]; then
+            echo "Missing one or more Vercel secrets; skipping hosted web deploy for this release."
+            exit 0
+          fi
+
           deployment_url="$(
             bunx vercel@53.1.1 deploy \
               --prod \
@@ -662,31 +663,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - id: app_token
-        name: Mint release app token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Checkout
         uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ steps.app_token.outputs.token }}
+          token: ${{ github.token }}
           persist-credentials: true
-
-      - id: app_bot
-        name: Resolve GitHub App bot identity
-        env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
-          APP_SLUG: ${{ steps.app_token.outputs.app-slug }}
-        run: |
-          user_id="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
-          echo "name=${APP_SLUG}[bot]" >> "$GITHUB_OUTPUT"
-          echo "email=${user_id}+${APP_SLUG}[bot]@users.noreply.github.com" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -726,8 +709,8 @@ jobs:
             exit 0
           fi
 
-          git config user.name "${{ steps.app_bot.outputs.name }}"
-          git config user.email "${{ steps.app_bot.outputs.email }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json bun.lock
           git commit -m "chore(release): prepare $RELEASE_TAG"
