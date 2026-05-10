@@ -15,7 +15,7 @@ Androdex is a minimal web GUI for coding agents (currently Codex, Claude, and Op
 ### Run without installing
 
 ```bash
-npx t3
+npx androdex
 ```
 
 ### Desktop app
@@ -25,13 +25,13 @@ Install the latest version of the desktop app from [GitHub Releases](https://git
 #### Windows (`winget`)
 
 ```bash
-winget install T3Tools.T3Code
+winget install Androdex.Androdex
 ```
 
 #### macOS (Homebrew)
 
 ```bash
-brew install --cask t3-code
+brew install --cask androdex
 ```
 
 #### Arch Linux (AUR)

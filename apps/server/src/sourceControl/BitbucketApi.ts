@@ -22,13 +22,28 @@ import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 
 const DEFAULT_API_BASE_URL = "https://api.bitbucket.org/2.0";
 
+const preferConfigOption = <A>(
+  preferred: Option.Option<A>,
+  legacy: Option.Option<A>,
+): Option.Option<A> => (Option.isSome(preferred) ? preferred : legacy);
+
+const optionalStringAlias = (preferredName: string, legacyName: string) =>
+  Config.all({
+    preferred: Config.string(preferredName).pipe(Config.option),
+    legacy: Config.string(legacyName).pipe(Config.option),
+  }).pipe(Config.map(({ preferred, legacy }) => preferConfigOption(preferred, legacy)));
+
 const BitbucketApiEnvConfig = Config.all({
-  baseUrl: Config.string("T3CODE_BITBUCKET_API_BASE_URL").pipe(
-    Config.withDefault(DEFAULT_API_BASE_URL),
+  baseUrl: optionalStringAlias(
+    "ANDRODEX_BITBUCKET_API_BASE_URL",
+    "T3CODE_BITBUCKET_API_BASE_URL",
+  ).pipe(Config.map((value) => Option.getOrElse(value, () => DEFAULT_API_BASE_URL))),
+  accessToken: optionalStringAlias(
+    "ANDRODEX_BITBUCKET_ACCESS_TOKEN",
+    "T3CODE_BITBUCKET_ACCESS_TOKEN",
   ),
-  accessToken: Config.string("T3CODE_BITBUCKET_ACCESS_TOKEN").pipe(Config.option),
-  email: Config.string("T3CODE_BITBUCKET_EMAIL").pipe(Config.option),
-  apiToken: Config.string("T3CODE_BITBUCKET_API_TOKEN").pipe(Config.option),
+  email: optionalStringAlias("ANDRODEX_BITBUCKET_EMAIL", "T3CODE_BITBUCKET_EMAIL"),
+  apiToken: optionalStringAlias("ANDRODEX_BITBUCKET_API_TOKEN", "T3CODE_BITBUCKET_API_TOKEN"),
 });
 
 export class BitbucketApiError extends Schema.TaggedErrorClass<BitbucketApiError>()(
@@ -337,7 +352,7 @@ function authFromConfig(
     account: Option.none(),
     host: Option.some("bitbucket.org"),
     detail: Option.some(
-      "Set T3CODE_BITBUCKET_EMAIL and T3CODE_BITBUCKET_API_TOKEN, or T3CODE_BITBUCKET_ACCESS_TOKEN.",
+      "Set ANDRODEX_BITBUCKET_EMAIL and ANDRODEX_BITBUCKET_API_TOKEN, or ANDRODEX_BITBUCKET_ACCESS_TOKEN.",
     ),
   };
 }

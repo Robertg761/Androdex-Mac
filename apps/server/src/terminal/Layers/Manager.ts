@@ -661,7 +661,7 @@ function toSessionKey(threadId: string, terminalId: string): string {
 
 function shouldExcludeTerminalEnvKey(key: string): boolean {
   const normalizedKey = key.toUpperCase();
-  if (normalizedKey.startsWith("T3CODE_")) {
+  if (normalizedKey.startsWith("ANDRODEX_") || normalizedKey.startsWith("T3CODE_")) {
     return true;
   }
   if (normalizedKey.startsWith("VITE_")) {

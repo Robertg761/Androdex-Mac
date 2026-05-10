@@ -45,27 +45,27 @@ Required GitHub Actions secrets:
 Optional GitHub Actions variables:
 
 - `VERCEL_TEAM_SLUG`: overrides the Vercel CLI scope when the team slug is preferred over the `VERCEL_ORG_ID` secret.
-- `T3CODE_WEB_ROUTER_URL`: defaults to `https://app.t3.codes`.
-- `T3CODE_WEB_LATEST_DOMAIN`: defaults to `latest.app.t3.codes`.
-- `T3CODE_WEB_NIGHTLY_DOMAIN`: defaults to `nightly.app.t3.codes`.
+- `ANDRODEX_WEB_ROUTER_URL`: defaults to `https://app.androdex.xyz`.
+- `ANDRODEX_WEB_LATEST_DOMAIN`: defaults to `latest.app.androdex.xyz`.
+- `ANDRODEX_WEB_NIGHTLY_DOMAIN`: defaults to `nightly.app.androdex.xyz`.
 
 Required Vercel domains:
 
-- `app.t3.codes`: the stable router domain users open.
-- `latest.app.t3.codes`: channel alias updated by stable releases.
-- `nightly.app.t3.codes`: channel alias updated by nightly releases.
+- `app.androdex.xyz`: the stable router domain users open.
+- `latest.app.androdex.xyz`: channel alias updated by stable releases.
+- `nightly.app.androdex.xyz`: channel alias updated by nightly releases.
 
 The router domain uses `apps/web/vercel.ts` routes. Users opt into a channel by
-visiting `/__t3code/channel?channel=latest` or
-`/__t3code/channel?channel=nightly`; the router stores the
-`t3code_web_channel` cookie and rewrites future requests on `app.t3.codes` to
+visiting `/__androdex/channel?channel=latest` or
+`/__androdex/channel?channel=nightly`; the router stores the
+`androdex_web_channel` cookie and rewrites future requests on `app.androdex.xyz` to
 the matching channel alias.
 
 The release deploy job rewrites release package versions before upload so the
 hosted app's About panel renders the release version. It also passes
 `VITE_HOSTED_APP_CHANNEL=latest|nightly`, which renders the hosted update track
 selector in the About panel. Changing the selector navigates through
-`/__t3code/channel` on the router domain so the user's channel cookie is updated
+`/__androdex/channel` on the router domain so the user's channel cookie is updated
 before redirecting to the hosted app root.
 
 One-time Vercel dashboard setup:
@@ -76,7 +76,7 @@ One-time Vercel dashboard setup:
    `vercel.ts` setting is the source-of-truth, but disconnecting Git in the
    dashboard is also safe.
 4. Promote or alias one deployment containing the router rules in `apps/web/vercel.ts` to
-   `app.t3.codes` once. Future release jobs should only update the channel
+   `app.androdex.xyz` once. Future release jobs should only update the channel
    aliases.
 
 ## Nightly builds
@@ -92,7 +92,7 @@ One-time Vercel dashboard setup:
   - `make_latest` is always `false`
 - Uses the next stable patch version as the nightly base. For example, `0.0.17` produces nightlies on `0.0.18-nightly.*`.
 - Publishes Electron auto-update metadata to the dedicated `nightly` updater channel, so desktop users can opt into that track independently from stable.
-- Publishes the CLI package (`apps/server`, npm package `t3`) to the `nightly` npm dist-tag using the same nightly version.
+- Publishes the CLI package (`apps/server`, npm package `androdex`) to the `nightly` npm dist-tag using the same nightly version.
 - Does not commit version bumps back to `main`.
 
 ## Desktop auto-update notes

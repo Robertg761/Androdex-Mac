@@ -12,24 +12,24 @@ import {
 
 describe("normalizeGitRemoteUrl", () => {
   it("canonicalizes equivalent GitHub remotes across protocol variants", () => {
-    expect(normalizeGitRemoteUrl("git@github.com:T3Tools/T3Code.git")).toBe(
-      "github.com/t3tools/t3code",
+    expect(normalizeGitRemoteUrl("git@github.com:Robertg761/Androdex-Desktop.git")).toBe(
+      "github.com/robertg761/androdex-desktop",
     );
-    expect(normalizeGitRemoteUrl("https://github.com/T3Tools/T3Code.git")).toBe(
-      "github.com/t3tools/t3code",
+    expect(normalizeGitRemoteUrl("https://github.com/Robertg761/Androdex-Desktop.git")).toBe(
+      "github.com/robertg761/androdex-desktop",
     );
-    expect(normalizeGitRemoteUrl("ssh://git@github.com/T3Tools/T3Code")).toBe(
-      "github.com/t3tools/t3code",
+    expect(normalizeGitRemoteUrl("ssh://git@github.com/Robertg761/Androdex-Desktop")).toBe(
+      "github.com/robertg761/androdex-desktop",
     );
   });
 
   it("preserves nested group paths for providers like GitLab", () => {
-    expect(normalizeGitRemoteUrl("git@gitlab.com:T3Tools/platform/T3Code.git")).toBe(
-      "gitlab.com/t3tools/platform/t3code",
+    expect(normalizeGitRemoteUrl("git@gitlab.com:Robertg761/platform/AndrodexDesktop.git")).toBe(
+      "gitlab.com/robertg761/platform/androdexdesktop",
     );
-    expect(normalizeGitRemoteUrl("https://gitlab.com/T3Tools/platform/T3Code.git")).toBe(
-      "gitlab.com/t3tools/platform/t3code",
-    );
+    expect(
+      normalizeGitRemoteUrl("https://gitlab.com/Robertg761/platform/AndrodexDesktop.git"),
+    ).toBe("gitlab.com/robertg761/platform/androdexdesktop");
   });
 
   it("drops explicit ports from URL-shaped remotes", () => {
@@ -45,11 +45,15 @@ describe("normalizeGitRemoteUrl", () => {
 describe("parseGitHubRepositoryNameWithOwnerFromRemoteUrl", () => {
   it("extracts the owner and repository from common GitHub remote shapes", () => {
     expect(
-      parseGitHubRepositoryNameWithOwnerFromRemoteUrl("git@github.com:T3Tools/T3Code.git"),
-    ).toBe("T3Tools/T3Code");
+      parseGitHubRepositoryNameWithOwnerFromRemoteUrl(
+        "git@github.com:Robertg761/Androdex-Desktop.git",
+      ),
+    ).toBe("Robertg761/Androdex-Desktop");
     expect(
-      parseGitHubRepositoryNameWithOwnerFromRemoteUrl("https://github.com/T3Tools/T3Code.git"),
-    ).toBe("T3Tools/T3Code");
+      parseGitHubRepositoryNameWithOwnerFromRemoteUrl(
+        "https://github.com/Robertg761/Androdex-Desktop.git",
+      ),
+    ).toBe("Robertg761/Androdex-Desktop");
   });
 });
 

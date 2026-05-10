@@ -39,7 +39,7 @@ export const hostFlag = Flag.string("host").pipe(
   Flag.optional,
 );
 export const baseDirFlag = Flag.string("base-dir").pipe(
-  Flag.withDescription("Base directory path (equivalent to T3CODE_HOME)."),
+  Flag.withDescription("Base directory path (equivalent to ANDRODEX_HOME)."),
   Flag.optional,
 );
 export const devUrlFlag = Flag.string("dev-url").pipe(
@@ -64,7 +64,7 @@ export const autoBootstrapProjectFromCwdFlag = Flag.boolean("auto-bootstrap-proj
 );
 export const logWebSocketEventsFlag = Flag.boolean("log-websocket-events").pipe(
   Flag.withDescription(
-    "Emit server-side logs for outbound WebSocket push traffic (equivalent to T3CODE_LOG_WS_EVENTS).",
+    "Emit server-side logs for outbound WebSocket push traffic (equivalent to ANDRODEX_LOG_WS_EVENTS).",
   ),
   Flag.withAlias("log-ws-events"),
   Flag.optional,
@@ -81,60 +81,129 @@ export const tailscaleServePortFlag = Flag.integer("tailscale-serve-port").pipe(
   Flag.optional,
 );
 
+const preferEnvOption = <Value>(
+  preferred: Option.Option<Value>,
+  legacy: Option.Option<Value>,
+): Value | undefined => Option.getOrUndefined(Option.isSome(preferred) ? preferred : legacy);
+
+const logLevelEnvAliasWithDefault = (
+  preferredName: string,
+  legacyName: string,
+  defaultValue: LogLevel.LogLevel,
+) =>
+  Config.all({
+    preferred: Config.logLevel(preferredName).pipe(Config.option),
+    legacy: Config.logLevel(legacyName).pipe(Config.option),
+  }).pipe(
+    Config.map(({ preferred, legacy }) => preferEnvOption(preferred, legacy) ?? defaultValue),
+  );
+
+const booleanEnvAliasOption = (preferredName: string, legacyName: string) =>
+  Config.all({
+    preferred: Config.boolean(preferredName).pipe(Config.option),
+    legacy: Config.boolean(legacyName).pipe(Config.option),
+  }).pipe(Config.map(({ preferred, legacy }) => preferEnvOption(preferred, legacy)));
+
+const booleanEnvAliasWithDefault = (
+  preferredName: string,
+  legacyName: string,
+  defaultValue: boolean,
+) =>
+  booleanEnvAliasOption(preferredName, legacyName).pipe(
+    Config.map((value) => value ?? defaultValue),
+  );
+
+const stringEnvAliasOption = (preferredName: string, legacyName: string) =>
+  Config.all({
+    preferred: Config.string(preferredName).pipe(Config.option),
+    legacy: Config.string(legacyName).pipe(Config.option),
+  }).pipe(Config.map(({ preferred, legacy }) => preferEnvOption(preferred, legacy)));
+
+const stringEnvAliasWithDefault = (
+  preferredName: string,
+  legacyName: string,
+  defaultValue: string,
+) =>
+  stringEnvAliasOption(preferredName, legacyName).pipe(
+    Config.map((value) => value ?? defaultValue),
+  );
+
+const intEnvAliasOption = (preferredName: string, legacyName: string) =>
+  Config.all({
+    preferred: Config.int(preferredName).pipe(Config.option),
+    legacy: Config.int(legacyName).pipe(Config.option),
+  }).pipe(Config.map(({ preferred, legacy }) => preferEnvOption(preferred, legacy)));
+
+const intEnvAliasWithDefault = (preferredName: string, legacyName: string, defaultValue: number) =>
+  intEnvAliasOption(preferredName, legacyName).pipe(Config.map((value) => value ?? defaultValue));
+
+const portEnvAliasOption = (preferredName: string, legacyName: string) =>
+  Config.all({
+    preferred: Config.port(preferredName).pipe(Config.option),
+    legacy: Config.port(legacyName).pipe(Config.option),
+  }).pipe(Config.map(({ preferred, legacy }) => preferEnvOption(preferred, legacy)));
+
+const runtimeModeEnvAliasOption = (preferredName: string, legacyName: string) =>
+  Config.all({
+    preferred: Config.schema(RuntimeMode, preferredName).pipe(Config.option),
+    legacy: Config.schema(RuntimeMode, legacyName).pipe(Config.option),
+  }).pipe(Config.map(({ preferred, legacy }) => preferEnvOption(preferred, legacy)));
+
 const EnvServerConfig = Config.all({
-  logLevel: Config.logLevel("T3CODE_LOG_LEVEL").pipe(Config.withDefault("Info")),
-  traceMinLevel: Config.logLevel("T3CODE_TRACE_MIN_LEVEL").pipe(Config.withDefault("Info")),
-  traceTimingEnabled: Config.boolean("T3CODE_TRACE_TIMING_ENABLED").pipe(Config.withDefault(true)),
-  traceFile: Config.string("T3CODE_TRACE_FILE").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
+  logLevel: logLevelEnvAliasWithDefault("ANDRODEX_LOG_LEVEL", "T3CODE_LOG_LEVEL", "Info"),
+  traceMinLevel: logLevelEnvAliasWithDefault(
+    "ANDRODEX_TRACE_MIN_LEVEL",
+    "T3CODE_TRACE_MIN_LEVEL",
+    "Info",
   ),
-  traceMaxBytes: Config.int("T3CODE_TRACE_MAX_BYTES").pipe(Config.withDefault(10 * 1024 * 1024)),
-  traceMaxFiles: Config.int("T3CODE_TRACE_MAX_FILES").pipe(Config.withDefault(10)),
-  traceBatchWindowMs: Config.int("T3CODE_TRACE_BATCH_WINDOW_MS").pipe(Config.withDefault(200)),
-  otlpTracesUrl: Config.string("T3CODE_OTLP_TRACES_URL").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
+  traceTimingEnabled: booleanEnvAliasWithDefault(
+    "ANDRODEX_TRACE_TIMING_ENABLED",
+    "T3CODE_TRACE_TIMING_ENABLED",
+    true,
   ),
-  otlpMetricsUrl: Config.string("T3CODE_OTLP_METRICS_URL").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
+  traceFile: stringEnvAliasOption("ANDRODEX_TRACE_FILE", "T3CODE_TRACE_FILE"),
+  traceMaxBytes: intEnvAliasWithDefault(
+    "ANDRODEX_TRACE_MAX_BYTES",
+    "T3CODE_TRACE_MAX_BYTES",
+    10 * 1024 * 1024,
   ),
-  otlpExportIntervalMs: Config.int("T3CODE_OTLP_EXPORT_INTERVAL_MS").pipe(
-    Config.withDefault(10_000),
+  traceMaxFiles: intEnvAliasWithDefault("ANDRODEX_TRACE_MAX_FILES", "T3CODE_TRACE_MAX_FILES", 10),
+  traceBatchWindowMs: intEnvAliasWithDefault(
+    "ANDRODEX_TRACE_BATCH_WINDOW_MS",
+    "T3CODE_TRACE_BATCH_WINDOW_MS",
+    200,
   ),
-  otlpServiceName: Config.string("T3CODE_OTLP_SERVICE_NAME").pipe(Config.withDefault("t3-server")),
-  mode: Config.schema(RuntimeMode, "T3CODE_MODE").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
+  otlpTracesUrl: stringEnvAliasOption("ANDRODEX_OTLP_TRACES_URL", "T3CODE_OTLP_TRACES_URL"),
+  otlpMetricsUrl: stringEnvAliasOption("ANDRODEX_OTLP_METRICS_URL", "T3CODE_OTLP_METRICS_URL"),
+  otlpExportIntervalMs: intEnvAliasWithDefault(
+    "ANDRODEX_OTLP_EXPORT_INTERVAL_MS",
+    "T3CODE_OTLP_EXPORT_INTERVAL_MS",
+    10_000,
   ),
-  port: Config.port("T3CODE_PORT").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  host: Config.string("T3CODE_HOST").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  t3Home: Config.string("T3CODE_HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  otlpServiceName: stringEnvAliasWithDefault(
+    "ANDRODEX_OTLP_SERVICE_NAME",
+    "T3CODE_OTLP_SERVICE_NAME",
+    "androdex-server",
+  ),
+  mode: runtimeModeEnvAliasOption("ANDRODEX_MODE", "T3CODE_MODE"),
+  port: portEnvAliasOption("ANDRODEX_PORT", "T3CODE_PORT"),
+  host: stringEnvAliasOption("ANDRODEX_HOST", "T3CODE_HOST"),
+  t3Home: stringEnvAliasOption("ANDRODEX_HOME", "T3CODE_HOME"),
   devUrl: Config.url("VITE_DEV_SERVER_URL").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  noBrowser: Config.boolean("T3CODE_NO_BROWSER").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
+  noBrowser: booleanEnvAliasOption("ANDRODEX_NO_BROWSER", "T3CODE_NO_BROWSER"),
+  bootstrapFd: intEnvAliasOption("ANDRODEX_BOOTSTRAP_FD", "T3CODE_BOOTSTRAP_FD"),
+  autoBootstrapProjectFromCwd: booleanEnvAliasOption(
+    "ANDRODEX_AUTO_BOOTSTRAP_PROJECT_FROM_CWD",
+    "T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD",
   ),
-  bootstrapFd: Config.int("T3CODE_BOOTSTRAP_FD").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
+  logWebSocketEvents: booleanEnvAliasOption("ANDRODEX_LOG_WS_EVENTS", "T3CODE_LOG_WS_EVENTS"),
+  tailscaleServeEnabled: booleanEnvAliasOption(
+    "ANDRODEX_TAILSCALE_SERVE",
+    "T3CODE_TAILSCALE_SERVE",
   ),
-  autoBootstrapProjectFromCwd: Config.boolean("T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
-  logWebSocketEvents: Config.boolean("T3CODE_LOG_WS_EVENTS").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
-  tailscaleServeEnabled: Config.boolean("T3CODE_TAILSCALE_SERVE").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
-  ),
-  tailscaleServePort: Config.port("T3CODE_TAILSCALE_SERVE_PORT").pipe(
-    Config.option,
-    Config.map(Option.getOrUndefined),
+  tailscaleServePort: portEnvAliasOption(
+    "ANDRODEX_TAILSCALE_SERVE_PORT",
+    "T3CODE_TAILSCALE_SERVE_PORT",
   ),
 });
 

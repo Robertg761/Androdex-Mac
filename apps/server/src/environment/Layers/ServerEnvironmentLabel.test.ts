@@ -21,7 +21,7 @@ describe("resolveServerEnvironmentLabel", () => {
   it.effect("uses hostname fallback regardless of launch mode", () =>
     Effect.gen(function* () {
       const result = yield* resolveServerEnvironmentLabel({
-        cwdBaseName: "t3code",
+        cwdBaseName: "androdex",
         platform: "win32",
         hostname: "macbook-pro",
       }).pipe(Effect.provide(NoopFileSystemLayer));
@@ -41,7 +41,7 @@ describe("resolveServerEnvironmentLabel", () => {
       });
 
       const result = yield* resolveServerEnvironmentLabel({
-        cwdBaseName: "t3code",
+        cwdBaseName: "androdex",
         platform: "darwin",
         hostname: "macbook-pro",
       }).pipe(Effect.provide(NoopFileSystemLayer));
@@ -58,7 +58,7 @@ describe("resolveServerEnvironmentLabel", () => {
   it.effect("prefers Linux PRETTY_HOSTNAME from machine-info", () =>
     Effect.gen(function* () {
       const result = yield* resolveServerEnvironmentLabel({
-        cwdBaseName: "t3code",
+        cwdBaseName: "androdex",
         platform: "linux",
         hostname: "buildbox",
       }).pipe(
@@ -89,7 +89,7 @@ describe("resolveServerEnvironmentLabel", () => {
       });
 
       const result = yield* resolveServerEnvironmentLabel({
-        cwdBaseName: "t3code",
+        cwdBaseName: "androdex",
         platform: "linux",
         hostname: "runner-01",
       }).pipe(Effect.provide(NoopFileSystemLayer));
@@ -106,7 +106,7 @@ describe("resolveServerEnvironmentLabel", () => {
   it.effect("falls back to the hostname when friendly labels are unavailable", () =>
     Effect.gen(function* () {
       const result = yield* resolveServerEnvironmentLabel({
-        cwdBaseName: "t3code",
+        cwdBaseName: "androdex",
         platform: "win32",
         hostname: "JULIUS-LAPTOP",
       }).pipe(Effect.provide(NoopFileSystemLayer));
@@ -120,7 +120,7 @@ describe("resolveServerEnvironmentLabel", () => {
       mockedRunProcess.mockRejectedValueOnce(new Error("spawn scutil ENOENT"));
 
       const result = yield* resolveServerEnvironmentLabel({
-        cwdBaseName: "t3code",
+        cwdBaseName: "androdex",
         platform: "darwin",
         hostname: "macbook-pro",
       }).pipe(Effect.provide(NoopFileSystemLayer));
@@ -140,12 +140,12 @@ describe("resolveServerEnvironmentLabel", () => {
       });
 
       const result = yield* resolveServerEnvironmentLabel({
-        cwdBaseName: "t3code",
+        cwdBaseName: "androdex",
         platform: "linux",
         hostname: "   ",
       }).pipe(Effect.provide(NoopFileSystemLayer));
 
-      expect(result).toBe("t3code");
+      expect(result).toBe("androdex");
     }),
   );
 });

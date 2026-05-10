@@ -878,7 +878,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     androdexCommitHash: commitHash,
     private: true,
     description: `${APP_BASE_NAME} desktop build`,
-    author: "T3 Tools",
+    author: "Androdex",
     main: "apps/desktop/dist-electron/main.cjs",
     build: yield* createBuildConfig(
       options.platform,

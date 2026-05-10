@@ -69,10 +69,10 @@ export const DesktopConfig = Config.all({
   xdgConfigHome: trimmedString("XDG_CONFIG_HOME"),
   t3Home: trimmedStringAlias("ANDRODEX_HOME", "T3CODE_HOME"),
   devServerUrl: Config.url("VITE_DEV_SERVER_URL").pipe(Config.option),
-  devRemoteT3ServerEntryPath: trimmedStringAlias(
-    "ANDRODEX_DEV_REMOTE_T3_SERVER_ENTRY_PATH",
-    "T3CODE_DEV_REMOTE_T3_SERVER_ENTRY_PATH",
-  ),
+  devRemoteServerEntryPath: Config.all({
+    primary: trimmedString("ANDRODEX_DEV_REMOTE_SERVER_ENTRY_PATH"),
+    legacy: trimmedString("T3CODE_DEV_REMOTE_T3_SERVER_ENTRY_PATH"),
+  }).pipe(Config.map(({ primary, legacy }) => preferOption(primary, legacy))),
   configuredBackendPort: optionalPortAlias("ANDRODEX_PORT", "T3CODE_PORT"),
   commitHashOverride: trimmedStringAlias("ANDRODEX_COMMIT_HASH", "T3CODE_COMMIT_HASH"),
   desktopLanHostOverride: trimmedStringAlias(

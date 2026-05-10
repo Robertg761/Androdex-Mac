@@ -287,9 +287,9 @@ const makeBrowserOtlpPayload = (spanName: string) =>
         url: collector.url,
         exportInterval: "10 millis",
         resource: {
-          serviceName: "t3-web",
+          serviceName: "androdex-web",
           attributes: {
-            "service.runtime": "t3-web",
+            "service.runtime": "androdex-web",
             "service.mode": "browser",
             "service.version": "test",
           },
@@ -354,7 +354,7 @@ const buildAppUnderTest = (options?: {
       otlpTracesUrl: undefined,
       otlpMetricsUrl: undefined,
       otlpExportIntervalMs: 10_000,
-      otlpServiceName: "t3-server",
+      otlpServiceName: "androdex-server",
       mode: "desktop",
       port: 0,
       host: "127.0.0.1",
@@ -1739,7 +1739,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               attributes: [
                 {
                   key: "service.name",
-                  value: { stringValue: "t3-web" },
+                  value: { stringValue: "androdex-web" },
                 },
               ],
             },
@@ -1881,7 +1881,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             "rpc.method": "server.getSettings",
           },
           resourceAttributes: {
-            "service.name": "t3-web",
+            "service.name": "androdex-web",
           },
           scope: {
             name: "effect",
@@ -2013,7 +2013,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         assert.deepEqual(record.links, []);
         assert.equal(record.scope.name, scopeSpan.scope.name);
         assert.deepEqual(record.scope.attributes, {});
-        assert.equal(record.resourceAttributes["service.name"], "t3-web");
+        assert.equal(record.resourceAttributes["service.name"], "androdex-web");
         assert.equal(record.status?.code, String(span.status.code));
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
@@ -3327,16 +3327,16 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
   it.effect("enriches replayed project events with repository identity metadata", () =>
     Effect.gen(function* () {
       const repositoryIdentity = {
-        canonicalKey: "github.com/t3tools/t3code",
+        canonicalKey: "github.com/robertg761/androdex-desktop",
         locator: {
           source: "git-remote" as const,
           remoteName: "origin",
-          remoteUrl: "git@github.com:T3Tools/t3code.git",
+          remoteUrl: "git@github.com:Robertg761/Androdex-Desktop.git",
         },
-        displayName: "T3Tools/t3code",
+        displayName: "Robertg761/Androdex-Desktop",
         provider: "github",
-        owner: "T3Tools",
-        name: "t3code",
+        owner: "Robertg761",
+        name: "androdex-desktop",
       };
 
       yield* buildAppUnderTest({

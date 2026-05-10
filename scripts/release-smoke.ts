@@ -112,13 +112,13 @@ function writeWindowsManifestFixtures(
     arm64Path,
     `version: 9.9.9-smoke.0
 files:
-  - url: T3-Code-9.9.9-smoke.0-arm64.exe
+  - url: Androdex-9.9.9-smoke.0-arm64.exe
     sha512: arm64exe
     size: 126621344
-  - url: T3-Code-9.9.9-smoke.0-arm64.exe.blockmap
+  - url: Androdex-9.9.9-smoke.0-arm64.exe.blockmap
     sha512: arm64blockmap
     size: 152344
-path: T3-Code-9.9.9-smoke.0-arm64.exe
+path: Androdex-9.9.9-smoke.0-arm64.exe
 sha512: arm64exe
 releaseDate: '2026-03-08T10:32:14.587Z'
 `,
@@ -128,13 +128,13 @@ releaseDate: '2026-03-08T10:32:14.587Z'
     x64Path,
     `version: 9.9.9-smoke.0
 files:
-  - url: T3-Code-9.9.9-smoke.0-x64.exe
+  - url: Androdex-9.9.9-smoke.0-x64.exe
     sha512: x64exe
     size: 132000112
-  - url: T3-Code-9.9.9-smoke.0-x64.exe.blockmap
+  - url: Androdex-9.9.9-smoke.0-x64.exe.blockmap
     sha512: x64blockmap
     size: 160112
-path: T3-Code-9.9.9-smoke.0-x64.exe
+path: Androdex-9.9.9-smoke.0-x64.exe
 sha512: x64exe
 releaseDate: '2026-03-08T10:36:07.540Z'
 `,
@@ -331,34 +331,34 @@ try {
   const mergedWindowsManifest = readFileSync(mergedWindowsManifestPath, "utf8");
   assertContains(
     mergedWindowsManifest,
-    "T3-Code-9.9.9-smoke.0-arm64.exe",
+    "Androdex-9.9.9-smoke.0-arm64.exe",
     "Merged Windows manifest is missing the arm64 asset.",
   );
   assertContains(
     mergedWindowsManifest,
-    "T3-Code-9.9.9-smoke.0-x64.exe",
+    "Androdex-9.9.9-smoke.0-x64.exe",
     "Merged Windows manifest is missing the x64 asset.",
   );
   const mergedNightlyWindowsManifest = readFileSync(mergedNightlyWindowsManifestPath, "utf8");
   assertContains(
     mergedNightlyWindowsManifest,
-    "T3-Code-9.9.9-smoke.0-arm64.exe",
+    "Androdex-9.9.9-smoke.0-arm64.exe",
     "Merged nightly Windows manifest is missing the arm64 asset.",
   );
   assertContains(
     mergedNightlyWindowsManifest,
-    "T3-Code-9.9.9-smoke.0-x64.exe",
+    "Androdex-9.9.9-smoke.0-x64.exe",
     "Merged nightly Windows manifest is missing the x64 asset.",
   );
   const mergedPreviewWindowsManifest = readFileSync(mergedPreviewWindowsManifestPath, "utf8");
   assertContains(
     mergedPreviewWindowsManifest,
-    "T3-Code-9.9.9-smoke.0-arm64.exe",
+    "Androdex-9.9.9-smoke.0-arm64.exe",
     "Merged preview Windows manifest is missing the arm64 asset.",
   );
   assertContains(
     mergedPreviewWindowsManifest,
-    "T3-Code-9.9.9-smoke.0-x64.exe",
+    "Androdex-9.9.9-smoke.0-x64.exe",
     "Merged preview Windows manifest is missing the x64 asset.",
   );
   assertMissing(
