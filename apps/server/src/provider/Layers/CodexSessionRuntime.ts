@@ -477,6 +477,8 @@ function readNotificationThreadId(notification: CodexServerNotification): string
     case "thread/unarchived":
     case "thread/closed":
     case "thread/name/updated":
+    case "thread/goal/updated":
+    case "thread/goal/cleared":
     case "thread/tokenUsage/updated":
     case "turn/started":
     case "hook/started":
@@ -540,6 +542,11 @@ function readRouteFields(notification: CodexServerNotification): {
     case "turn/plan/updated":
       return {
         turnId: TurnId.make(notification.params.turnId),
+        itemId: undefined,
+      };
+    case "thread/goal/updated":
+      return {
+        turnId: notification.params.turnId ? TurnId.make(notification.params.turnId) : undefined,
         itemId: undefined,
       };
     case "serverRequest/resolved":

@@ -533,6 +533,51 @@ function runtimeEventToActivities(
       ];
     }
 
+    case "thread.goal.updated": {
+      const goal = event.payload.goal;
+      const summary =
+        goal.status === "complete"
+          ? "Goal completed"
+          : goal.status === "paused"
+            ? "Goal paused"
+            : goal.status === "budgetLimited"
+              ? "Goal budget reached"
+              : "Goal updated";
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "goal.updated",
+          summary,
+          payload: {
+            detail: truncateDetail(goal.objective),
+            status: goal.status,
+            tokensUsed: goal.tokensUsed,
+            timeUsedSeconds: goal.timeUsedSeconds,
+            ...(goal.tokenBudget !== undefined ? { tokenBudget: goal.tokenBudget } : {}),
+          },
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "thread.goal.cleared": {
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "goal.cleared",
+          summary: "Goal cleared",
+          payload: {},
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
     case "item.updated": {
       if (!isToolLifecycleItemType(event.payload.itemType)) {
         return [];

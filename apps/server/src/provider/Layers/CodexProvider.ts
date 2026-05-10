@@ -18,6 +18,7 @@ import type {
   ModelCapabilities,
   ServerProviderModel,
   ServerProviderSkill,
+  ServerProviderSlashCommand,
 } from "@t3tools/contracts";
 import { ServerSettingsError } from "@t3tools/contracts";
 
@@ -38,6 +39,7 @@ export interface CodexAppServerProviderSnapshot {
   readonly account: CodexSchema.V2GetAccountResponse;
   readonly version: string | undefined;
   readonly models: ReadonlyArray<ServerProviderModel>;
+  readonly slashCommands: ReadonlyArray<ServerProviderSlashCommand>;
   readonly skills: ReadonlyArray<ServerProviderSkill>;
 }
 
@@ -214,6 +216,23 @@ function parseCodexSkillsListResponse(
   });
 }
 
+export function parseCodexSlashCommandsFromExperimentalFeatures(
+  response: CodexSchema.V2ExperimentalFeatureListResponse,
+): ReadonlyArray<ServerProviderSlashCommand> {
+  const goalsFeature = response.data.find((feature) => feature.name === "goals");
+  if (!goalsFeature?.enabled || goalsFeature.stage === "removed") {
+    return [];
+  }
+
+  return [
+    {
+      name: "goal",
+      description: "Set, inspect, pause, resume, or clear a Codex thread goal",
+      input: { hint: "objective | pause | resume | clear" },
+    },
+  ];
+}
+
 const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
   client: CodexClient.CodexAppServerClientShape,
 ) {
@@ -231,6 +250,24 @@ const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
 
   return models;
 });
+
+const requestAllCodexExperimentalFeatures = Effect.fn("requestAllCodexExperimentalFeatures")(
+  function* (client: CodexClient.CodexAppServerClientShape) {
+    const data: Array<CodexSchema.V2ExperimentalFeatureListResponse["data"][number]> = [];
+    let cursor: string | null | undefined = undefined;
+
+    do {
+      const response: CodexSchema.V2ExperimentalFeatureListResponse = yield* client.request(
+        "experimentalFeature/list",
+        cursor ? { cursor } : {},
+      );
+      data.push(...response.data);
+      cursor = response.nextCursor;
+    } while (cursor);
+
+    return { data } satisfies CodexSchema.V2ExperimentalFeatureListResponse;
+  },
+);
 
 export function buildCodexInitializeParams(): CodexSchema.V1InitializeParams {
   return {
@@ -300,16 +337,20 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
       account: accountResponse,
       version,
       models: appendCustomCodexModels([], input.customModels ?? []),
+      slashCommands: [],
       skills: [],
     } satisfies CodexAppServerProviderSnapshot;
   }
 
-  const [skillsResponse, models] = yield* Effect.all(
+  const [skillsResponse, models, experimentalFeaturesResponse] = yield* Effect.all(
     [
       client.request("skills/list", {
         cwds: [input.cwd],
       }),
       requestAllCodexModels(client),
+      requestAllCodexExperimentalFeatures(client).pipe(
+        Effect.catch(() => Effect.succeed({ data: [] })),
+      ),
     ],
     { concurrency: "unbounded" },
   );
@@ -318,6 +359,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
     account: accountResponse,
     version,
     models: appendCustomCodexModels(models, input.customModels ?? []),
+    slashCommands: parseCodexSlashCommandsFromExperimentalFeatures(experimentalFeaturesResponse),
     skills: parseCodexSkillsListResponse(skillsResponse, input.cwd),
   } satisfies CodexAppServerProviderSnapshot;
 }, scopedSafeTeardown("codex-probe"));
@@ -346,6 +388,7 @@ const makePendingCodexProvider = (
         enabled: false,
         checkedAt,
         models,
+        slashCommands: [],
         skills: [],
         probe: {
           installed: false,
@@ -362,6 +405,7 @@ const makePendingCodexProvider = (
       enabled: true,
       checkedAt,
       models,
+      slashCommands: [],
       skills: [],
       probe: {
         installed: false,
@@ -430,6 +474,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
       enabled: false,
       checkedAt,
       models: emptyModels,
+      slashCommands: [],
       skills: [],
       probe: {
         installed: false,
@@ -457,6 +502,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
       enabled: codexSettings.enabled,
       checkedAt,
       models: emptyModels,
+      slashCommands: [],
       skills: [],
       probe: {
         installed,
@@ -476,6 +522,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
       enabled: codexSettings.enabled,
       checkedAt,
       models: emptyModels,
+      slashCommands: [],
       skills: [],
       probe: {
         installed: true,
@@ -495,6 +542,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     enabled: codexSettings.enabled,
     checkedAt,
     models: snapshot.models,
+    slashCommands: snapshot.slashCommands,
     skills: snapshot.skills,
     probe: {
       installed: true,

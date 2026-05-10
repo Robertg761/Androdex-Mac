@@ -29,7 +29,11 @@ import { deepMerge } from "@t3tools/shared/Struct";
 import { createModelCapabilities } from "@t3tools/shared/model";
 import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 
-import { checkCodexProviderStatus, type CodexAppServerProviderSnapshot } from "./CodexProvider.ts";
+import {
+  checkCodexProviderStatus,
+  parseCodexSlashCommandsFromExperimentalFeatures,
+  type CodexAppServerProviderSnapshot,
+} from "./CodexProvider.ts";
 import { checkClaudeProviderStatus } from "./ClaudeProvider.ts";
 import { OpenCodeRuntimeLive } from "../opencodeRuntime.ts";
 import { NoOpProviderEventLoggers, ProviderEventLoggers } from "./ProviderEventLoggers.ts";
@@ -240,6 +244,7 @@ function makeCodexProbeSnapshot(
         capabilities: codexModelCapabilities,
       },
     ],
+    slashCommands: [],
     skills: [],
     ...input,
   };
@@ -308,6 +313,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
               capabilities: codexModelCapabilities,
             },
           ]);
+          assert.deepStrictEqual(status.slashCommands, []);
           assert.deepStrictEqual(status.skills, [
             {
               name: "github:gh-fix-ci",
@@ -381,6 +387,70 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
           assert.strictEqual(status.auth.label, "OpenAI API Key");
         }),
       );
+
+      it.effect("includes Codex goal slash command when the goals feature is enabled", () =>
+        Effect.gen(function* () {
+          const status = yield* checkCodexProviderStatus(defaultCodexSettings, () =>
+            Effect.succeed(
+              makeCodexProbeSnapshot({
+                slashCommands: [
+                  {
+                    name: "goal",
+                    description: "Set, inspect, pause, resume, or clear a Codex thread goal",
+                    input: { hint: "objective | pause | resume | clear" },
+                  },
+                ],
+              }),
+            ),
+          );
+
+          assert.deepStrictEqual(status.slashCommands, [
+            {
+              name: "goal",
+              description: "Set, inspect, pause, resume, or clear a Codex thread goal",
+              input: { hint: "objective | pause | resume | clear" },
+            },
+          ]);
+        }),
+      );
+
+      it("derives the Codex goal slash command from enabled experimental features", () => {
+        assert.deepStrictEqual(
+          parseCodexSlashCommandsFromExperimentalFeatures({
+            data: [
+              {
+                name: "goals",
+                enabled: true,
+                defaultEnabled: false,
+                stage: "beta",
+                displayName: "Goals",
+                description: "Keep working toward a thread goal",
+              },
+            ],
+          }),
+          [
+            {
+              name: "goal",
+              description: "Set, inspect, pause, resume, or clear a Codex thread goal",
+              input: { hint: "objective | pause | resume | clear" },
+            },
+          ],
+        );
+
+        assert.deepStrictEqual(
+          parseCodexSlashCommandsFromExperimentalFeatures({
+            data: [
+              {
+                name: "goals",
+                enabled: false,
+                defaultEnabled: false,
+                stage: "beta",
+              },
+            ],
+          }),
+          [],
+        );
+      });
 
       it.effect("returns an Amazon Bedrock label for codex Bedrock auth", () =>
         Effect.gen(function* () {

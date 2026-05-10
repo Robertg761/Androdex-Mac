@@ -189,6 +189,21 @@ function normalizeCodexTokenUsage(
   };
 }
 
+function normalizeCodexThreadGoal(goal: EffectCodexSchema.V2ThreadGoalUpdatedNotification["goal"]) {
+  const tokenBudget =
+    goal.tokenBudget !== undefined && goal.tokenBudget !== null ? goal.tokenBudget : undefined;
+
+  return {
+    objective: goal.objective,
+    status: goal.status,
+    tokensUsed: Math.max(0, goal.tokensUsed),
+    timeUsedSeconds: Math.max(0, goal.timeUsedSeconds),
+    ...(tokenBudget !== undefined ? { tokenBudget: Math.max(0, tokenBudget) } : {}),
+    createdAt: Math.max(0, goal.createdAt),
+    updatedAt: Math.max(0, goal.updatedAt),
+  };
+}
+
 function toTurnStatus(
   value: EffectCodexSchema.V2TurnCompletedNotification["turn"]["status"] | "cancelled",
 ): "completed" | "failed" | "cancelled" | "interrupted" {
@@ -717,6 +732,32 @@ function mapToRuntimeEvents(
               }
             : {}),
         },
+      },
+    ];
+  }
+
+  if (event.method === "thread/goal/updated") {
+    const payload = readPayload(EffectCodexSchema.V2ThreadGoalUpdatedNotification, event.payload);
+    if (!payload) {
+      return [];
+    }
+    return [
+      {
+        type: "thread.goal.updated",
+        ...runtimeEventBase(event, canonicalThreadId),
+        payload: {
+          goal: normalizeCodexThreadGoal(payload.goal),
+        },
+      },
+    ];
+  }
+
+  if (event.method === "thread/goal/cleared") {
+    return [
+      {
+        type: "thread.goal.cleared",
+        ...runtimeEventBase(event, canonicalThreadId),
+        payload: {},
       },
     ];
   }
