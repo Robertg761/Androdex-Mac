@@ -29,7 +29,7 @@ import type {
 } from "@t3tools/contracts";
 import { autoUpdater } from "electron-updater";
 
-import { RotatingFileSink } from "@t3tools/shared/logging";
+import { installStdIoLogCapture, RotatingFileSink } from "@t3tools/shared/logging";
 import { parsePersistedServerObservabilitySettings } from "@t3tools/shared/serverSettings";
 import {
   APP_BASE_NAME,
@@ -43,7 +43,6 @@ import {
 } from "@t3tools/shared/branding";
 import { DEFAULT_DESKTOP_BACKEND_PORT, resolveDesktopBackendPort } from "./backendPort";
 import {
-  type DesktopSettings,
   loadDesktopSettings,
   resolveDefaultDesktopSettings as resolveDefaultDesktopSettingsValue,
   setDesktopServerExposurePreference,
@@ -663,36 +662,14 @@ function installStdIoCapture(): void {
     return;
   }
 
-  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
-  const originalStderrWrite = process.stderr.write.bind(process.stderr);
-
-  const patchWrite =
-    (streamName: "stdout" | "stderr", originalWrite: typeof process.stdout.write) =>
-    (
-      chunk: string | Uint8Array,
-      encodingOrCallback?: BufferEncoding | ((error?: Error | null) => void),
-      callback?: (error?: Error | null) => void,
-    ): boolean => {
-      const encoding = typeof encodingOrCallback === "string" ? encodingOrCallback : undefined;
-      writeDesktopStreamChunk(streamName, chunk, encoding);
-      if (typeof encodingOrCallback === "function") {
-        return originalWrite(chunk, encodingOrCallback);
-      }
-      if (callback !== undefined) {
-        return originalWrite(chunk, encoding, callback);
-      }
-      if (encoding !== undefined) {
-        return originalWrite(chunk, encoding);
-      }
-      return originalWrite(chunk);
-    };
-
-  process.stdout.write = patchWrite("stdout", originalStdoutWrite);
-  process.stderr.write = patchWrite("stderr", originalStderrWrite);
+  const restore = installStdIoLogCapture({
+    stdout: process.stdout,
+    stderr: process.stderr,
+    writeCapturedChunk: writeDesktopStreamChunk,
+  });
 
   restoreStdIoCapture = () => {
-    process.stdout.write = originalStdoutWrite;
-    process.stderr.write = originalStderrWrite;
+    restore();
     restoreStdIoCapture = null;
   };
 }

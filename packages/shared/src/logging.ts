@@ -1,6 +1,24 @@
 import fs from "node:fs";
 import path from "node:path";
 
+export type CapturedStdIoStreamName = "stdout" | "stderr";
+
+export interface CapturableStdIoStream {
+  write: typeof process.stdout.write;
+  on(event: "error", listener: (error: Error) => void): this;
+  removeListener(event: "error", listener: (error: Error) => void): this;
+}
+
+export interface StdIoLogCaptureOptions {
+  readonly stdout: CapturableStdIoStream;
+  readonly stderr: CapturableStdIoStream;
+  readonly writeCapturedChunk: (
+    streamName: CapturedStdIoStreamName,
+    chunk: unknown,
+    encoding: BufferEncoding | undefined,
+  ) => void;
+}
+
 export interface RotatingFileSinkOptions {
   readonly filePath: string;
   readonly maxBytes: number;
@@ -112,4 +130,123 @@ export class RotatingFileSink {
   private withSuffix(index: number): string {
     return `${this.filePath}.${index}`;
   }
+}
+
+interface PatchedStreamState {
+  forwardingError: Error | null;
+}
+
+function isTerminalStdIoWriteError(error: unknown): error is Error {
+  if (!(error instanceof Error)) return false;
+  const code = (error as NodeJS.ErrnoException).code;
+  return (
+    code === "EPIPE" || code === "ERR_STREAM_DESTROYED" || code === "ERR_STREAM_WRITE_AFTER_END"
+  );
+}
+
+function invokeWriteCallback(
+  encodingOrCallback: BufferEncoding | ((error?: Error | null) => void) | undefined,
+  callback: ((error?: Error | null) => void) | undefined,
+  error: Error,
+): void {
+  const writeCallback = typeof encodingOrCallback === "function" ? encodingOrCallback : callback;
+  writeCallback?.(error);
+}
+
+function callOriginalWrite(
+  stream: CapturableStdIoStream,
+  originalWrite: typeof process.stdout.write,
+  chunk: string | Uint8Array,
+  encodingOrCallback: BufferEncoding | ((error?: Error | null) => void) | undefined,
+  callback: ((error?: Error | null) => void) | undefined,
+): boolean {
+  const write = originalWrite as unknown as {
+    call: (thisArg: CapturableStdIoStream, ...args: unknown[]) => boolean;
+  };
+  if (typeof encodingOrCallback === "function") {
+    return write.call(stream, chunk, encodingOrCallback);
+  }
+  if (callback !== undefined) {
+    return write.call(stream, chunk, encodingOrCallback, callback);
+  }
+  if (encodingOrCallback !== undefined) {
+    return write.call(stream, chunk, encodingOrCallback);
+  }
+  return write.call(stream, chunk);
+}
+
+function patchStdIoWrite(
+  streamName: CapturedStdIoStreamName,
+  stream: CapturableStdIoStream,
+  originalWrite: typeof process.stdout.write,
+  state: PatchedStreamState,
+  writeCapturedChunk: StdIoLogCaptureOptions["writeCapturedChunk"],
+): typeof process.stdout.write {
+  return ((
+    chunk: string | Uint8Array,
+    encodingOrCallback?: BufferEncoding | ((error?: Error | null) => void),
+    callback?: (error?: Error | null) => void,
+  ): boolean => {
+    const encoding = typeof encodingOrCallback === "string" ? encodingOrCallback : undefined;
+    writeCapturedChunk(streamName, chunk, encoding);
+
+    if (state.forwardingError !== null) {
+      invokeWriteCallback(encodingOrCallback, callback, state.forwardingError);
+      return false;
+    }
+
+    try {
+      return callOriginalWrite(stream, originalWrite, chunk, encodingOrCallback, callback);
+    } catch (error) {
+      if (!isTerminalStdIoWriteError(error)) {
+        throw error;
+      }
+      state.forwardingError = error;
+      invokeWriteCallback(encodingOrCallback, callback, error);
+      return false;
+    }
+  }) as typeof process.stdout.write;
+}
+
+export function installStdIoLogCapture(options: StdIoLogCaptureOptions): () => void {
+  const stdoutOriginalWrite = options.stdout.write;
+  const stderrOriginalWrite = options.stderr.write;
+  const stdoutState: PatchedStreamState = { forwardingError: null };
+  const stderrState: PatchedStreamState = { forwardingError: null };
+
+  const makeErrorListener =
+    (state: PatchedStreamState) =>
+    (error: Error): void => {
+      if (!isTerminalStdIoWriteError(error)) {
+        throw error;
+      }
+      state.forwardingError = error;
+    };
+
+  const stdoutErrorListener = makeErrorListener(stdoutState);
+  const stderrErrorListener = makeErrorListener(stderrState);
+
+  options.stdout.write = patchStdIoWrite(
+    "stdout",
+    options.stdout,
+    stdoutOriginalWrite,
+    stdoutState,
+    options.writeCapturedChunk,
+  );
+  options.stderr.write = patchStdIoWrite(
+    "stderr",
+    options.stderr,
+    stderrOriginalWrite,
+    stderrState,
+    options.writeCapturedChunk,
+  );
+  options.stdout.on("error", stdoutErrorListener);
+  options.stderr.on("error", stderrErrorListener);
+
+  return () => {
+    options.stdout.write = stdoutOriginalWrite;
+    options.stderr.write = stderrOriginalWrite;
+    options.stdout.removeListener("error", stdoutErrorListener);
+    options.stderr.removeListener("error", stderrErrorListener);
+  };
 }
