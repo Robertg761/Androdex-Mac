@@ -26,6 +26,7 @@ const KNOWN_SHARED_DIRECTORIES = [
   "plugins",
   "cache",
   "logs",
+  "themes",
 ] as const;
 
 const PRIVATE_ENTRY_NAMES = new Set(["auth.json", "models_cache.json"]);

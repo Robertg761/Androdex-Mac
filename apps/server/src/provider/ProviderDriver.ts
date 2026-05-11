@@ -26,6 +26,8 @@ import type {
   ServerCodexAutomationRunReadInput,
   ServerCodexAutomationUpsertInput,
   ServerCodexAutomationsListResult,
+  ServerCodexThemeListResult,
+  ServerCodexThemeSetInput,
   ServerProviderSkillSetEnabledInput,
   ProviderDriverKind,
   ProviderInstanceEnvironment,
@@ -77,6 +79,7 @@ export interface ProviderInstance {
   readonly adapter: ProviderAdapterShape<ProviderAdapterError>;
   readonly textGeneration: TextGenerationShape;
   readonly skillControls?: ProviderSkillControls | undefined;
+  readonly codexThemeControls?: ProviderCodexThemeControls | undefined;
   readonly automationControls?: ProviderAutomationControls | undefined;
 }
 
@@ -89,6 +92,15 @@ export interface ProviderSkillControls {
   readonly setEnabled: (
     input: Omit<ServerProviderSkillSetEnabledInput, "instanceId">,
   ) => Effect.Effect<{ readonly effectiveEnabled: boolean }, ProviderDriverError>;
+}
+
+export type ProviderCodexThemeSetInput = Omit<ServerCodexThemeSetInput, "instanceId">;
+
+export interface ProviderCodexThemeControls {
+  readonly list: () => Effect.Effect<ServerCodexThemeListResult, ProviderDriverError>;
+  readonly set: (
+    input: ProviderCodexThemeSetInput,
+  ) => Effect.Effect<ServerCodexThemeListResult, ProviderDriverError>;
 }
 
 export type ProviderAutomationUpsertInput = Omit<ServerCodexAutomationUpsertInput, "instanceId">;

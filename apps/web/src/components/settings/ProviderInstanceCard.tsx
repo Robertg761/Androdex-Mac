@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpCircleIcon,
   ChevronDownIcon,
@@ -18,6 +19,7 @@ import {
   type ProviderInstanceId,
   type ProviderDriverKind,
   type ServerProvider,
+  type ServerCodexThemeListResult,
   type ServerProviderModel,
 } from "@t3tools/contracts";
 
@@ -29,6 +31,16 @@ import { Button } from "../ui/button";
 import { Collapsible, CollapsibleContent } from "../ui/collapsible";
 import { DraftInput } from "../ui/draft-input";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
+import {
+  Select,
+  SelectGroup,
+  SelectGroupLabel,
+  SelectItem,
+  SelectPopup,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -37,6 +49,7 @@ import { ProviderSettingsForm } from "./ProviderSettingsForm";
 import { ProviderModelsSection } from "./ProviderModelsSection";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { RedactedSensitiveText } from "./RedactedSensitiveText";
+import { ensureLocalApi } from "../../localApi";
 import {
   getProviderVersionAdvisoryPresentation,
   PROVIDER_STATUS_STYLES,
@@ -55,6 +68,9 @@ const PROVIDER_ACCENT_SWATCHES = [
 ] as const;
 
 const ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+const codexThemesQueryKey = (instanceId: ProviderInstanceId) =>
+  ["provider-instance", instanceId, "codex-themes"] as const;
 
 let environmentVariableDraftId = 0;
 const nextEnvironmentVariableDraftId = () => `provider-env-${environmentVariableDraftId++}`;
@@ -78,6 +94,12 @@ function makeEnvironmentDraftRow(
     sensitive: variable.sensitive,
     ...(variable.valueRedacted !== undefined ? { valueRedacted: variable.valueRedacted } : {}),
   };
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message.trim().length > 0
+    ? error.message
+    : "Unknown error";
 }
 
 /**
@@ -385,6 +407,131 @@ function ProviderEnvironmentSection(props: {
       <span className="text-xs text-muted-foreground">
         Sensitive values are stored separately and are not returned to the app after saving.
       </span>
+    </div>
+  );
+}
+
+function CodexSyntaxThemeSection(props: { readonly instanceId: ProviderInstanceId }) {
+  const queryClient = useQueryClient();
+  const [pendingTheme, setPendingTheme] = useState<string | null>(null);
+  const queryKey = codexThemesQueryKey(props.instanceId);
+  const themesQuery = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const api = ensureLocalApi();
+      if (!api.server.listCodexThemes) {
+        throw new Error("Codex theme settings are not available.");
+      }
+      return api.server.listCodexThemes({ instanceId: props.instanceId });
+    },
+    staleTime: 30_000,
+  });
+
+  const themeData = themesQuery.data;
+  const themeNames = new Set(themeData?.themes.map((theme) => theme.name) ?? []);
+  const selectedTheme =
+    themeData?.selectedTheme && themeNames.has(themeData.selectedTheme)
+      ? themeData.selectedTheme
+      : (themeData?.defaultTheme ?? "");
+  const value = pendingTheme ?? selectedTheme;
+  const bundledThemes = themeData?.themes.filter((theme) => theme.source === "bundled") ?? [];
+  const customThemes = themeData?.themes.filter((theme) => theme.source === "custom") ?? [];
+  const unavailableSelectedTheme =
+    themeData?.selectedTheme && !themeNames.has(themeData.selectedTheme)
+      ? themeData.selectedTheme
+      : null;
+  const isBusy = themesQuery.isPending || pendingTheme !== null;
+
+  const setTheme = async (theme: string) => {
+    const trimmedTheme = theme.trim();
+    if (!trimmedTheme || trimmedTheme === selectedTheme) return;
+    setPendingTheme(trimmedTheme);
+    try {
+      const api = ensureLocalApi();
+      if (!api.server.setCodexTheme) {
+        throw new Error("Codex theme settings are not available.");
+      }
+      const result = await api.server.setCodexTheme({
+        instanceId: props.instanceId,
+        theme: trimmedTheme,
+      });
+      queryClient.setQueryData<ServerCodexThemeListResult>(queryKey, result);
+      toastManager.add({
+        type: "success",
+        title: "Codex theme updated",
+        description: `Syntax theme set to ${trimmedTheme}.`,
+      });
+    } catch (error) {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Could not update Codex theme",
+          description: getErrorMessage(error),
+        }),
+      );
+    } finally {
+      setPendingTheme(null);
+    }
+  };
+
+  return (
+    <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)] sm:items-start">
+        <div className="min-w-0 space-y-1">
+          <p className="text-xs font-medium text-foreground">Syntax theme</p>
+          <p className="text-xs text-muted-foreground">
+            Codex code and diff highlighting theme for this provider instance.
+          </p>
+          {themesQuery.isError ? (
+            <p className="text-xs text-destructive">{getErrorMessage(themesQuery.error)}</p>
+          ) : unavailableSelectedTheme ? (
+            <p className="text-xs text-warning">
+              Configured theme <code>{unavailableSelectedTheme}</code> is not available.
+            </p>
+          ) : null}
+        </div>
+        <Select
+          value={value}
+          disabled={!themeData || isBusy}
+          onValueChange={(nextValue) => {
+            if (typeof nextValue === "string") {
+              void setTheme(nextValue);
+            }
+          }}
+        >
+          <SelectTrigger className="w-full" aria-label="Codex syntax theme">
+            <SelectValue>
+              <span className="inline-flex min-w-0 items-center gap-2">
+                {isBusy ? <LoaderIcon className="size-3 animate-spin" /> : null}
+                <span className="truncate">{themesQuery.isPending ? "Loading themes" : value}</span>
+              </span>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectPopup align="end" alignItemWithTrigger={false} className="max-h-80">
+            <SelectGroup>
+              <SelectGroupLabel>Bundled</SelectGroupLabel>
+              {bundledThemes.map((theme) => (
+                <SelectItem key={theme.name} value={theme.name}>
+                  {theme.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            {customThemes.length > 0 ? (
+              <>
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectGroupLabel>Custom</SelectGroupLabel>
+                  {customThemes.map((theme) => (
+                    <SelectItem key={theme.name} value={theme.name}>
+                      {theme.name} (custom)
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </>
+            ) : null}
+          </SelectPopup>
+        </Select>
+      </div>
     </div>
   );
 }
@@ -834,6 +981,10 @@ export function ProviderInstanceCard({
                 variant="card"
                 onChange={updateConfig}
               />
+            ) : null}
+
+            {String(instance.driver) === "codex" ? (
+              <CodexSyntaxThemeSection instanceId={instanceId} />
             ) : null}
 
             {driverOption !== undefined ? (

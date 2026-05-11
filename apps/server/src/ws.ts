@@ -29,6 +29,7 @@ import {
   OrchestrationReplayEventsError,
   FilesystemBrowseError,
   ServerCodexAutomationsError,
+  ServerCodexThemeError,
   ServerProviderSkillError,
   type ProviderInstanceId,
   ThreadId,
@@ -620,6 +621,18 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
           return instance.automationControls;
         });
 
+      const resolveCodexThemeControls = (instanceId: ProviderInstanceId) =>
+        Effect.gen(function* () {
+          const instance = yield* providerInstanceRegistry.getInstance(instanceId);
+          if (!instance?.codexThemeControls) {
+            return yield* new ServerCodexThemeError({
+              instanceId,
+              detail: "Codex theme settings are not available for this provider instance.",
+            });
+          }
+          return instance.codexThemeControls;
+        });
+
       const toAutomationError = (
         instanceId: ProviderInstanceId,
         cause: { readonly detail?: string; readonly message?: string } | unknown,
@@ -632,6 +645,21 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
               : cause instanceof Error
                 ? cause.message
                 : "Failed to update Codex automations.",
+          cause,
+        });
+
+      const toCodexThemeError = (
+        instanceId: ProviderInstanceId,
+        cause: { readonly detail?: string; readonly message?: string } | unknown,
+      ) =>
+        new ServerCodexThemeError({
+          instanceId,
+          detail:
+            typeof cause === "object" && cause !== null && "detail" in cause
+              ? String(cause.detail)
+              : cause instanceof Error
+                ? cause.message
+                : "Failed to update Codex theme settings.",
           cause,
         });
 
@@ -924,6 +952,28 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
                 effectiveEnabled: result.effectiveEnabled,
                 providers,
               };
+            }),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverListCodexThemes]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverListCodexThemes,
+            Effect.gen(function* () {
+              const controls = yield* resolveCodexThemeControls(input.instanceId);
+              return yield* controls
+                .list()
+                .pipe(Effect.mapError((cause) => toCodexThemeError(input.instanceId, cause)));
+            }),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverSetCodexTheme]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverSetCodexTheme,
+            Effect.gen(function* () {
+              const controls = yield* resolveCodexThemeControls(input.instanceId);
+              return yield* controls
+                .set({ theme: input.theme })
+                .pipe(Effect.mapError((cause) => toCodexThemeError(input.instanceId, cause)));
             }),
             { "rpc.aggregate": "server" },
           ),
