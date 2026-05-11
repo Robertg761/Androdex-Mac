@@ -151,6 +151,7 @@ import { resolveEffectiveEnvMode, resolveEnvironmentOptionLabel } from "./Branch
 import { ProviderStatusBanner } from "./chat/ProviderStatusBanner";
 import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
+import { CodexNewThreadHero } from "./CodexAppChrome";
 import {
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
   buildExpiredTerminalContextToastCopy,
@@ -1563,6 +1564,7 @@ export default function ChatView(props: ChatViewProps) {
       deriveTimelineEntries(timelineMessages, activeThread?.proposedPlans ?? [], workLogEntries),
     [activeThread?.proposedPlans, timelineMessages, workLogEntries],
   );
+  const showNewThreadHero = routeKind === "draft" && timelineEntries.length === 0 && !isWorking;
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
     useTurnDiffSummaries(activeThread);
   const turnDiffSummaryByAssistantMessageId = useMemo(() => {
@@ -3506,7 +3508,7 @@ export default function ChatView(props: ChatViewProps) {
       {/* Top bar */}
       <header
         className={cn(
-          "border-b border-border",
+          "border-b border-border/40 bg-background/72 backdrop-blur-xl",
           isElectron
             ? cn(
                 "drag-region flex h-[52px] items-center px-3 sm:px-5 wco:h-[env(titlebar-area-height)]",
@@ -3583,6 +3585,14 @@ export default function ChatView(props: ChatViewProps) {
               timestampFormat={timestampFormat}
               workspaceRoot={activeWorkspaceRoot}
               skills={activeProviderStatus?.skills ?? EMPTY_PROVIDER_SKILLS}
+              emptyState={
+                showNewThreadHero ? (
+                  <CodexNewThreadHero
+                    projectName={activeProject?.name ?? null}
+                    className="-mt-10 sm:-mt-16"
+                  />
+                ) : undefined
+              }
               onIsAtEndChange={onIsAtEndChange}
             />
 
@@ -3605,6 +3615,7 @@ export default function ChatView(props: ChatViewProps) {
           <div
             className={cn(
               "pl-[calc(env(safe-area-inset-left)+0.75rem)] pr-[calc(env(safe-area-inset-right)+0.75rem)] pt-1.5 sm:pl-[calc(env(safe-area-inset-left)+1.25rem)] sm:pr-[calc(env(safe-area-inset-right)+1.25rem)] sm:pt-2",
+              showNewThreadHero && "pt-0 sm:pt-0",
               isGitRepo
                 ? "pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
                 : "pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:pb-[calc(env(safe-area-inset-bottom)+1rem)]",

@@ -1,10 +1,46 @@
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
+import { useCallback } from "react";
+import { PlusIcon } from "lucide-react";
+
+import { CodexNewThreadHero } from "./CodexAppChrome";
 import { SidebarInset, SidebarTrigger } from "./ui/sidebar";
 import { getDesktopTitlebarStyle } from "../desktopShell";
 import { isElectron } from "../env";
 import { cn } from "~/lib/utils";
+import { Button } from "./ui/button";
+import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { startNewThreadFromContext } from "../lib/chatThreadActions";
+import { useSettings } from "../hooks/useSettings";
+import { resolveSidebarNewThreadEnvMode } from "./Sidebar.logic";
+import { useCommandPaletteStore } from "../commandPaletteStore";
 
 export function NoActiveThreadState() {
+  const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
+    useHandleNewThread();
+  const defaultThreadEnvMode = useSettings((s) => s.defaultThreadEnvMode);
+  const openAddProject = useCommandPaletteStore((store) => store.openAddProject);
+  const handleNewThreadClick = useCallback(() => {
+    void startNewThreadFromContext({
+      activeDraftThread,
+      activeThread,
+      defaultProjectRef,
+      defaultThreadEnvMode: resolveSidebarNewThreadEnvMode({
+        defaultEnvMode: defaultThreadEnvMode,
+      }),
+      handleNewThread,
+    }).then((started) => {
+      if (!started) {
+        openAddProject();
+      }
+    });
+  }, [
+    activeDraftThread,
+    activeThread,
+    defaultProjectRef,
+    defaultThreadEnvMode,
+    handleNewThread,
+    openAddProject,
+  ]);
+
   return (
     <SidebarInset
       className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground"
@@ -16,7 +52,7 @@ export function NoActiveThreadState() {
       >
         <header
           className={cn(
-            "border-b border-border px-3 sm:px-5",
+            "border-b border-border/40 bg-background/70 px-3 backdrop-blur-xl sm:px-5",
             isElectron
               ? "drag-region flex h-[52px] items-center wco:h-[env(titlebar-area-height)]"
               : "py-2 sm:py-3",
@@ -26,28 +62,25 @@ export function NoActiveThreadState() {
         >
           {isElectron ? (
             <span className="text-xs text-muted-foreground/50 wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]">
-              No active thread
+              New thread
             </span>
           ) : (
             <div className="flex items-center gap-2">
               <SidebarTrigger className="size-7 shrink-0 md:hidden" />
-              <span className="text-sm font-medium text-foreground md:text-muted-foreground/60">
-                No active thread
-              </span>
+              <span className="text-sm font-medium text-muted-foreground">New thread</span>
             </div>
           )}
         </header>
 
-        <Empty className="flex-1">
-          <div className="w-full max-w-lg rounded-3xl border border-border/55 bg-card/20 px-8 py-12 shadow-sm/5">
-            <EmptyHeader className="max-w-none">
-              <EmptyTitle className="text-foreground text-xl">Pick a thread to continue</EmptyTitle>
-              <EmptyDescription className="mt-2 text-sm text-muted-foreground/78">
-                Select an existing thread or create a new one to get started.
-              </EmptyDescription>
-            </EmptyHeader>
+        <div className="flex min-h-0 flex-1 items-center justify-center px-6 pb-24 pt-10">
+          <div className="flex w-full max-w-208 flex-col items-center">
+            <CodexNewThreadHero projectName={null} />
+            <Button className="mt-9 rounded-full px-5" size="lg" onClick={handleNewThreadClick}>
+              <PlusIcon className="size-4" />
+              New thread
+            </Button>
           </div>
-        </Empty>
+        </div>
       </div>
     </SidebarInset>
   );

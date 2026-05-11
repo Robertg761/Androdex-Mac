@@ -128,6 +128,7 @@ interface MessagesTimelineProps {
   timestampFormat: TimestampFormat;
   workspaceRoot: string | undefined;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
+  emptyState?: ReactNode;
   onIsAtEndChange: (isAtEnd: boolean) => void;
 }
 
@@ -157,6 +158,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   timestampFormat,
   workspaceRoot,
   skills = EMPTY_TIMELINE_SKILLS,
+  emptyState,
   onIsAtEndChange,
 }: MessagesTimelineProps) {
   const rawRows = useMemo(
@@ -256,9 +258,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   if (rows.length === 0 && !isWorking) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-muted-foreground/30">
-          Send a message to start the conversation.
-        </p>
+        {emptyState ?? (
+          <p className="text-sm text-muted-foreground/30">
+            Send a message to start the conversation.
+          </p>
+        )}
       </div>
     );
   }
@@ -331,7 +335,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
 
   return (
     <div className="flex justify-end">
-      <div className="group relative max-w-[80%] rounded-2xl rounded-br-sm border border-border bg-secondary px-4 py-3">
+      <div className="group relative max-w-[80%] rounded-[22px] rounded-br-md border border-white/80 bg-white/90 px-4 py-3 shadow-sm ring-1 ring-black/[0.03] dark:border-border dark:bg-secondary">
         {userImages.length > 0 && (
           <div className="mb-2 grid max-w-[420px] grid-cols-2 gap-2">
             {userImages.map((image: NonNullable<TimelineMessage["attachments"]>[number]) => (

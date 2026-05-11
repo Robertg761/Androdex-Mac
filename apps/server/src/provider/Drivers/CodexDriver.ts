@@ -35,7 +35,11 @@ import { makeCodexTextGeneration } from "../../textGeneration/CodexTextGeneratio
 import { ServerConfig } from "../../config.ts";
 import { ProviderDriverError } from "../Errors.ts";
 import { makeCodexAdapter } from "../Layers/CodexAdapter.ts";
-import { checkCodexProviderStatus, makePendingCodexProvider } from "../Layers/CodexProvider.ts";
+import {
+  checkCodexProviderStatus,
+  makePendingCodexProvider,
+  writeCodexSkillConfig,
+} from "../Layers/CodexProvider.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import type { ProviderDriver, ProviderInstance } from "../ProviderDriver.ts";
@@ -51,6 +55,7 @@ import {
   materializeCodexShadowHome,
   resolveCodexHomeLayout,
 } from "./CodexHomeLayout.ts";
+import { makeCodexAutomationControls } from "./CodexAutomations.ts";
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("codex");
@@ -108,6 +113,8 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
   create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
       const httpClient = yield* HttpClient.HttpClient;
       const eventLoggers = yield* ProviderEventLoggers;
       const processEnv = mergeProviderInstanceEnvironment(environment);
@@ -187,6 +194,30 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         ),
       );
 
+      const skillControls = {
+        setEnabled: (input) =>
+          writeCodexSkillConfig({
+            binaryPath: effectiveConfig.binaryPath,
+            homePath: effectiveConfig.homePath,
+            cwd: process.cwd(),
+            enabled: input.enabled,
+            ...(input.name ? { name: input.name } : {}),
+            ...(input.path ? { path: input.path } : {}),
+            environment: processEnv,
+          }).pipe(
+            Effect.mapError(
+              (cause) =>
+                new ProviderDriverError({
+                  driver: DRIVER_KIND,
+                  instanceId,
+                  detail: cause.message ?? "Failed to update Codex skill configuration.",
+                  cause,
+                }),
+            ),
+            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          ),
+      } satisfies ProviderInstance["skillControls"];
+
       return {
         instanceId,
         driverKind: DRIVER_KIND,
@@ -197,6 +228,13 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         snapshot,
         adapter,
         textGeneration,
+        skillControls,
+        automationControls: makeCodexAutomationControls({
+          instanceId,
+          codexHomePath: homeLayout.sharedHomePath,
+          fileSystem,
+          path,
+        }),
       } satisfies ProviderInstance;
     }),
 };
