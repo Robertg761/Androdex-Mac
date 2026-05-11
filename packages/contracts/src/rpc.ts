@@ -76,6 +76,15 @@ import {
   ServerLifecycleStreamEvent,
   ServerRemoveKeybindingInput,
   ServerRemoveKeybindingResult,
+  ServerCodexAutomationDeleteInput,
+  ServerCodexAutomationRunReadInput,
+  ServerCodexAutomationUpsertInput,
+  ServerCodexAutomationsError,
+  ServerCodexAutomationsListInput,
+  ServerCodexAutomationsListResult,
+  ServerProviderSkillError,
+  ServerProviderSkillSetEnabledInput,
+  ServerProviderSkillSetEnabledResult,
   ServerProviderUpdatedPayload,
   ServerTraceDiagnosticsResult,
   ServerProcessDiagnosticsResult,
@@ -138,6 +147,11 @@ export const WS_METHODS = {
   serverGetConfig: "server.getConfig",
   serverRefreshProviders: "server.refreshProviders",
   serverUpdateProvider: "server.updateProvider",
+  serverSetProviderSkillEnabled: "server.setProviderSkillEnabled",
+  serverListCodexAutomations: "server.listCodexAutomations",
+  serverUpsertCodexAutomation: "server.upsertCodexAutomation",
+  serverDeleteCodexAutomation: "server.deleteCodexAutomation",
+  serverMarkCodexAutomationRunRead: "server.markCodexAutomationRunRead",
   serverUpsertKeybinding: "server.upsertKeybinding",
   serverRemoveKeybinding: "server.removeKeybinding",
   serverGetSettings: "server.getSettings",
@@ -196,6 +210,42 @@ export const WsServerUpdateProviderRpc = Rpc.make(WS_METHODS.serverUpdateProvide
   success: ServerProviderUpdatedPayload,
   error: ServerProviderUpdateError,
 });
+
+export const WsServerSetProviderSkillEnabledRpc = Rpc.make(
+  WS_METHODS.serverSetProviderSkillEnabled,
+  {
+    payload: ServerProviderSkillSetEnabledInput,
+    success: ServerProviderSkillSetEnabledResult,
+    error: ServerProviderSkillError,
+  },
+);
+
+export const WsServerListCodexAutomationsRpc = Rpc.make(WS_METHODS.serverListCodexAutomations, {
+  payload: ServerCodexAutomationsListInput,
+  success: ServerCodexAutomationsListResult,
+  error: ServerCodexAutomationsError,
+});
+
+export const WsServerUpsertCodexAutomationRpc = Rpc.make(WS_METHODS.serverUpsertCodexAutomation, {
+  payload: ServerCodexAutomationUpsertInput,
+  success: ServerCodexAutomationsListResult,
+  error: ServerCodexAutomationsError,
+});
+
+export const WsServerDeleteCodexAutomationRpc = Rpc.make(WS_METHODS.serverDeleteCodexAutomation, {
+  payload: ServerCodexAutomationDeleteInput,
+  success: ServerCodexAutomationsListResult,
+  error: ServerCodexAutomationsError,
+});
+
+export const WsServerMarkCodexAutomationRunReadRpc = Rpc.make(
+  WS_METHODS.serverMarkCodexAutomationRunRead,
+  {
+    payload: ServerCodexAutomationRunReadInput,
+    success: ServerCodexAutomationsListResult,
+    error: ServerCodexAutomationsError,
+  },
+);
 
 export const WsServerGetSettingsRpc = Rpc.make(WS_METHODS.serverGetSettings, {
   payload: Schema.Struct({}),
@@ -465,6 +515,11 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
   WsServerUpdateProviderRpc,
+  WsServerSetProviderSkillEnabledRpc,
+  WsServerListCodexAutomationsRpc,
+  WsServerUpsertCodexAutomationRpc,
+  WsServerDeleteCodexAutomationRpc,
+  WsServerMarkCodexAutomationRunReadRpc,
   WsServerUpsertKeybindingRpc,
   WsServerRemoveKeybindingRpc,
   WsServerGetSettingsRpc,

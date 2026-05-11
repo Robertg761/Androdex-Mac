@@ -487,6 +487,150 @@ export const ServerProviderUpdatedPayload = Schema.Struct({
 });
 export type ServerProviderUpdatedPayload = typeof ServerProviderUpdatedPayload.Type;
 
+export const ServerProviderSkillSelector = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  name: Schema.optional(TrimmedNonEmptyString),
+  path: Schema.optional(TrimmedNonEmptyString),
+});
+export type ServerProviderSkillSelector = typeof ServerProviderSkillSelector.Type;
+
+export const ServerProviderSkillSetEnabledInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  name: Schema.optional(TrimmedNonEmptyString),
+  path: Schema.optional(TrimmedNonEmptyString),
+  enabled: Schema.Boolean,
+});
+export type ServerProviderSkillSetEnabledInput = typeof ServerProviderSkillSetEnabledInput.Type;
+
+export const ServerProviderSkillSetEnabledResult = Schema.Struct({
+  effectiveEnabled: Schema.Boolean,
+  providers: ServerProviders,
+});
+export type ServerProviderSkillSetEnabledResult = typeof ServerProviderSkillSetEnabledResult.Type;
+
+export class ServerProviderSkillError extends Schema.TaggedErrorClass<ServerProviderSkillError>()(
+  "ServerProviderSkillError",
+  {
+    instanceId: ProviderInstanceId,
+    detail: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect),
+  },
+) {
+  override get message(): string {
+    return `Provider skill operation failed for ${this.instanceId}: ${this.detail}`;
+  }
+}
+
+export const ServerCodexAutomationStatus = Schema.Literals(["ACTIVE", "PAUSED"]);
+export type ServerCodexAutomationStatus = typeof ServerCodexAutomationStatus.Type;
+
+const ServerCodexAutomationId = TrimmedNonEmptyString;
+const ServerCodexAutomationTimestamp = Schema.NullOr(NonNegativeInt);
+const ServerCodexAutomationNullableString = Schema.NullOr(TrimmedNonEmptyString);
+
+export const ServerCodexAutomation = Schema.Struct({
+  id: ServerCodexAutomationId,
+  name: TrimmedNonEmptyString,
+  prompt: TrimmedNonEmptyString,
+  status: ServerCodexAutomationStatus,
+  nextRunAt: ServerCodexAutomationTimestamp,
+  lastRunAt: ServerCodexAutomationTimestamp,
+  cwds: Schema.Array(TrimmedNonEmptyString),
+  rrule: TrimmedNonEmptyString,
+  model: ServerCodexAutomationNullableString,
+  reasoningEffort: ServerCodexAutomationNullableString,
+  createdAt: NonNegativeInt,
+  updatedAt: NonNegativeInt,
+});
+export type ServerCodexAutomation = typeof ServerCodexAutomation.Type;
+
+export const ServerCodexAutomationRun = Schema.Struct({
+  threadId: TrimmedNonEmptyString,
+  automationId: ServerCodexAutomationId,
+  status: TrimmedNonEmptyString,
+  readAt: ServerCodexAutomationTimestamp,
+  threadTitle: ServerCodexAutomationNullableString,
+  sourceCwd: ServerCodexAutomationNullableString,
+  inboxTitle: ServerCodexAutomationNullableString,
+  inboxSummary: ServerCodexAutomationNullableString,
+  createdAt: NonNegativeInt,
+  updatedAt: NonNegativeInt,
+  archivedUserMessage: ServerCodexAutomationNullableString,
+  archivedAssistantMessage: ServerCodexAutomationNullableString,
+  archivedReason: ServerCodexAutomationNullableString,
+});
+export type ServerCodexAutomationRun = typeof ServerCodexAutomationRun.Type;
+
+export const ServerCodexAutomationInboxItem = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  title: ServerCodexAutomationNullableString,
+  description: ServerCodexAutomationNullableString,
+  threadId: ServerCodexAutomationNullableString,
+  readAt: ServerCodexAutomationTimestamp,
+  createdAt: ServerCodexAutomationTimestamp,
+});
+export type ServerCodexAutomationInboxItem = typeof ServerCodexAutomationInboxItem.Type;
+
+export const ServerCodexAutomationsListInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+});
+export type ServerCodexAutomationsListInput = typeof ServerCodexAutomationsListInput.Type;
+
+export const ServerCodexAutomationsListResult = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  codexHomePath: TrimmedNonEmptyString,
+  databasePath: TrimmedNonEmptyString,
+  automations: Schema.Array(ServerCodexAutomation),
+  runs: Schema.Array(ServerCodexAutomationRun),
+  inboxItems: Schema.Array(ServerCodexAutomationInboxItem),
+});
+export type ServerCodexAutomationsListResult = typeof ServerCodexAutomationsListResult.Type;
+
+export const ServerCodexAutomationUpsertPayload = Schema.Struct({
+  id: Schema.optional(ServerCodexAutomationId),
+  name: TrimmedNonEmptyString,
+  prompt: TrimmedNonEmptyString,
+  status: ServerCodexAutomationStatus,
+  nextRunAt: ServerCodexAutomationTimestamp,
+  cwds: Schema.Array(TrimmedNonEmptyString),
+  rrule: TrimmedNonEmptyString,
+  model: ServerCodexAutomationNullableString,
+  reasoningEffort: ServerCodexAutomationNullableString,
+});
+export type ServerCodexAutomationUpsertPayload = typeof ServerCodexAutomationUpsertPayload.Type;
+
+export const ServerCodexAutomationUpsertInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  automation: ServerCodexAutomationUpsertPayload,
+});
+export type ServerCodexAutomationUpsertInput = typeof ServerCodexAutomationUpsertInput.Type;
+
+export const ServerCodexAutomationDeleteInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  id: ServerCodexAutomationId,
+});
+export type ServerCodexAutomationDeleteInput = typeof ServerCodexAutomationDeleteInput.Type;
+
+export const ServerCodexAutomationRunReadInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  threadId: TrimmedNonEmptyString,
+  read: Schema.Boolean,
+});
+export type ServerCodexAutomationRunReadInput = typeof ServerCodexAutomationRunReadInput.Type;
+
+export class ServerCodexAutomationsError extends Schema.TaggedErrorClass<ServerCodexAutomationsError>()(
+  "ServerCodexAutomationsError",
+  {
+    instanceId: ProviderInstanceId,
+    detail: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect),
+  },
+) {
+  override get message(): string {
+    return `Codex automations operation failed for ${this.instanceId}: ${this.detail}`;
+  }
+}
+
 export const ServerProviderUpdateInput = Schema.Struct({
   provider: ProviderDriverKind,
   instanceId: Schema.optionalKey(ProviderInstanceId),

@@ -93,13 +93,16 @@ export const ChatHeader = memo(function ChatHeader({
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
         <h2
-          className="min-w-0 shrink truncate text-sm font-medium text-foreground"
+          className="min-w-0 shrink truncate text-sm font-medium text-muted-foreground"
           title={activeThreadTitle}
         >
           {activeThreadTitle}
         </h2>
         {activeProjectName && (
-          <Badge variant="outline" className="min-w-0 shrink overflow-hidden">
+          <Badge
+            variant="outline"
+            className="min-w-0 shrink overflow-hidden rounded-full border-border/55 bg-white/55 px-2.5"
+          >
             <span className="min-w-0 truncate">{activeProjectName}</span>
           </Badge>
         )}

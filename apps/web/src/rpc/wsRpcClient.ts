@@ -121,6 +121,15 @@ export interface WsRpcClient {
       input?: RpcInput<typeof WS_METHODS.serverRefreshProviders>,
     ) => ReturnType<RpcUnaryMethod<typeof WS_METHODS.serverRefreshProviders>>;
     readonly updateProvider: RpcUnaryMethod<typeof WS_METHODS.serverUpdateProvider>;
+    readonly setProviderSkillEnabled: RpcUnaryMethod<
+      typeof WS_METHODS.serverSetProviderSkillEnabled
+    >;
+    readonly listCodexAutomations: RpcUnaryMethod<typeof WS_METHODS.serverListCodexAutomations>;
+    readonly upsertCodexAutomation: RpcUnaryMethod<typeof WS_METHODS.serverUpsertCodexAutomation>;
+    readonly deleteCodexAutomation: RpcUnaryMethod<typeof WS_METHODS.serverDeleteCodexAutomation>;
+    readonly markCodexAutomationRunRead: RpcUnaryMethod<
+      typeof WS_METHODS.serverMarkCodexAutomationRunRead
+    >;
     readonly upsertKeybinding: RpcUnaryMethod<typeof WS_METHODS.serverUpsertKeybinding>;
     readonly removeKeybinding: RpcUnaryMethod<typeof WS_METHODS.serverRemoveKeybinding>;
     readonly getSettings: RpcUnaryNoArgMethod<typeof WS_METHODS.serverGetSettings>;
@@ -247,6 +256,16 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
         transport.request((client) => client[WS_METHODS.serverRefreshProviders](input ?? {})),
       updateProvider: (input) =>
         transport.request((client) => client[WS_METHODS.serverUpdateProvider](input)),
+      setProviderSkillEnabled: (input) =>
+        transport.request((client) => client[WS_METHODS.serverSetProviderSkillEnabled](input)),
+      listCodexAutomations: (input) =>
+        transport.request((client) => client[WS_METHODS.serverListCodexAutomations](input)),
+      upsertCodexAutomation: (input) =>
+        transport.request((client) => client[WS_METHODS.serverUpsertCodexAutomation](input)),
+      deleteCodexAutomation: (input) =>
+        transport.request((client) => client[WS_METHODS.serverDeleteCodexAutomation](input)),
+      markCodexAutomationRunRead: (input) =>
+        transport.request((client) => client[WS_METHODS.serverMarkCodexAutomationRunRead](input)),
       upsertKeybinding: (input) =>
         transport.request((client) => client[WS_METHODS.serverUpsertKeybinding](input)),
       removeKeybinding: (input) =>

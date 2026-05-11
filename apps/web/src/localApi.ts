@@ -129,6 +129,26 @@ function createBrowserLocalApi(rpcClient?: WsRpcClient): LocalApi {
         rpcClient
           ? rpcClient.server.updateProvider(input)
           : Promise.reject(unavailableLocalBackendError()),
+      setProviderSkillEnabled: (input) =>
+        rpcClient
+          ? rpcClient.server.setProviderSkillEnabled(input)
+          : Promise.reject(unavailableLocalBackendError()),
+      listCodexAutomations: (input) =>
+        rpcClient
+          ? rpcClient.server.listCodexAutomations(input)
+          : Promise.reject(unavailableLocalBackendError()),
+      upsertCodexAutomation: (input) =>
+        rpcClient
+          ? rpcClient.server.upsertCodexAutomation(input)
+          : Promise.reject(unavailableLocalBackendError()),
+      deleteCodexAutomation: (input) =>
+        rpcClient
+          ? rpcClient.server.deleteCodexAutomation(input)
+          : Promise.reject(unavailableLocalBackendError()),
+      markCodexAutomationRunRead: (input) =>
+        rpcClient
+          ? rpcClient.server.markCodexAutomationRunRead(input)
+          : Promise.reject(unavailableLocalBackendError()),
       upsertKeybinding: (input) =>
         rpcClient
           ? rpcClient.server.upsertKeybinding(input)

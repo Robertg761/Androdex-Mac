@@ -28,7 +28,14 @@ import type {
 import type { ProviderInstanceId } from "./providerInstance.ts";
 import type {
   ServerConfig,
+  ServerCodexAutomationDeleteInput,
+  ServerCodexAutomationRunReadInput,
+  ServerCodexAutomationUpsertInput,
+  ServerCodexAutomationsListInput,
+  ServerCodexAutomationsListResult,
   ServerProcessDiagnosticsResult,
+  ServerProviderSkillSetEnabledInput,
+  ServerProviderSkillSetEnabledResult,
   ServerProviderUpdateInput,
   ServerProviderUpdatedPayload,
   ServerRemoveKeybindingResult,
@@ -491,6 +498,21 @@ export interface LocalApi {
       readonly instanceId?: ProviderInstanceId;
     }) => Promise<ServerProviderUpdatedPayload>;
     updateProvider: (input: ServerProviderUpdateInput) => Promise<ServerProviderUpdatedPayload>;
+    setProviderSkillEnabled?: (
+      input: ServerProviderSkillSetEnabledInput,
+    ) => Promise<ServerProviderSkillSetEnabledResult>;
+    listCodexAutomations?: (
+      input: ServerCodexAutomationsListInput,
+    ) => Promise<ServerCodexAutomationsListResult>;
+    upsertCodexAutomation?: (
+      input: ServerCodexAutomationUpsertInput,
+    ) => Promise<ServerCodexAutomationsListResult>;
+    deleteCodexAutomation?: (
+      input: ServerCodexAutomationDeleteInput,
+    ) => Promise<ServerCodexAutomationsListResult>;
+    markCodexAutomationRunRead?: (
+      input: ServerCodexAutomationRunReadInput,
+    ) => Promise<ServerCodexAutomationsListResult>;
     upsertKeybinding: (input: ServerUpsertKeybindingInput) => Promise<ServerUpsertKeybindingResult>;
     removeKeybinding: (input: ServerRemoveKeybindingInput) => Promise<ServerRemoveKeybindingResult>;
     getSettings: () => Promise<ServerSettings>;

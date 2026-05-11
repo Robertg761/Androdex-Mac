@@ -28,6 +28,9 @@ import {
   ProjectWriteFileError,
   OrchestrationReplayEventsError,
   FilesystemBrowseError,
+  ServerCodexAutomationsError,
+  ServerProviderSkillError,
+  type ProviderInstanceId,
   ThreadId,
   type TerminalEvent,
   WS_METHODS,
@@ -50,6 +53,7 @@ import {
   observeRpcStreamEffect,
 } from "./observability/RpcInstrumentation.ts";
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
+import { ProviderInstanceRegistry } from "./provider/Services/ProviderInstanceRegistry.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import { ServerLifecycleEvents } from "./serverLifecycleEvents.ts";
 import { ServerRuntimeStartup } from "./serverRuntimeStartup.ts";
@@ -169,6 +173,7 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
       const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
       const terminalManager = yield* TerminalManager;
       const providerRegistry = yield* ProviderRegistry;
+      const providerInstanceRegistry = yield* ProviderInstanceRegistry;
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const config = yield* ServerConfig;
       const lifecycleEvents = yield* ServerLifecycleEvents;
@@ -603,6 +608,33 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
           .refreshStatus(cwd)
           .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid);
 
+      const resolveAutomationControls = (instanceId: ProviderInstanceId) =>
+        Effect.gen(function* () {
+          const instance = yield* providerInstanceRegistry.getInstance(instanceId);
+          if (!instance?.automationControls) {
+            return yield* new ServerCodexAutomationsError({
+              instanceId,
+              detail: "Codex automations are not available for this provider instance.",
+            });
+          }
+          return instance.automationControls;
+        });
+
+      const toAutomationError = (
+        instanceId: ProviderInstanceId,
+        cause: { readonly detail?: string; readonly message?: string } | unknown,
+      ) =>
+        new ServerCodexAutomationsError({
+          instanceId,
+          detail:
+            typeof cause === "object" && cause !== null && "detail" in cause
+              ? String(cause.detail)
+              : cause instanceof Error
+                ? cause.message
+                : "Failed to update Codex automations.",
+          cause,
+        });
+
       return WsRpcGroup.of({
         [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
@@ -851,6 +883,93 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
             {
               "rpc.aggregate": "server",
             },
+          ),
+        [WS_METHODS.serverSetProviderSkillEnabled]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverSetProviderSkillEnabled,
+            Effect.gen(function* () {
+              if (!input.name && !input.path) {
+                return yield* new ServerProviderSkillError({
+                  instanceId: input.instanceId,
+                  detail: "A skill name or path is required.",
+                });
+              }
+
+              const instance = yield* providerInstanceRegistry.getInstance(input.instanceId);
+              if (!instance?.skillControls) {
+                return yield* new ServerProviderSkillError({
+                  instanceId: input.instanceId,
+                  detail: "Skill configuration is not available for this provider instance.",
+                });
+              }
+
+              const result = yield* instance.skillControls
+                .setEnabled({
+                  enabled: input.enabled,
+                  ...(input.name ? { name: input.name } : {}),
+                  ...(input.path ? { path: input.path } : {}),
+                })
+                .pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new ServerProviderSkillError({
+                        instanceId: input.instanceId,
+                        detail: cause.detail,
+                        cause,
+                      }),
+                  ),
+                );
+              const providers = yield* providerRegistry.refreshInstance(input.instanceId);
+              return {
+                effectiveEnabled: result.effectiveEnabled,
+                providers,
+              };
+            }),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverListCodexAutomations]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverListCodexAutomations,
+            Effect.gen(function* () {
+              const controls = yield* resolveAutomationControls(input.instanceId);
+              return yield* controls
+                .list()
+                .pipe(Effect.mapError((cause) => toAutomationError(input.instanceId, cause)));
+            }),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverUpsertCodexAutomation]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverUpsertCodexAutomation,
+            Effect.gen(function* () {
+              const controls = yield* resolveAutomationControls(input.instanceId);
+              return yield* controls
+                .upsert({ automation: input.automation })
+                .pipe(Effect.mapError((cause) => toAutomationError(input.instanceId, cause)));
+            }),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverDeleteCodexAutomation]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverDeleteCodexAutomation,
+            Effect.gen(function* () {
+              const controls = yield* resolveAutomationControls(input.instanceId);
+              return yield* controls
+                .delete({ id: input.id })
+                .pipe(Effect.mapError((cause) => toAutomationError(input.instanceId, cause)));
+            }),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverMarkCodexAutomationRunRead]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverMarkCodexAutomationRunRead,
+            Effect.gen(function* () {
+              const controls = yield* resolveAutomationControls(input.instanceId);
+              return yield* controls
+                .markRunRead({ threadId: input.threadId, read: input.read })
+                .pipe(Effect.mapError((cause) => toAutomationError(input.instanceId, cause)));
+            }),
+            { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.serverUpsertKeybinding]: (rule) =>
           observeRpcEffect(

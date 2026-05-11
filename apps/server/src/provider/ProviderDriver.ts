@@ -22,6 +22,11 @@
  * @module provider/ProviderDriver
  */
 import type {
+  ServerCodexAutomationDeleteInput,
+  ServerCodexAutomationRunReadInput,
+  ServerCodexAutomationUpsertInput,
+  ServerCodexAutomationsListResult,
+  ServerProviderSkillSetEnabledInput,
   ProviderDriverKind,
   ProviderInstanceEnvironment,
   ProviderInstanceId,
@@ -71,11 +76,36 @@ export interface ProviderInstance {
   readonly snapshot: ServerProviderShape;
   readonly adapter: ProviderAdapterShape<ProviderAdapterError>;
   readonly textGeneration: TextGenerationShape;
+  readonly skillControls?: ProviderSkillControls | undefined;
+  readonly automationControls?: ProviderAutomationControls | undefined;
 }
 
 export interface ProviderContinuationIdentity {
   readonly driverKind: ProviderDriverKind;
   readonly continuationKey: string;
+}
+
+export interface ProviderSkillControls {
+  readonly setEnabled: (
+    input: Omit<ServerProviderSkillSetEnabledInput, "instanceId">,
+  ) => Effect.Effect<{ readonly effectiveEnabled: boolean }, ProviderDriverError>;
+}
+
+export type ProviderAutomationUpsertInput = Omit<ServerCodexAutomationUpsertInput, "instanceId">;
+export type ProviderAutomationDeleteInput = Omit<ServerCodexAutomationDeleteInput, "instanceId">;
+export type ProviderAutomationRunReadInput = Omit<ServerCodexAutomationRunReadInput, "instanceId">;
+
+export interface ProviderAutomationControls {
+  readonly list: () => Effect.Effect<ServerCodexAutomationsListResult, ProviderDriverError>;
+  readonly upsert: (
+    input: ProviderAutomationUpsertInput,
+  ) => Effect.Effect<ServerCodexAutomationsListResult, ProviderDriverError>;
+  readonly delete: (
+    input: ProviderAutomationDeleteInput,
+  ) => Effect.Effect<ServerCodexAutomationsListResult, ProviderDriverError>;
+  readonly markRunRead: (
+    input: ProviderAutomationRunReadInput,
+  ) => Effect.Effect<ServerCodexAutomationsListResult, ProviderDriverError>;
 }
 
 export function defaultProviderContinuationIdentity(input: {

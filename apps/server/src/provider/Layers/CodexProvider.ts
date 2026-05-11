@@ -364,6 +364,41 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
   } satisfies CodexAppServerProviderSnapshot;
 }, scopedSafeTeardown("codex-probe"));
 
+export const writeCodexSkillConfig = Effect.fn("writeCodexSkillConfig")(function* (input: {
+  readonly binaryPath: string;
+  readonly homePath?: string;
+  readonly cwd: string;
+  readonly enabled: boolean;
+  readonly name?: string;
+  readonly path?: string;
+  readonly environment?: NodeJS.ProcessEnv;
+}) {
+  const resolvedHomePath = input.homePath ? expandHomePath(input.homePath) : undefined;
+  const clientContext = yield* Layer.build(
+    CodexClient.layerCommand({
+      command: input.binaryPath,
+      args: ["app-server"],
+      cwd: input.cwd,
+      env: {
+        ...(input.environment ?? process.env),
+        ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
+      },
+    }),
+  );
+  const client = yield* Effect.service(CodexClient.CodexAppServerClient).pipe(
+    Effect.provide(clientContext),
+  );
+
+  yield* client.request("initialize", buildCodexInitializeParams());
+  yield* client.notify("initialized", undefined);
+
+  return yield* client.request("skills/config/write", {
+    enabled: input.enabled,
+    ...(input.name ? { name: input.name } : {}),
+    ...(input.path ? { path: input.path } : {}),
+  });
+}, scopedSafeTeardown("codex-skill-config"));
+
 const emptyCodexModelsFromSettings = (codexSettings: CodexSettings): ServerProvider["models"] =>
   codexSettings.customModels
     .map((model) => model.trim())
