@@ -5,12 +5,6 @@ import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { OpenError, OpenInEditorInput } from "./editor.ts";
 import { AuthAccessStreamEvent } from "./auth.ts";
 import {
-  ServerCodexThemeError,
-  ServerCodexThemeListInput,
-  ServerCodexThemeListResult,
-  ServerCodexThemeSetInput,
-} from "./codexTheme.ts";
-import {
   FilesystemBrowseInput,
   FilesystemBrowseResult,
   FilesystemBrowseError,
@@ -154,8 +148,6 @@ export const WS_METHODS = {
   serverRefreshProviders: "server.refreshProviders",
   serverUpdateProvider: "server.updateProvider",
   serverSetProviderSkillEnabled: "server.setProviderSkillEnabled",
-  serverListCodexThemes: "server.listCodexThemes",
-  serverSetCodexTheme: "server.setCodexTheme",
   serverListCodexAutomations: "server.listCodexAutomations",
   serverUpsertCodexAutomation: "server.upsertCodexAutomation",
   serverDeleteCodexAutomation: "server.deleteCodexAutomation",
@@ -227,18 +219,6 @@ export const WsServerSetProviderSkillEnabledRpc = Rpc.make(
     error: ServerProviderSkillError,
   },
 );
-
-export const WsServerListCodexThemesRpc = Rpc.make(WS_METHODS.serverListCodexThemes, {
-  payload: ServerCodexThemeListInput,
-  success: ServerCodexThemeListResult,
-  error: ServerCodexThemeError,
-});
-
-export const WsServerSetCodexThemeRpc = Rpc.make(WS_METHODS.serverSetCodexTheme, {
-  payload: ServerCodexThemeSetInput,
-  success: ServerCodexThemeListResult,
-  error: ServerCodexThemeError,
-});
 
 export const WsServerListCodexAutomationsRpc = Rpc.make(WS_METHODS.serverListCodexAutomations, {
   payload: ServerCodexAutomationsListInput,
@@ -536,8 +516,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRefreshProvidersRpc,
   WsServerUpdateProviderRpc,
   WsServerSetProviderSkillEnabledRpc,
-  WsServerListCodexThemesRpc,
-  WsServerSetCodexThemeRpc,
   WsServerListCodexAutomationsRpc,
   WsServerUpsertCodexAutomationRpc,
   WsServerDeleteCodexAutomationRpc,

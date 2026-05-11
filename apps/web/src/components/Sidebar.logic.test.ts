@@ -575,25 +575,25 @@ describe("resolveThreadStatusPill", () => {
 describe("resolveThreadRowClassName", () => {
   it("uses the darker selected palette when a thread is both selected and active", () => {
     const className = resolveThreadRowClassName({ isActive: true, isSelected: true });
-    expect(className).toContain("bg-white/82");
-    expect(className).toContain("hover:bg-white");
+    expect(className).toContain("bg-primary/18");
+    expect(className).toContain("hover:bg-primary/24");
     expect(className).toContain("dark:bg-primary/30");
     expect(className).not.toContain("dark:bg-accent/55");
   });
 
   it("uses selected hover colors for selected threads", () => {
     const className = resolveThreadRowClassName({ isActive: false, isSelected: true });
-    expect(className).toContain("bg-white/70");
-    expect(className).toContain("hover:bg-white/85");
+    expect(className).toContain("bg-primary/12");
+    expect(className).toContain("hover:bg-primary/18");
     expect(className).toContain("dark:bg-primary/22");
     expect(className).not.toContain("dark:hover:bg-accent");
   });
 
-  it("keeps the accent palette for active-only threads", () => {
+  it("keeps the app accent palette for active-only threads", () => {
     const className = resolveThreadRowClassName({ isActive: true, isSelected: false });
-    expect(className).toContain("bg-white/72");
-    expect(className).toContain("hover:bg-white/86");
-    expect(className).toContain("dark:bg-accent/55");
+    expect(className).toContain("bg-primary/14");
+    expect(className).toContain("hover:bg-primary/20");
+    expect(className).toContain("dark:bg-primary/18");
   });
 });
 

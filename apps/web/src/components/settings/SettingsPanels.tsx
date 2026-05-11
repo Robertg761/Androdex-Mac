@@ -1,4 +1,11 @@
-import { ArchiveIcon, ArchiveX, LoaderIcon, PlusIcon, RefreshCwIcon } from "lucide-react";
+import {
+  ArchiveIcon,
+  ArchiveX,
+  CheckIcon,
+  LoaderIcon,
+  PlusIcon,
+  RefreshCwIcon,
+} from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -12,11 +19,12 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime";
-import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
+import { DEFAULT_APP_ACCENT_COLOR, DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
 import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
+import { APP_ACCENT_SWATCHES, normalizeAppAccentColor } from "../../appAppearance";
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
@@ -31,6 +39,7 @@ import { buildHostedChannelSelectionUrl, type HostedAppChannel } from "../../hos
 import { useTheme } from "../../hooks/useTheme";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useThreadActions } from "../../hooks/useThreadActions";
+import { cn } from "../../lib/utils";
 import {
   setDesktopUpdateStateQueryData,
   useDesktopUpdateState,
@@ -378,7 +387,6 @@ function AboutVersionSection() {
 }
 
 export function useSettingsRestore(onRestored?: () => void) {
-  const { theme, setTheme } = useTheme();
   const settings = useSettings();
   const { updateSettings } = useUpdateSettings();
 
@@ -389,7 +397,6 @@ export function useSettingsRestore(onRestored?: () => void) {
 
   const changedSettingLabels = useMemo(
     () => [
-      ...(theme !== "system" ? ["Theme"] : []),
       ...(settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat
         ? ["Time format"]
         : []),
@@ -439,7 +446,6 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.enableAssistantStreaming,
       settings.sidebarThreadPreviewCount,
       settings.timestampFormat,
-      theme,
     ],
   );
 
@@ -453,7 +459,6 @@ export function useSettingsRestore(onRestored?: () => void) {
     );
     if (!confirmed) return;
 
-    setTheme("system");
     updateSettings({
       timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
       diffWordWrap: DEFAULT_UNIFIED_SETTINGS.diffWordWrap,
@@ -469,7 +474,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
     });
     onRestored?.();
-  }, [changedSettingLabels, onRestored, setTheme, updateSettings]);
+  }, [changedSettingLabels, onRestored, updateSettings]);
 
   return {
     changedSettingLabels,
@@ -477,8 +482,117 @@ export function useSettingsRestore(onRestored?: () => void) {
   };
 }
 
-export function GeneralSettingsPanel() {
+function AppAccentPicker(props: {
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+}) {
+  const value = normalizeAppAccentColor(props.value);
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+      <input
+        type="color"
+        value={value}
+        onChange={(event) => props.onChange(event.currentTarget.value)}
+        aria-label="App accent color"
+        className="h-8 w-10 cursor-pointer rounded border border-input bg-background p-0.5"
+      />
+      <div className="flex flex-wrap justify-end gap-1.5">
+        {APP_ACCENT_SWATCHES.map((swatch) => {
+          const selected = value === swatch;
+          return (
+            <button
+              key={swatch}
+              type="button"
+              className={cn(
+                "relative size-6 cursor-pointer rounded-full border transition",
+                selected
+                  ? "border-foreground ring-2 ring-ring ring-offset-1 ring-offset-background"
+                  : "border-black/10 hover:scale-105 dark:border-white/20",
+              )}
+              style={{ backgroundColor: swatch }}
+              onClick={() => props.onChange(swatch)}
+              aria-label={`Use ${swatch} accent`}
+            >
+              {selected ? (
+                <CheckIcon className="absolute inset-1 size-4 text-white drop-shadow-sm" />
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function AppearanceSettingsPanel() {
   const { theme, setTheme } = useTheme();
+  const settings = useSettings();
+  const { updateSettings } = useUpdateSettings();
+  const appAccentColor = normalizeAppAccentColor(settings.appAccentColor);
+
+  return (
+    <SettingsPageContainer>
+      <SettingsSection title="Appearance">
+        <SettingsRow
+          title="Theme"
+          description="Choose how Androdex looks across the app."
+          resetAction={
+            theme !== "system" ? (
+              <SettingResetButton label="theme" onClick={() => setTheme("system")} />
+            ) : null
+          }
+          control={
+            <Select
+              value={theme}
+              onValueChange={(value) => {
+                if (value === "system" || value === "light" || value === "dark") {
+                  setTheme(value);
+                }
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-40" aria-label="Theme preference">
+                <SelectValue>
+                  {THEME_OPTIONS.find((option) => option.value === theme)?.label ?? "System"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {THEME_OPTIONS.map((option) => (
+                  <SelectItem hideIndicator key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Accent color"
+          description="Sets the accent used across Androdex."
+          resetAction={
+            appAccentColor !== DEFAULT_APP_ACCENT_COLOR ? (
+              <SettingResetButton
+                label="accent color"
+                onClick={() => updateSettings({ appAccentColor: DEFAULT_APP_ACCENT_COLOR })}
+              />
+            ) : null
+          }
+          control={
+            <AppAccentPicker
+              value={appAccentColor}
+              onChange={(nextColor) =>
+                updateSettings({ appAccentColor: normalizeAppAccentColor(nextColor) })
+              }
+            />
+          }
+        />
+      </SettingsSection>
+    </SettingsPageContainer>
+  );
+}
+
+export function GeneralSettingsPanel() {
   const settings = useSettings();
   const { updateSettings } = useUpdateSettings();
   const observability = useServerObservability();
@@ -517,39 +631,6 @@ export function GeneralSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection title="General">
-        <SettingsRow
-          title="Theme"
-          description="Choose how Androdex looks across the app."
-          resetAction={
-            theme !== "system" ? (
-              <SettingResetButton label="theme" onClick={() => setTheme("system")} />
-            ) : null
-          }
-          control={
-            <Select
-              value={theme}
-              onValueChange={(value) => {
-                if (value === "system" || value === "light" || value === "dark") {
-                  setTheme(value);
-                }
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-40" aria-label="Theme preference">
-                <SelectValue>
-                  {THEME_OPTIONS.find((option) => option.value === theme)?.label ?? "System"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                {THEME_OPTIONS.map((option) => (
-                  <SelectItem hideIndicator key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          }
-        />
-
         <SettingsRow
           title="Time format"
           description="System default follows your browser or OS clock preference."

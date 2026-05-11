@@ -124,8 +124,6 @@ export interface WsRpcClient {
     readonly setProviderSkillEnabled: RpcUnaryMethod<
       typeof WS_METHODS.serverSetProviderSkillEnabled
     >;
-    readonly listCodexThemes: RpcUnaryMethod<typeof WS_METHODS.serverListCodexThemes>;
-    readonly setCodexTheme: RpcUnaryMethod<typeof WS_METHODS.serverSetCodexTheme>;
     readonly listCodexAutomations: RpcUnaryMethod<typeof WS_METHODS.serverListCodexAutomations>;
     readonly upsertCodexAutomation: RpcUnaryMethod<typeof WS_METHODS.serverUpsertCodexAutomation>;
     readonly deleteCodexAutomation: RpcUnaryMethod<typeof WS_METHODS.serverDeleteCodexAutomation>;
@@ -260,10 +258,6 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
         transport.request((client) => client[WS_METHODS.serverUpdateProvider](input)),
       setProviderSkillEnabled: (input) =>
         transport.request((client) => client[WS_METHODS.serverSetProviderSkillEnabled](input)),
-      listCodexThemes: (input) =>
-        transport.request((client) => client[WS_METHODS.serverListCodexThemes](input)),
-      setCodexTheme: (input) =>
-        transport.request((client) => client[WS_METHODS.serverSetCodexTheme](input)),
       listCodexAutomations: (input) =>
         transport.request((client) => client[WS_METHODS.serverListCodexAutomations](input)),
       upsertCodexAutomation: (input) =>

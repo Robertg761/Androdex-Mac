@@ -11,7 +11,6 @@ import {
 
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
-import { normalizeProviderAccentColor } from "../../providerInstances";
 import { Button } from "../ui/button";
 import { ACPRegistryIcon, Gemini, GithubCopilotIcon, PiAgentIcon, type Icon } from "../Icons";
 import {
@@ -29,15 +28,6 @@ import { toastManager } from "../ui/toast";
 import { DRIVER_OPTION_BY_VALUE, DRIVER_OPTIONS } from "./providerDriverMeta";
 import { ProviderSettingsForm, deriveProviderSettingsFields } from "./ProviderSettingsForm";
 import { AnimatedHeight } from "../AnimatedHeight";
-
-const PROVIDER_ACCENT_SWATCHES = [
-  "#2563eb",
-  "#16a34a",
-  "#ea580c",
-  "#dc2626",
-  "#7c3aed",
-  "#0891b2",
-] as const;
 
 /**
  * Normalize a user-provided label into a slug suffix for the instance id.
@@ -120,7 +110,6 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
   const [wizardStep, setWizardStep] = useState(0);
   const [driver, setDriver] = useState<ProviderDriverKind>(DEFAULT_DRIVER_KIND);
   const [label, setLabel] = useState("");
-  const [accentColor, setAccentColor] = useState<string>("");
   const [instanceId, setInstanceId] = useState("");
   const [instanceIdDirty, setInstanceIdDirty] = useState(false);
   // Driver-specific config drafts keyed by driver so toggling between drivers
@@ -141,7 +130,6 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
     if (!open) return;
     setDriver(DEFAULT_DRIVER_KIND);
     setLabel("");
-    setAccentColor("");
     setInstanceId("");
     setWizardStep(0);
     setInstanceIdDirty(false);
@@ -189,13 +177,11 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
 
     const config = configByDriver[driver] ?? {};
     const hasConfig = Object.keys(config).length > 0;
-    const normalizedAccentColor = normalizeProviderAccentColor(accentColor);
 
     const nextInstance: ProviderInstanceConfig = {
       driver,
       enabled: true,
       ...(label.trim().length > 0 ? { displayName: label.trim() } : {}),
-      ...(normalizedAccentColor ? { accentColor: normalizedAccentColor } : {}),
       ...(hasConfig ? { config } : {}),
     };
     // `ProviderInstanceId.make` revalidates the slug; we've already checked
@@ -229,7 +215,6 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
     instanceId,
     instanceIdError,
     label,
-    accentColor,
     onOpenChange,
     settings.providerInstances,
     updateSettings,
@@ -392,53 +377,6 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
                   </span>
                 )}
               </label>
-
-              <div className={cn("grid gap-2", wizardStep !== 1 && "hidden")}>
-                <span className="text-xs font-medium text-foreground">Accent color</span>
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <input
-                    type="color"
-                    value={normalizeProviderAccentColor(accentColor) ?? PROVIDER_ACCENT_SWATCHES[0]}
-                    onChange={(event) => setAccentColor(event.target.value)}
-                    aria-label="Provider instance accent color"
-                    className="h-8 w-10 cursor-pointer rounded-xl border border-input bg-background p-0.5"
-                  />
-                  <div className="flex flex-wrap gap-1.5">
-                    {PROVIDER_ACCENT_SWATCHES.map((swatch) => {
-                      const selected = accentColor.toLowerCase() === swatch;
-                      return (
-                        <button
-                          key={swatch}
-                          type="button"
-                          className={cn(
-                            "size-6 cursor-pointer rounded-full border transition",
-                            selected
-                              ? "scale-110 border-foreground ring-2 ring-ring ring-offset-1 ring-offset-background"
-                              : "border-black/10 hover:scale-105 dark:border-white/20",
-                          )}
-                          style={{ backgroundColor: swatch }}
-                          onClick={() => setAccentColor(swatch)}
-                          aria-label={`Use ${swatch} accent`}
-                        />
-                      );
-                    })}
-                  </div>
-                  {accentColor ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs text-muted-foreground"
-                      onClick={() => setAccentColor("")}
-                    >
-                      Clear
-                    </Button>
-                  ) : null}
-                </div>
-                <span className="text-[11px] text-muted-foreground">
-                  Optional marker shown in the picker.
-                </span>
-              </div>
 
               {driverSettingsFields.length > 0 ? (
                 <div className={cn("grid gap-4", wizardStep !== 2 && "hidden")}>

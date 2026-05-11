@@ -1,6 +1,5 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpCircleIcon,
   ChevronDownIcon,
@@ -19,7 +18,6 @@ import {
   type ProviderInstanceId,
   type ProviderDriverKind,
   type ServerProvider,
-  type ServerCodexThemeListResult,
   type ServerProviderModel,
 } from "@t3tools/contracts";
 
@@ -31,16 +29,6 @@ import { Button } from "../ui/button";
 import { Collapsible, CollapsibleContent } from "../ui/collapsible";
 import { DraftInput } from "../ui/draft-input";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
-import {
-  Select,
-  SelectGroup,
-  SelectGroupLabel,
-  SelectItem,
-  SelectPopup,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
 import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -49,7 +37,6 @@ import { ProviderSettingsForm } from "./ProviderSettingsForm";
 import { ProviderModelsSection } from "./ProviderModelsSection";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { RedactedSensitiveText } from "./RedactedSensitiveText";
-import { ensureLocalApi } from "../../localApi";
 import {
   getProviderVersionAdvisoryPresentation,
   PROVIDER_STATUS_STYLES,
@@ -58,19 +45,7 @@ import {
   type ProviderStatusKey,
 } from "./providerStatus";
 
-const PROVIDER_ACCENT_SWATCHES = [
-  "#2563eb",
-  "#16a34a",
-  "#ea580c",
-  "#dc2626",
-  "#7c3aed",
-  "#0891b2",
-] as const;
-
 const ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-
-const codexThemesQueryKey = (instanceId: ProviderInstanceId) =>
-  ["provider-instance", instanceId, "codex-themes"] as const;
 
 let environmentVariableDraftId = 0;
 const nextEnvironmentVariableDraftId = () => `provider-env-${environmentVariableDraftId++}`;
@@ -94,12 +69,6 @@ function makeEnvironmentDraftRow(
     sensitive: variable.sensitive,
     ...(variable.valueRedacted !== undefined ? { valueRedacted: variable.valueRedacted } : {}),
   };
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error && error.message.trim().length > 0
-    ? error.message
-    : "Unknown error";
 }
 
 /**
@@ -175,94 +144,6 @@ function ProviderAuthEmail(props: {
         hideTooltip="Click to hide email"
       />
     </span>
-  );
-}
-
-function ProviderAccentColorPicker(props: {
-  readonly displayName: string;
-  readonly value: string | undefined;
-  readonly onCommit: (value: string) => void;
-}) {
-  const [draft, setDraft] = useState(props.value ?? "");
-  const [isEditing, setIsEditing] = useState(false);
-  const draftColor = normalizeProviderAccentColor(draft);
-
-  useEffect(() => {
-    if (isEditing) return;
-    setDraft(props.value ?? "");
-  }, [isEditing, props.value]);
-
-  const commitDraft = () => {
-    setIsEditing(false);
-    props.onCommit(draftColor ?? "");
-  };
-
-  const commitSwatch = (swatch: string) => {
-    setIsEditing(false);
-    setDraft(swatch);
-    props.onCommit(swatch);
-  };
-
-  return (
-    <div className="grid gap-2">
-      <span className="text-xs font-medium text-foreground">Accent color</span>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <input
-          type="color"
-          value={draftColor ?? PROVIDER_ACCENT_SWATCHES[0]}
-          onFocus={() => setIsEditing(true)}
-          onInput={(event) => {
-            setIsEditing(true);
-            setDraft(event.currentTarget.value);
-          }}
-          onChange={(event) => {
-            setIsEditing(true);
-            setDraft(event.currentTarget.value);
-          }}
-          onBlur={commitDraft}
-          aria-label={`Accent color for ${props.displayName}`}
-          className="h-8 w-10 cursor-pointer rounded border border-input bg-background p-0.5"
-        />
-        <div className="flex flex-wrap gap-1.5">
-          {PROVIDER_ACCENT_SWATCHES.map((swatch) => {
-            const selected = draftColor?.toLowerCase() === swatch;
-            return (
-              <button
-                key={swatch}
-                type="button"
-                className={cn(
-                  "size-6 cursor-pointer rounded-full border transition",
-                  selected
-                    ? "border-foreground ring-2 ring-ring ring-offset-1 ring-offset-background"
-                    : "border-black/10 hover:scale-105 dark:border-white/20",
-                )}
-                style={{ backgroundColor: swatch }}
-                onClick={() => commitSwatch(swatch)}
-                aria-label={`Use ${swatch} accent`}
-              />
-            );
-          })}
-        </div>
-        {draftColor ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-xs text-muted-foreground"
-            onClick={() => {
-              setIsEditing(false);
-              setDraft("");
-              props.onCommit("");
-            }}
-          >
-            Clear
-          </Button>
-        ) : null}
-      </div>
-      <span className="text-xs text-muted-foreground">
-        Used to distinguish this instance in picker rails and model lists.
-      </span>
-    </div>
   );
 }
 
@@ -407,131 +288,6 @@ function ProviderEnvironmentSection(props: {
       <span className="text-xs text-muted-foreground">
         Sensitive values are stored separately and are not returned to the app after saving.
       </span>
-    </div>
-  );
-}
-
-function CodexSyntaxThemeSection(props: { readonly instanceId: ProviderInstanceId }) {
-  const queryClient = useQueryClient();
-  const [pendingTheme, setPendingTheme] = useState<string | null>(null);
-  const queryKey = codexThemesQueryKey(props.instanceId);
-  const themesQuery = useQuery({
-    queryKey,
-    queryFn: async () => {
-      const api = ensureLocalApi();
-      if (!api.server.listCodexThemes) {
-        throw new Error("Codex theme settings are not available.");
-      }
-      return api.server.listCodexThemes({ instanceId: props.instanceId });
-    },
-    staleTime: 30_000,
-  });
-
-  const themeData = themesQuery.data;
-  const themeNames = new Set(themeData?.themes.map((theme) => theme.name) ?? []);
-  const selectedTheme =
-    themeData?.selectedTheme && themeNames.has(themeData.selectedTheme)
-      ? themeData.selectedTheme
-      : (themeData?.defaultTheme ?? "");
-  const value = pendingTheme ?? selectedTheme;
-  const bundledThemes = themeData?.themes.filter((theme) => theme.source === "bundled") ?? [];
-  const customThemes = themeData?.themes.filter((theme) => theme.source === "custom") ?? [];
-  const unavailableSelectedTheme =
-    themeData?.selectedTheme && !themeNames.has(themeData.selectedTheme)
-      ? themeData.selectedTheme
-      : null;
-  const isBusy = themesQuery.isPending || pendingTheme !== null;
-
-  const setTheme = async (theme: string) => {
-    const trimmedTheme = theme.trim();
-    if (!trimmedTheme || trimmedTheme === selectedTheme) return;
-    setPendingTheme(trimmedTheme);
-    try {
-      const api = ensureLocalApi();
-      if (!api.server.setCodexTheme) {
-        throw new Error("Codex theme settings are not available.");
-      }
-      const result = await api.server.setCodexTheme({
-        instanceId: props.instanceId,
-        theme: trimmedTheme,
-      });
-      queryClient.setQueryData<ServerCodexThemeListResult>(queryKey, result);
-      toastManager.add({
-        type: "success",
-        title: "Codex theme updated",
-        description: `Syntax theme set to ${trimmedTheme}.`,
-      });
-    } catch (error) {
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: "Could not update Codex theme",
-          description: getErrorMessage(error),
-        }),
-      );
-    } finally {
-      setPendingTheme(null);
-    }
-  };
-
-  return (
-    <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)] sm:items-start">
-        <div className="min-w-0 space-y-1">
-          <p className="text-xs font-medium text-foreground">Syntax theme</p>
-          <p className="text-xs text-muted-foreground">
-            Codex code and diff highlighting theme for this provider instance.
-          </p>
-          {themesQuery.isError ? (
-            <p className="text-xs text-destructive">{getErrorMessage(themesQuery.error)}</p>
-          ) : unavailableSelectedTheme ? (
-            <p className="text-xs text-warning">
-              Configured theme <code>{unavailableSelectedTheme}</code> is not available.
-            </p>
-          ) : null}
-        </div>
-        <Select
-          value={value}
-          disabled={!themeData || isBusy}
-          onValueChange={(nextValue) => {
-            if (typeof nextValue === "string") {
-              void setTheme(nextValue);
-            }
-          }}
-        >
-          <SelectTrigger className="w-full" aria-label="Codex syntax theme">
-            <SelectValue>
-              <span className="inline-flex min-w-0 items-center gap-2">
-                {isBusy ? <LoaderIcon className="size-3 animate-spin" /> : null}
-                <span className="truncate">{themesQuery.isPending ? "Loading themes" : value}</span>
-              </span>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectPopup align="end" alignItemWithTrigger={false} className="max-h-80">
-            <SelectGroup>
-              <SelectGroupLabel>Bundled</SelectGroupLabel>
-              {bundledThemes.map((theme) => (
-                <SelectItem key={theme.name} value={theme.name}>
-                  {theme.name}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-            {customThemes.length > 0 ? (
-              <>
-                <SelectSeparator />
-                <SelectGroup>
-                  <SelectGroupLabel>Custom</SelectGroupLabel>
-                  {customThemes.map((theme) => (
-                    <SelectItem key={theme.name} value={theme.name}>
-                      {theme.name} (custom)
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </>
-            ) : null}
-          </SelectPopup>
-        </Select>
-      </div>
     </div>
   );
 }
@@ -682,16 +438,6 @@ export function ProviderInstanceCard({
 
   const updateEnabled = (value: boolean) => {
     onUpdate({ ...instance, enabled: value });
-  };
-
-  const updateAccentColor = (value: string) => {
-    const normalized = normalizeProviderAccentColor(value);
-    const { accentColor: _omit, ...rest } = instance;
-    onUpdate(
-      normalized
-        ? ({ ...rest, accentColor: normalized } as ProviderInstanceConfig)
-        : (rest as ProviderInstanceConfig),
-    );
   };
 
   const updateConfig = (nextConfig: Record<string, unknown> | undefined) => {
@@ -959,14 +705,6 @@ export function ProviderInstanceCard({
             </div>
 
             <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-              <ProviderAccentColorPicker
-                displayName={displayName}
-                value={accentColor}
-                onCommit={updateAccentColor}
-              />
-            </div>
-
-            <div className="border-t border-border/60 px-4 py-3 sm:px-5">
               <ProviderEnvironmentSection
                 environment={instance.environment ?? []}
                 onChange={updateEnvironment}
@@ -981,10 +719,6 @@ export function ProviderInstanceCard({
                 variant="card"
                 onChange={updateConfig}
               />
-            ) : null}
-
-            {String(instance.driver) === "codex" ? (
-              <CodexSyntaxThemeSection instanceId={instanceId} />
             ) : null}
 
             {driverOption !== undefined ? (

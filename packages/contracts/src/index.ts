@@ -10,7 +10,6 @@ export * from "./providerInstance.ts";
 export * from "./providerRuntime.ts";
 export * from "./model.ts";
 export * from "./keybindings.ts";
-export * from "./codexTheme.ts";
 export * from "./server.ts";
 export * from "./settings.ts";
 export * from "./git.ts";

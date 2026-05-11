@@ -133,14 +133,6 @@ function createBrowserLocalApi(rpcClient?: WsRpcClient): LocalApi {
         rpcClient
           ? rpcClient.server.setProviderSkillEnabled(input)
           : Promise.reject(unavailableLocalBackendError()),
-      listCodexThemes: (input) =>
-        rpcClient
-          ? rpcClient.server.listCodexThemes(input)
-          : Promise.reject(unavailableLocalBackendError()),
-      setCodexTheme: (input) =>
-        rpcClient
-          ? rpcClient.server.setCodexTheme(input)
-          : Promise.reject(unavailableLocalBackendError()),
       listCodexAutomations: (input) =>
         rpcClient
           ? rpcClient.server.listCodexAutomations(input)

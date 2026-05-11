@@ -56,7 +56,6 @@ import {
   resolveCodexHomeLayout,
 } from "./CodexHomeLayout.ts";
 import { makeCodexAutomationControls } from "./CodexAutomations.ts";
-import { makeCodexThemeControls } from "./CodexThemes.ts";
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("codex");
@@ -230,16 +229,6 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         adapter,
         textGeneration,
         skillControls,
-        codexThemeControls: makeCodexThemeControls({
-          instanceId,
-          binaryPath: effectiveConfig.binaryPath,
-          codexHomePath: homeLayout.effectiveHomePath ?? homeLayout.sharedHomePath,
-          cwd: process.cwd(),
-          environment: processEnv,
-          fileSystem,
-          path,
-          spawner,
-        }),
         automationControls: makeCodexAutomationControls({
           instanceId,
           codexHomePath: homeLayout.sharedHomePath,

@@ -55,11 +55,6 @@ import type {
   TerminalWriteInput,
 } from "./terminal.ts";
 import type { ServerRemoveKeybindingInput, ServerUpsertKeybindingInput } from "./server.ts";
-import type {
-  ServerCodexThemeListInput,
-  ServerCodexThemeListResult,
-  ServerCodexThemeSetInput,
-} from "./codexTheme.ts";
 import * as Schema from "effect/Schema";
 import type {
   ClientOrchestrationCommand,
@@ -506,8 +501,6 @@ export interface LocalApi {
     setProviderSkillEnabled?: (
       input: ServerProviderSkillSetEnabledInput,
     ) => Promise<ServerProviderSkillSetEnabledResult>;
-    listCodexThemes?: (input: ServerCodexThemeListInput) => Promise<ServerCodexThemeListResult>;
-    setCodexTheme?: (input: ServerCodexThemeSetInput) => Promise<ServerCodexThemeListResult>;
     listCodexAutomations?: (
       input: ServerCodexAutomationsListInput,
     ) => Promise<ServerCodexAutomationsListResult>;

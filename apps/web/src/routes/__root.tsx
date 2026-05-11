@@ -61,6 +61,7 @@ import {
   updatePrimaryEnvironmentDescriptor,
 } from "../environments/primary";
 import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
+import { applyAppAccentColor } from "../appAppearance";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -133,6 +134,7 @@ function RootRouteView() {
       <AnchoredToastProvider>
         {primaryEnvironmentAuthenticated ? <AuthenticatedTracingBootstrap /> : null}
         {primaryEnvironmentAuthenticated ? <ServerStateBootstrap /> : null}
+        <AppAppearanceBootstrap />
         <EnvironmentConnectionManagerBootstrap />
         <SshPasswordPromptDialog />
         <HostedStaticEnvironmentBootstrap />
@@ -273,6 +275,16 @@ function EnvironmentConnectionManagerBootstrap() {
   useEffect(() => {
     return startEnvironmentConnectionService(queryClient);
   }, [queryClient]);
+
+  return null;
+}
+
+function AppAppearanceBootstrap() {
+  const appAccentColor = useSettings((settings) => settings.appAccentColor);
+
+  useEffect(() => {
+    applyAppAccentColor(appAccentColor);
+  }, [appAccentColor]);
 
   return null;
 }
