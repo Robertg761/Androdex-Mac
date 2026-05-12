@@ -834,7 +834,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                   onClick={(event) => event.currentTarget.select()}
                 />
                 {shareablePairingUrl ? (
-                  <div className="flex justify-center rounded-xl border border-border/60 bg-muted/30 p-4">
+                  <div className="flex justify-center rounded-lg border border-border/60 bg-muted/30 p-4">
                     <QRCodeSvg
                       value={shareablePairingUrl}
                       size={132}

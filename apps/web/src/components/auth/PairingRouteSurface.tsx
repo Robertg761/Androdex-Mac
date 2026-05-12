@@ -21,7 +21,7 @@ export function PairingPendingSurface() {
         <div className="absolute inset-0 bg-[linear-gradient(145deg,color-mix(in_srgb,var(--background)_90%,var(--color-black))_0%,var(--background)_55%)]" />
       </div>
 
-      <section className="relative w-full max-w-xl rounded-2xl border border-border/80 bg-card/90 p-6 shadow-2xl shadow-black/20 backdrop-blur-md sm:p-8">
+      <section className="relative w-full max-w-xl rounded-lg border border-border/80 bg-card/90 p-6 shadow-[0_20px_70px_rgb(0_0_0_/_0.16)] backdrop-blur-md sm:p-8">
         <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
           {APP_DISPLAY_NAME}
         </p>
@@ -102,7 +102,7 @@ export function PairingRouteSurface({
         <div className="absolute inset-0 bg-[linear-gradient(145deg,color-mix(in_srgb,var(--background)_90%,var(--color-black))_0%,var(--background)_55%)]" />
       </div>
 
-      <section className="relative w-full max-w-xl rounded-2xl border border-border/80 bg-card/90 p-6 shadow-2xl shadow-black/20 backdrop-blur-md sm:p-8">
+      <section className="relative w-full max-w-xl rounded-lg border border-border/80 bg-card/90 p-6 shadow-[0_20px_70px_rgb(0_0_0_/_0.16)] backdrop-blur-md sm:p-8">
         <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
           {APP_DISPLAY_NAME}
         </p>
@@ -235,7 +235,7 @@ export function HostedPairingRouteSurface() {
         <div className="absolute inset-0 bg-[linear-gradient(145deg,color-mix(in_srgb,var(--background)_90%,var(--color-black))_0%,var(--background)_55%)]" />
       </div>
 
-      <section className="relative w-full max-w-xl rounded-2xl border border-border/80 bg-card/90 p-6 shadow-2xl shadow-black/20 backdrop-blur-md sm:p-8">
+      <section className="relative w-full max-w-xl rounded-lg border border-border/80 bg-card/90 p-6 shadow-[0_20px_70px_rgb(0_0_0_/_0.16)] backdrop-blur-md sm:p-8">
         <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
           {APP_DISPLAY_NAME}
         </p>

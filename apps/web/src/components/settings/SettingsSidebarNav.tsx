@@ -84,8 +84,8 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                     isActive={isActive}
                     className={
                       isActive
-                        ? "gap-2.5 px-2.5 py-2 text-left text-[13px] font-medium text-foreground"
-                        : "gap-2.5 px-2.5 py-2 text-left text-[13px] text-muted-foreground/70 hover:text-foreground/80"
+                        ? "gap-2.5 px-2.5 py-2 text-left text-[13px] font-medium text-sidebar-accent-foreground"
+                        : "gap-2.5 px-2.5 py-2 text-left text-[13px] text-sidebar-foreground/70 hover:text-sidebar-accent-foreground"
                     }
                     onClick={() => handleSectionClick(item.to)}
                   >
@@ -93,7 +93,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                       className={
                         isActive
                           ? "size-4 shrink-0 text-foreground"
-                          : "size-4 shrink-0 text-muted-foreground/60"
+                          : "size-4 shrink-0 text-sidebar-foreground/60"
                       }
                     />
                     <span className="truncate">{item.label}</span>
@@ -111,7 +111,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
           <SidebarMenuItem>
             <SidebarMenuButton
               size="sm"
-              className="gap-2 px-2 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="gap-2 px-2 py-2 text-xs text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               onClick={handleBackClick}
             >
               <ArrowLeftIcon className="size-4" />

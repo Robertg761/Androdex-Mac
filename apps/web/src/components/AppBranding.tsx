@@ -34,7 +34,7 @@ export function AppNewThreadHero({
         Let's build
       </h1>
       {projectName ? (
-        <div className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full bg-white/72 px-3 py-2 text-sm font-medium text-foreground shadow-sm ring-1 ring-black/5 backdrop-blur">
+        <div className="mt-4 inline-flex max-w-full items-center gap-2 rounded-md border border-border/65 bg-card/80 px-3 py-2 text-sm font-medium text-foreground shadow-[0_1px_2px_rgb(0_0_0_/_0.05)] backdrop-blur">
           <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0 truncate">{projectName}</span>
         </div>

@@ -223,7 +223,7 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup className="max-w-xl overflow-hidden">
-        <div className="flex min-h-0 flex-col overflow-hidden border-foreground/10 bg-background shadow-2xl">
+        <div className="flex min-h-0 flex-col overflow-hidden border-foreground/10 bg-background shadow-[0_20px_70px_rgb(0_0_0_/_0.16)]">
           <DialogHeader className="border-b border-border/70 bg-background">
             <DialogTitle>Add provider instance</DialogTitle>
             <DialogDescription>

@@ -3508,7 +3508,7 @@ export default function ChatView(props: ChatViewProps) {
       {/* Top bar */}
       <header
         className={cn(
-          "border-b border-border/40 bg-background/72 backdrop-blur-xl",
+          "border-b border-border/60 bg-background/82 backdrop-blur-xl",
           isElectron
             ? cn(
                 "drag-region flex h-[52px] items-center px-3 sm:px-5 wco:h-[env(titlebar-area-height)]",
@@ -3602,7 +3602,7 @@ export default function ChatView(props: ChatViewProps) {
                 <button
                   type="button"
                   onClick={() => scrollToEnd(true)}
-                  className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1 text-muted-foreground text-xs shadow-sm transition-colors hover:border-border hover:text-foreground hover:cursor-pointer"
+                  className="pointer-events-auto flex items-center gap-1.5 rounded-md border border-border/60 bg-card px-3 py-1 text-muted-foreground text-xs shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] transition-colors hover:border-border hover:text-foreground hover:cursor-pointer"
                 >
                   <ChevronDownIcon className="size-3.5" />
                   Scroll to bottom

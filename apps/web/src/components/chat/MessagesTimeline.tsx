@@ -335,13 +335,13 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
 
   return (
     <div className="flex justify-end">
-      <div className="group relative max-w-[80%] rounded-[22px] rounded-br-md border border-white/80 bg-white/90 px-4 py-3 shadow-sm ring-1 ring-black/[0.03] dark:border-border dark:bg-secondary">
+      <div className="group relative max-w-[80%] rounded-lg rounded-br-sm border border-border/70 bg-card/92 px-4 py-3 shadow-[0_1px_2px_rgb(0_0_0_/_0.05)] dark:bg-secondary">
         {userImages.length > 0 && (
           <div className="mb-2 grid max-w-[420px] grid-cols-2 gap-2">
             {userImages.map((image: NonNullable<TimelineMessage["attachments"]>[number]) => (
               <div
                 key={image.id}
-                className="overflow-hidden rounded-lg border border-border/80 bg-background/70"
+                className="overflow-hidden rounded-md border border-border/80 bg-background/70"
               >
                 {image.previewUrl ? (
                   <button
@@ -459,7 +459,7 @@ function AssistantCompletionDivider() {
   return (
     <div className="my-3 flex items-center gap-3">
       <span className="h-px flex-1 bg-border" />
-      <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">
+      <span className="rounded-md border border-border bg-background px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">
         {activity.completionSummary ? `Response • ${activity.completionSummary}` : "Response"}
       </span>
       <span className="h-px flex-1 bg-border" />
@@ -615,7 +615,7 @@ const WorkGroupSection = memo(function WorkGroupSection({
   const groupLabel = onlyToolEntries ? "Tool calls" : "Work log";
 
   return (
-    <div className="rounded-xl border border-border/45 bg-card/25 px-2 py-1.5">
+    <div className="rounded-lg border border-border/50 bg-card/35 px-2 py-1.5">
       {showHeader && (
         <div className="mb-1.5 flex items-center justify-between gap-2 px-0.5">
           <p className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground/55">

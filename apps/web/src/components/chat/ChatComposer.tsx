@@ -1952,7 +1952,7 @@ export const ChatComposer = memo(
       >
         <div
           className={cn(
-            "group rounded-[31px] p-px transition-colors duration-200",
+            "group rounded-lg p-px transition-colors duration-200",
             composerProviderState.composerFrameClassName,
           )}
           onDragEnter={onComposerDragEnter}
@@ -1964,8 +1964,8 @@ export const ChatComposer = memo(
             ref={composerSurfaceRef}
             data-chat-composer-mobile-collapsed={isComposerCollapsedMobile ? "true" : "false"}
             className={cn(
-              "rounded-[30px] border bg-card/95 shadow-[0_18px_55px_rgba(15,23,42,0.11)] transition-colors duration-200 backdrop-blur-xl has-focus-visible:border-ring/45",
-              isDragOverComposer ? "border-primary/70 bg-accent/30" : "border-white/85",
+              "rounded-lg border bg-card/95 shadow-[0_10px_36px_rgb(0_0_0_/_0.08)] transition-colors duration-200 backdrop-blur-xl has-focus-visible:border-ring/45",
+              isDragOverComposer ? "border-primary/70 bg-accent/30" : "border-border/70",
               environmentUnavailable ? "opacity-75" : null,
               composerProviderState.composerSurfaceClassName,
             )}
@@ -1990,14 +1990,14 @@ export const ChatComposer = memo(
           >
             {!isComposerCollapsedMobile &&
               (activePendingApproval ? (
-                <div className="rounded-t-[29px] border-b border-border/45 bg-muted/20">
+                <div className="rounded-t-[calc(var(--radius)-1px)] border-b border-border/45 bg-muted/30">
                   <ComposerPendingApprovalPanel
                     approval={activePendingApproval}
                     pendingCount={pendingApprovals.length}
                   />
                 </div>
               ) : pendingUserInputs.length > 0 ? (
-                <div className="rounded-t-[29px] border-b border-border/45 bg-muted/20">
+                <div className="rounded-t-[calc(var(--radius)-1px)] border-b border-border/45 bg-muted/30">
                   <ComposerPendingUserInputPanel
                     pendingUserInputs={pendingUserInputs}
                     respondingRequestIds={respondingRequestIds}
@@ -2008,7 +2008,7 @@ export const ChatComposer = memo(
                   />
                 </div>
               ) : showPlanFollowUpPrompt && activeProposedPlan ? (
-                <div className="rounded-t-[29px] border-b border-border/45 bg-muted/20">
+                <div className="rounded-t-[calc(var(--radius)-1px)] border-b border-border/45 bg-muted/30">
                   <ComposerPlanFollowUpBanner
                     key={activeProposedPlan.id}
                     planTitle={proposedPlanTitle(activeProposedPlan.planMarkdown) ?? null}
@@ -2018,7 +2018,7 @@ export const ChatComposer = memo(
 
             {isComposerCollapsedMobile && activePendingApproval ? (
               <div
-                className="rounded-t-[29px] border-b border-border/45 bg-muted/20"
+                className="rounded-t-[calc(var(--radius)-1px)] border-b border-border/45 bg-muted/30"
                 data-chat-composer-collapsed-controls="true"
               >
                 <ComposerPendingApprovalPanel
@@ -2035,7 +2035,7 @@ export const ChatComposer = memo(
               </div>
             ) : isComposerCollapsedMobile && pendingUserInputs.length > 0 ? (
               <div
-                className="rounded-t-[29px] border-b border-border/45 bg-muted/20"
+                className="rounded-t-[calc(var(--radius)-1px)] border-b border-border/45 bg-muted/30"
                 data-chat-composer-collapsed-controls="true"
               >
                 <ComposerPendingUserInputPanel
@@ -2050,7 +2050,7 @@ export const ChatComposer = memo(
                   <div
                     data-chat-composer-mobile-pending-compact="true"
                     className={cn(
-                      "flex min-w-0 items-center gap-2 rounded-lg border border-border/55 bg-background/55 p-1.5 pl-3 transition-colors hover:bg-background/80",
+                      "flex min-w-0 items-center gap-2 rounded-md border border-border/55 bg-background/55 p-1.5 pl-3 transition-colors hover:bg-background/80",
                       !activePendingProgress?.activeQuestion?.multiSelect && "p-0",
                     )}
                   >
@@ -2113,7 +2113,7 @@ export const ChatComposer = memo(
                 </button>
                 <button
                   type="button"
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/90 text-primary-foreground disabled:opacity-30"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/90 text-primary-foreground disabled:opacity-30"
                   disabled={collapsedComposerPrimaryActionDisabled}
                   aria-label={collapsedComposerPrimaryActionLabel}
                   onPointerDown={(event) => event.preventDefault()}
@@ -2169,7 +2169,7 @@ export const ChatComposer = memo(
                     {composerImages.map((image) => (
                       <div
                         key={image.id}
-                        className="relative h-16 w-16 overflow-hidden rounded-lg border border-border/80 bg-background"
+                        className="relative h-16 w-16 overflow-hidden rounded-md border border-border/80 bg-background"
                       >
                         {image.previewUrl ? (
                           <button

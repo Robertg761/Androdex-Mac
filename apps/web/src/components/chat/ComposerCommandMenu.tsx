@@ -141,7 +141,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
     >
       <div
         ref={listRef}
-        className="relative overflow-hidden rounded-xl border border-border/80 bg-popover/96 shadow-lg/8 backdrop-blur-xs"
+        className="relative overflow-hidden rounded-lg border border-border/80 bg-popover/96 shadow-[0_12px_40px_rgb(0_0_0_/_0.12)] backdrop-blur-xs"
       >
         <CommandList className="max-h-72">
           {groups.map((group, groupIndex) => (

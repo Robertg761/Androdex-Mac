@@ -38,7 +38,7 @@ export const SidebarThreadPreviewCount = Schema.Int.check(
 );
 export type SidebarThreadPreviewCount = typeof SidebarThreadPreviewCount.Type;
 export const DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT: SidebarThreadPreviewCount = 6;
-export const DEFAULT_APP_ACCENT_COLOR = "#2563eb";
+export const DEFAULT_APP_ACCENT_COLOR = "#111111";
 
 export const ClientSettingsSchema = Schema.Struct({
   appAccentColor: TrimmedString.pipe(

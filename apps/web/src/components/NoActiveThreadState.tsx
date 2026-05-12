@@ -52,7 +52,7 @@ export function NoActiveThreadState() {
       >
         <header
           className={cn(
-            "border-b border-border/40 bg-background/70 px-3 backdrop-blur-xl sm:px-5",
+            "border-b border-border/60 bg-background/82 px-3 backdrop-blur-xl sm:px-5",
             isElectron
               ? "drag-region flex h-[52px] items-center wco:h-[env(titlebar-area-height)]"
               : "py-2 sm:py-3",

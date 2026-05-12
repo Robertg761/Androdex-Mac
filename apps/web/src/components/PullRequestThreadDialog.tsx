@@ -232,7 +232,7 @@ export function PullRequestThreadDialog({
           </label>
 
           {resolvedPullRequest ? (
-            <div className="rounded-xl border border-border/70 bg-muted/24 p-3">
+            <div className="rounded-lg border border-border/70 bg-muted/24 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate font-medium text-sm">{resolvedPullRequest.title}</p>

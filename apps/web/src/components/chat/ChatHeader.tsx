@@ -101,7 +101,7 @@ export const ChatHeader = memo(function ChatHeader({
         {activeProjectName && (
           <Badge
             variant="outline"
-            className="min-w-0 shrink overflow-hidden rounded-full border-border/55 bg-white/55 px-2.5"
+            className="min-w-0 shrink overflow-hidden rounded-md border-border/60 bg-muted/45 px-2.5"
           >
             <span className="min-w-0 truncate">{activeProjectName}</span>
           </Badge>

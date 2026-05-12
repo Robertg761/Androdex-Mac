@@ -62,7 +62,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       <Sidebar
         side="left"
         collapsible="offcanvas"
-        className="border-r border-sidebar-border bg-sidebar/95 text-sidebar-foreground backdrop-blur-xl"
+        className="border-r border-sidebar-border bg-sidebar/95 text-sidebar-foreground shadow-[inset_-1px_0_var(--sidebar-border)] backdrop-blur-xl"
         resizable={{
           minWidth: THREAD_SIDEBAR_MIN_WIDTH,
           shouldAcceptWidth: ({ nextWidth, wrapper }) =>
