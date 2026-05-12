@@ -19,7 +19,8 @@ import { useSettings } from "./useSettings";
 
 function useNewThreadState() {
   const projects = useStore(useShallow((store) => selectProjectsAcrossEnvironments(store)));
-  const projectGroupingSettings = useSettings((settings) => ({
+  const newThreadSettings = useSettings((settings) => ({
+    defaultComposerModelSelection: settings.defaultComposerModelSelection,
     sidebarProjectGroupingMode: settings.sidebarProjectGroupingMode,
     sidebarProjectGroupingOverrides: settings.sidebarProjectGroupingOverrides,
   }));
@@ -43,6 +44,7 @@ function useNewThreadState() {
         getDraftSession,
         getDraftThread,
         applyStickyState,
+        setModelSelection,
         setDraftThreadContext,
         setLogicalProjectDraftThreadId,
       } = useComposerDraftStore.getState();
@@ -53,7 +55,7 @@ function useNewThreadState() {
           candidate.environmentId === projectRef.environmentId,
       );
       const logicalProjectKey = project
-        ? deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings)
+        ? deriveLogicalProjectKeyFromSettings(project, newThreadSettings)
         : scopedProjectKey(projectRef);
       const hasBranchOption = options?.branch !== undefined;
       const hasWorktreePathOption = options?.worktreePath !== undefined;
@@ -126,7 +128,11 @@ function useNewThreadState() {
           envMode: options?.envMode ?? "local",
           runtimeMode: DEFAULT_RUNTIME_MODE,
         });
-        applyStickyState(draftId);
+        if (newThreadSettings.defaultComposerModelSelection) {
+          setModelSelection(draftId, newThreadSettings.defaultComposerModelSelection);
+        } else {
+          applyStickyState(draftId);
+        }
 
         await router.navigate({
           to: "/draft/$draftId",
@@ -134,7 +140,7 @@ function useNewThreadState() {
         });
       })();
     },
-    [getCurrentRouteTarget, projectGroupingSettings, router, projects],
+    [getCurrentRouteTarget, newThreadSettings, router, projects],
   );
 }
 

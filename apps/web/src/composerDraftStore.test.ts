@@ -11,10 +11,12 @@ import {
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
+  type ServerProvider,
   ThreadId,
   type ModelSelection,
   type ProviderOptionSelection,
 } from "@t3tools/contracts";
+import { DEFAULT_UNIFIED_SETTINGS, type UnifiedSettings } from "@t3tools/contracts/settings";
 import { createModelSelection } from "@t3tools/shared/model";
 
 // The composer draft's `modelSelectionByProvider` and
@@ -58,6 +60,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   COMPOSER_DRAFT_STORAGE_KEY,
+  deriveEffectiveComposerModelState,
   finalizePromotedDraftThreadByRef,
   markPromotedDraftThread,
   markPromotedDraftThreadByRef,
@@ -144,6 +147,32 @@ function providerModelOptions(
   options: Partial<Record<string, Record<string, string | boolean | undefined>>>,
 ): ProviderOptionSelectionsByProvider {
   return selectionsByProvider(options);
+}
+
+function serverProvider(input: {
+  provider?: ProviderDriverKind;
+  instanceId: ProviderInstanceId;
+  models: ReadonlyArray<string>;
+}): ServerProvider {
+  const driver = input.provider ?? CODEX_DRIVER;
+  return {
+    instanceId: input.instanceId,
+    driver,
+    enabled: true,
+    installed: true,
+    version: null,
+    status: "ready",
+    auth: { status: "authenticated" },
+    checkedAt: "2026-01-01T00:00:00.000Z",
+    models: input.models.map((slug) => ({
+      slug,
+      name: slug,
+      isCustom: false,
+      capabilities: {},
+    })),
+    slashCommands: [],
+    skills: [],
+  };
 }
 
 const TEST_ENVIRONMENT_ID = EnvironmentId.make("environment-local");
@@ -1239,6 +1268,68 @@ describe("composerDraftStore modelSelection", () => {
     expect(
       useComposerDraftStore.getState().stickyModelSelectionByProvider[CLAUDE_AGENT_INSTANCE],
     ).toEqual(modelSelection(CLAUDE_AGENT_DRIVER, "claude-opus-4-6", { effort: "max" }));
+  });
+});
+
+describe("deriveEffectiveComposerModelState", () => {
+  const providers = [
+    serverProvider({
+      provider: CODEX_DRIVER,
+      instanceId: CODEX_INSTANCE,
+      models: ["gpt-5.4", "gpt-5.3-codex"],
+    }),
+  ];
+
+  it("uses the client default selection when no draft, thread, or project model exists", () => {
+    const settings: UnifiedSettings = {
+      ...DEFAULT_UNIFIED_SETTINGS,
+      defaultComposerModelSelection: createModelSelection(
+        CODEX_INSTANCE,
+        "gpt-5.3-codex",
+        toSelections({ reasoningEffort: "low", fastMode: true }),
+      ),
+    };
+
+    expect(
+      deriveEffectiveComposerModelState({
+        draft: null,
+        providers,
+        selectedProvider: CODEX_DRIVER,
+        selectedInstanceId: CODEX_INSTANCE,
+        threadModelSelection: null,
+        projectModelSelection: null,
+        settings,
+      }),
+    ).toEqual({
+      selectedModel: "gpt-5.3-codex",
+      modelOptions: {
+        [CODEX_INSTANCE]: toSelections({ reasoningEffort: "low", fastMode: true }),
+      },
+    });
+  });
+
+  it("lets draft selections override the client default", () => {
+    const settings: UnifiedSettings = {
+      ...DEFAULT_UNIFIED_SETTINGS,
+      defaultComposerModelSelection: createModelSelection(CODEX_INSTANCE, "gpt-5.3-codex"),
+    };
+
+    expect(
+      deriveEffectiveComposerModelState({
+        draft: {
+          activeProvider: CODEX_INSTANCE,
+          modelSelectionByProvider: {
+            [CODEX_INSTANCE]: createModelSelection(CODEX_INSTANCE, "gpt-5.4"),
+          },
+        },
+        providers,
+        selectedProvider: CODEX_DRIVER,
+        selectedInstanceId: CODEX_INSTANCE,
+        threadModelSelection: null,
+        projectModelSelection: null,
+        settings,
+      }).selectedModel,
+    ).toBe("gpt-5.4");
   });
 });
 

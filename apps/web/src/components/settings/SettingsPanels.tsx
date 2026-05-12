@@ -47,6 +47,7 @@ import {
 import {
   getCustomModelOptionsByInstance,
   resolveAppModelSelectionState,
+  resolveDefaultComposerModelSelectionState,
 } from "../../modelSelection";
 import {
   deriveProviderInstanceEntries,
@@ -394,6 +395,10 @@ export function useSettingsRestore(onRestored?: () => void) {
     settings.textGenerationModelSelection ?? null,
     DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
   );
+  const isDefaultComposerModelDirty = !Equal.equals(
+    settings.defaultComposerModelSelection ?? null,
+    DEFAULT_UNIFIED_SETTINGS.defaultComposerModelSelection ?? null,
+  );
 
   const changedSettingLabels = useMemo(
     () => [
@@ -431,9 +436,11 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.confirmThreadDelete !== DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete
         ? ["Delete confirmation"]
         : []),
+      ...(isDefaultComposerModelDirty ? ["Default chat model"] : []),
       ...(isGitWritingModelDirty ? ["Git writing model"] : []),
     ],
     [
+      isDefaultComposerModelDirty,
       isGitWritingModelDirty,
       settings.autoOpenPlanSidebar,
       settings.confirmThreadArchive,
@@ -471,6 +478,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       addProjectBaseDirectory: DEFAULT_UNIFIED_SETTINGS.addProjectBaseDirectory,
       confirmThreadArchive: DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive,
       confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
+      defaultComposerModelSelection: DEFAULT_UNIFIED_SETTINGS.defaultComposerModelSelection,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
     });
     onRestored?.();
@@ -605,23 +613,35 @@ export function GeneralSettingsPanel() {
     otlpMetricsUrl: observability?.otlpMetricsUrl,
   });
 
+  const modelInstanceEntries = sortProviderInstanceEntries(
+    deriveProviderInstanceEntries(serverProviders),
+  );
+
+  const defaultComposerModelSelection = resolveDefaultComposerModelSelectionState(
+    settings,
+    serverProviders,
+  );
+  const defaultComposerInstanceId = defaultComposerModelSelection.instanceId;
+  const defaultComposerModel = defaultComposerModelSelection.model;
+  const defaultComposerModelOptions = defaultComposerModelSelection.options;
+  const defaultComposerInstanceEntry = modelInstanceEntries.find(
+    (entry) => entry.instanceId === defaultComposerInstanceId,
+  );
+  const defaultComposerProvider: ProviderDriverKind =
+    defaultComposerInstanceEntry?.driverKind ?? DEFAULT_DRIVER_KIND;
   const textGenerationModelSelection = resolveAppModelSelectionState(settings, serverProviders);
   const textGenInstanceId = textGenerationModelSelection.instanceId;
   const textGenModel = textGenerationModelSelection.model;
   const textGenModelOptions = textGenerationModelSelection.options;
-  const gitModelInstanceEntries = sortProviderInstanceEntries(
-    deriveProviderInstanceEntries(serverProviders),
-  );
-  const textGenInstanceEntry = gitModelInstanceEntries.find(
+  const textGenInstanceEntry = modelInstanceEntries.find(
     (entry) => entry.instanceId === textGenInstanceId,
   );
   const textGenProvider: ProviderDriverKind =
     textGenInstanceEntry?.driverKind ?? DEFAULT_DRIVER_KIND;
-  const gitModelOptionsByInstance = getCustomModelOptionsByInstance(
-    settings,
-    serverProviders,
-    textGenInstanceId,
-    textGenModel,
+  const modelOptionsByInstance = getCustomModelOptionsByInstance(settings, serverProviders);
+  const isDefaultComposerModelDirty = !Equal.equals(
+    settings.defaultComposerModelSelection ?? null,
+    DEFAULT_UNIFIED_SETTINGS.defaultComposerModelSelection ?? null,
   );
   const isGitWritingModelDirty = !Equal.equals(
     settings.textGenerationModelSelection ?? null,
@@ -818,6 +838,74 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
+          title="Default chat model"
+          description="Used for new draft threads unless a project or thread already specifies a model."
+          resetAction={
+            isDefaultComposerModelDirty ? (
+              <SettingResetButton
+                label="default chat model"
+                onClick={() =>
+                  updateSettings({
+                    defaultComposerModelSelection:
+                      DEFAULT_UNIFIED_SETTINGS.defaultComposerModelSelection,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <ProviderModelPicker
+                activeInstanceId={defaultComposerInstanceId}
+                model={defaultComposerModel}
+                lockedProvider={null}
+                instanceEntries={modelInstanceEntries}
+                modelOptionsByInstance={modelOptionsByInstance}
+                triggerVariant="outline"
+                triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
+                onInstanceModelChange={(instanceId, model) => {
+                  updateSettings({
+                    defaultComposerModelSelection: resolveDefaultComposerModelSelectionState(
+                      {
+                        ...settings,
+                        defaultComposerModelSelection: createModelSelection(instanceId, model),
+                      },
+                      serverProviders,
+                    ),
+                  });
+                }}
+              />
+              <TraitsPicker
+                provider={defaultComposerProvider}
+                models={defaultComposerInstanceEntry?.models ?? []}
+                model={defaultComposerModel}
+                prompt=""
+                onPromptChange={() => {}}
+                modelOptions={defaultComposerModelOptions}
+                allowPromptInjectedEffort={false}
+                triggerVariant="outline"
+                triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
+                onModelOptionsChange={(nextOptions) => {
+                  updateSettings({
+                    defaultComposerModelSelection: resolveDefaultComposerModelSelectionState(
+                      {
+                        ...settings,
+                        defaultComposerModelSelection: createModelSelection(
+                          defaultComposerInstanceId,
+                          defaultComposerModel,
+                          nextOptions,
+                        ),
+                      },
+                      serverProviders,
+                    ),
+                  });
+                }}
+              />
+            </div>
+          }
+        />
+
+        <SettingsRow
           title="Add project starts in"
           description='Leave empty to use "~/" when the Add Project browser opens.'
           resetAction={
@@ -919,8 +1007,8 @@ export function GeneralSettingsPanel() {
                 activeInstanceId={textGenInstanceId}
                 model={textGenModel}
                 lockedProvider={null}
-                instanceEntries={gitModelInstanceEntries}
-                modelOptionsByInstance={gitModelOptionsByInstance}
+                instanceEntries={modelInstanceEntries}
+                modelOptionsByInstance={modelOptionsByInstance}
                 triggerVariant="outline"
                 triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
                 onInstanceModelChange={(instanceId, model) => {

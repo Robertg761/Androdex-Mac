@@ -50,6 +50,9 @@ export const ClientSettingsSchema = Schema.Struct({
   dismissedProviderUpdateNotificationKeys: Schema.Array(TrimmedNonEmptyString).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
+  defaultComposerModelSelection: Schema.NullOr(ModelSelection).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   diffIgnoreWhitespace: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   diffWordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   // Model favorites. Historically keyed by provider kind, now
@@ -483,6 +486,7 @@ export const ClientSettingsPatch = Schema.Struct({
   autoOpenPlanSidebar: Schema.optionalKey(Schema.Boolean),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
+  defaultComposerModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
   diffWordWrap: Schema.optionalKey(Schema.Boolean),
   favorites: Schema.optionalKey(

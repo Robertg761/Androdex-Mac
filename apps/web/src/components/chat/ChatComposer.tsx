@@ -599,18 +599,21 @@ export const ChatComposer = memo(
       [providerStatuses],
     );
     const selectedProviderByThreadId = composerDraft.activeProvider ?? null;
+    const defaultComposerInstanceId = settings.defaultComposerModelSelection?.instanceId ?? null;
     const threadProvider =
       activeThread?.session?.providerInstanceId ??
       activeThreadModelSelection?.instanceId ??
       activeProjectDefaultModelSelection?.instanceId ??
       null;
+    const selectedProviderHint =
+      selectedProviderByThreadId ?? threadProvider ?? defaultComposerInstanceId;
     const explicitSelectedInstanceId = selectedProviderByThreadId ?? threadProvider;
 
     const unlockedSelectedProvider =
       resolveProviderDriverKindForInstanceSelection(
         providerInstanceEntries,
         providerStatuses,
-        explicitSelectedInstanceId,
+        selectedProviderHint,
       ) ?? ProviderDriverKind.make("codex");
     const selectedProvider: ProviderDriverKind = lockedProvider ?? unlockedSelectedProvider;
     const lockedContinuationGroupKey = useMemo((): string | null => {
@@ -645,6 +648,7 @@ export const ChatComposer = memo(
         activeThread?.session?.providerInstanceId,
         activeThreadModelSelection?.instanceId,
         activeProjectDefaultModelSelection?.instanceId,
+        defaultComposerInstanceId,
       ];
       for (const candidate of candidates) {
         if (!candidate) continue;
@@ -688,6 +692,7 @@ export const ChatComposer = memo(
       activeThread?.session?.providerInstanceId,
       activeThreadModelSelection?.instanceId,
       composerDraft.activeProvider,
+      defaultComposerInstanceId,
       explicitSelectedInstanceId,
       lockedContinuationGroupKey,
       lockedProvider,

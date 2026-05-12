@@ -1,4 +1,6 @@
 import {
+  DEFAULT_MODEL,
+  DEFAULT_MODEL_BY_PROVIDER,
   DEFAULT_GIT_TEXT_GENERATION_MODEL,
   DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER,
   defaultInstanceIdForDriver,
@@ -25,7 +27,7 @@ import { sortModelsForProviderInstance } from "./modelOrdering";
 
 const MAX_CUSTOM_MODEL_COUNT = 32;
 export const MAX_CUSTOM_MODEL_LENGTH = 256;
-const DEFAULT_TEXT_GENERATION_INSTANCE_ID = ProviderInstanceId.make("codex");
+const DEFAULT_CODEX_INSTANCE_ID = ProviderInstanceId.make("codex");
 
 /**
  * Resolve the custom-model list for a given instance, preferring the
@@ -269,14 +271,15 @@ export function getCustomModelOptionsByInstance(
   return out;
 }
 
-export function resolveAppModelSelectionState(
-  settings: UnifiedSettings,
-  providers: ReadonlyArray<ServerProvider>,
-): ModelSelection {
-  const selection = settings.textGenerationModelSelection ?? {
-    instanceId: DEFAULT_TEXT_GENERATION_INSTANCE_ID,
-    model: DEFAULT_GIT_TEXT_GENERATION_MODEL,
-  };
+function resolveSettingsModelSelectionState(input: {
+  settings: UnifiedSettings;
+  providers: ReadonlyArray<ServerProvider>;
+  selection: ModelSelection | null | undefined;
+  fallbackSelection: ModelSelection;
+  fallbackModelByProvider: Partial<Record<ProviderDriverKind, string>>;
+}): ModelSelection {
+  const { settings, providers, fallbackModelByProvider } = input;
+  const selection = input.selection ?? input.fallbackSelection;
   const entries = deriveProviderInstanceEntries(providers);
   const selectedEntry = entries.find(
     (entry) => entry.instanceId === selection.instanceId && entry.enabled && entry.isAvailable,
@@ -290,7 +293,7 @@ export function resolveAppModelSelectionState(
     const model =
       resolveAppModelSelectionForInstance(entry.instanceId, settings, providers, selectedModel) ??
       entry.models[0]?.slug ??
-      DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER[entry.driverKind];
+      fallbackModelByProvider[entry.driverKind];
     if (!model) {
       return createModelSelection(entry.instanceId, "", []);
     }
@@ -322,4 +325,36 @@ export function resolveAppModelSelectionState(
   });
 
   return createModelSelection(defaultInstanceIdForDriver(provider), model, modelOptionsForDispatch);
+}
+
+export function resolveAppModelSelectionState(
+  settings: UnifiedSettings,
+  providers: ReadonlyArray<ServerProvider>,
+): ModelSelection {
+  return resolveSettingsModelSelectionState({
+    settings,
+    providers,
+    selection: settings.textGenerationModelSelection,
+    fallbackSelection: {
+      instanceId: DEFAULT_CODEX_INSTANCE_ID,
+      model: DEFAULT_GIT_TEXT_GENERATION_MODEL,
+    },
+    fallbackModelByProvider: DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER,
+  });
+}
+
+export function resolveDefaultComposerModelSelectionState(
+  settings: UnifiedSettings,
+  providers: ReadonlyArray<ServerProvider>,
+): ModelSelection {
+  return resolveSettingsModelSelectionState({
+    settings,
+    providers,
+    selection: settings.defaultComposerModelSelection,
+    fallbackSelection: {
+      instanceId: DEFAULT_CODEX_INSTANCE_ID,
+      model: DEFAULT_MODEL,
+    },
+    fallbackModelByProvider: DEFAULT_MODEL_BY_PROVIDER,
+  });
 }

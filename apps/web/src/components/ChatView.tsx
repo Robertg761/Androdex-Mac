@@ -1123,10 +1123,12 @@ export default function ChatView(props: ChatViewProps) {
     serverThread?.id,
   ]);
 
+  const defaultComposerInstanceId = settings.defaultComposerModelSelection?.instanceId ?? null;
   const selectedProviderByThreadId = composerActiveProvider ?? null;
   const threadProvider =
     activeThread?.modelSelection.instanceId ??
     activeProject?.defaultModelSelection?.instanceId ??
+    defaultComposerInstanceId ??
     null;
   const lockedProvider = deriveLockedProvider({
     thread: activeThread,
@@ -1644,6 +1646,7 @@ export default function ChatView(props: ChatViewProps) {
     activeThread?.session?.providerInstanceId ??
     activeThread?.modelSelection.instanceId ??
     activeProject?.defaultModelSelection?.instanceId ??
+    defaultComposerInstanceId ??
     null;
   const activeProviderStatus = useMemo(() => {
     if (activeProviderInstanceId) {

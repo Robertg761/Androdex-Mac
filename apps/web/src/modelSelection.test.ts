@@ -6,6 +6,7 @@ import {
   getAppModelOptionsForInstance,
   resolveAppModelSelectionForInstance,
   resolveAppModelSelectionState,
+  resolveDefaultComposerModelSelectionState,
 } from "./modelSelection";
 
 function provider(input: {
@@ -244,6 +245,49 @@ describe("instance-scoped model selection", () => {
     };
 
     expect(resolveAppModelSelectionState(settings, providers)).toEqual({
+      instanceId: ProviderInstanceId.make("claude_openrouter"),
+      model: "openai/gpt-5.5",
+    });
+  });
+
+  it("uses the conversation default model for chat defaults", () => {
+    const providers = [
+      provider({
+        instanceId: "codex",
+        models: ["gpt-5.4-mini", "gpt-5.4"],
+      }),
+    ];
+
+    expect(resolveDefaultComposerModelSelectionState(DEFAULT_UNIFIED_SETTINGS, providers)).toEqual({
+      instanceId: ProviderInstanceId.make("codex"),
+      model: "gpt-5.4",
+    });
+    expect(resolveAppModelSelectionState(DEFAULT_UNIFIED_SETTINGS, providers)).toEqual({
+      instanceId: ProviderInstanceId.make("codex"),
+      model: "gpt-5.4-mini",
+    });
+  });
+
+  it("preserves custom provider instances in the default chat model selection", () => {
+    const providers = [
+      provider({
+        instanceId: "claudeAgent",
+        models: ["claude-sonnet-4-6"],
+      }),
+      provider({
+        instanceId: "claude_openrouter",
+        models: ["claude-sonnet-4-6"],
+      }),
+    ];
+    const settings: UnifiedSettings = {
+      ...settingsWithProviderInstances(),
+      defaultComposerModelSelection: {
+        instanceId: ProviderInstanceId.make("claude_openrouter"),
+        model: "openai/gpt-5.5",
+      },
+    };
+
+    expect(resolveDefaultComposerModelSelectionState(settings, providers)).toEqual({
       instanceId: ProviderInstanceId.make("claude_openrouter"),
       model: "openai/gpt-5.5",
     });
