@@ -517,6 +517,50 @@ label:has(> select#reasoning-effort) select {
   animation: provider-update-pill-countdown var(--provider-update-pill-dismiss-ms) linear forwards;
 }
 
+@keyframes codex-thinking-text-shine {
+  from {
+    background-position: -180% 50%;
+  }
+  to {
+    background-position: 180% 50%;
+  }
+}
+
+.codex-thinking-shine {
+  --codex-thinking-text-base: color-mix(in srgb, var(--muted-foreground) 62%, transparent);
+  --codex-thinking-text-highlight: color-mix(in srgb, var(--foreground) 96%, transparent);
+  display: inline-block;
+  color: var(--codex-thinking-text-base);
+  background-image: linear-gradient(
+    105deg,
+    var(--codex-thinking-text-base) 0%,
+    var(--codex-thinking-text-base) 38%,
+    var(--codex-thinking-text-highlight) 50%,
+    var(--codex-thinking-text-base) 62%,
+    var(--codex-thinking-text-base) 100%
+  );
+  background-size: 260% 100%;
+  background-position: -180% 50%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: codex-thinking-text-shine 2.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .codex-thinking-shine {
+    background-image: none;
+    animation: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+html[data-render-mode="android-webview"] .codex-thinking-shine {
+  background-image: none;
+  animation: none;
+  -webkit-text-fill-color: currentColor;
+}
+
 /* Diffs theme bridge (match diff surfaces to app palette) */
 .diff-panel-viewport {
   background: color-mix(in srgb, var(--background) 94%, var(--card));

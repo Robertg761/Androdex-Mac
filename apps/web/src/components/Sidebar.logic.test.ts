@@ -573,27 +573,30 @@ describe("resolveThreadStatusPill", () => {
 });
 
 describe("resolveThreadRowClassName", () => {
-  it("uses the darker selected palette when a thread is both selected and active", () => {
+  it("uses the stronger neutral surface when a thread is both selected and active", () => {
     const className = resolveThreadRowClassName({ isActive: true, isSelected: true });
-    expect(className).toContain("bg-primary/18");
-    expect(className).toContain("hover:bg-primary/24");
-    expect(className).toContain("dark:bg-primary/30");
-    expect(className).not.toContain("dark:bg-accent/55");
+    expect(className).toContain("bg-neutral-900/10");
+    expect(className).toContain("hover:bg-neutral-900/12");
+    expect(className).toContain("dark:bg-white/12");
+    expect(className).toContain("ring-0");
+    expect(className).not.toContain("bg-primary");
   });
 
-  it("uses selected hover colors for selected threads", () => {
+  it("uses the neutral selected surface for selected threads", () => {
     const className = resolveThreadRowClassName({ isActive: false, isSelected: true });
-    expect(className).toContain("bg-primary/12");
-    expect(className).toContain("hover:bg-primary/18");
-    expect(className).toContain("dark:bg-primary/22");
-    expect(className).not.toContain("dark:hover:bg-accent");
+    expect(className).toContain("bg-neutral-900/8");
+    expect(className).toContain("hover:bg-neutral-900/10");
+    expect(className).toContain("dark:bg-white/10");
+    expect(className).toContain("shadow-none");
+    expect(className).not.toContain("bg-primary");
   });
 
-  it("keeps the app accent palette for active-only threads", () => {
+  it("uses the same neutral family for active-only threads", () => {
     const className = resolveThreadRowClassName({ isActive: true, isSelected: false });
-    expect(className).toContain("bg-primary/14");
-    expect(className).toContain("hover:bg-primary/20");
-    expect(className).toContain("dark:bg-primary/18");
+    expect(className).toContain("bg-neutral-900/8");
+    expect(className).toContain("hover:bg-neutral-900/10");
+    expect(className).toContain("dark:bg-white/10");
+    expect(className).not.toContain("bg-primary");
   });
 });
 

@@ -300,30 +300,33 @@ export function resolveThreadRowClassName(input: {
   isSelected: boolean;
 }): string {
   const baseClassName =
-    "h-7 w-full translate-x-0 cursor-pointer justify-start rounded-xl px-2 text-left select-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring";
+    "h-7 w-full translate-x-0 cursor-pointer justify-start rounded-lg px-2 text-left select-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring";
 
   if (input.isSelected && input.isActive) {
     return cn(
       baseClassName,
-      "bg-primary/18 text-foreground font-medium shadow-sm ring-1 ring-primary/22 hover:bg-primary/24 hover:text-foreground dark:bg-primary/30 dark:hover:bg-primary/36",
+      "bg-neutral-900/10 text-foreground font-medium shadow-none ring-0 hover:bg-neutral-900/12 hover:text-foreground dark:bg-white/12 dark:hover:bg-white/16",
     );
   }
 
   if (input.isSelected) {
     return cn(
       baseClassName,
-      "bg-primary/12 text-foreground shadow-sm ring-1 ring-primary/18 hover:bg-primary/18 hover:text-foreground dark:bg-primary/22 dark:hover:bg-primary/28",
+      "bg-neutral-900/8 text-foreground shadow-none ring-0 hover:bg-neutral-900/10 hover:text-foreground dark:bg-white/10 dark:hover:bg-white/14",
     );
   }
 
   if (input.isActive) {
     return cn(
       baseClassName,
-      "bg-primary/14 text-foreground font-medium shadow-sm ring-1 ring-primary/18 hover:bg-primary/20 hover:text-foreground dark:bg-primary/18 dark:hover:bg-primary/24",
+      "bg-neutral-900/8 text-foreground font-medium shadow-none ring-0 hover:bg-neutral-900/10 hover:text-foreground dark:bg-white/10 dark:hover:bg-white/14",
     );
   }
 
-  return cn(baseClassName, "text-muted-foreground hover:bg-white/55 hover:text-foreground");
+  return cn(
+    baseClassName,
+    "text-muted-foreground hover:bg-neutral-900/6 hover:text-foreground dark:hover:bg-white/7",
+  );
 }
 
 export function resolveThreadStatusPill(input: {

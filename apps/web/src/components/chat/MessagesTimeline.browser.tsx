@@ -135,6 +135,26 @@ describe("MessagesTimeline", () => {
     }
   });
 
+  it("renders the active thinking row with shiny text instead of pulsing dots", async () => {
+    const screen = await render(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={new Date().toISOString()}
+        timelineEntries={[]}
+      />,
+    );
+
+    try {
+      await expect.element(page.getByText("Thinking for", { exact: false })).toBeVisible();
+      const thinkingLabel = document.querySelector(".codex-thinking-shine");
+      expect(thinkingLabel?.textContent).toContain("Thinking for");
+      expect(document.querySelector(".animate-pulse")).toBeNull();
+    } finally {
+      await screen.unmount();
+    }
+  });
+
   it("snaps to the bottom when timeline rows appear after an initially empty render", async () => {
     const requestAnimationFrameSpy = vi
       .spyOn(window, "requestAnimationFrame")
