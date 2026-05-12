@@ -2017,15 +2017,17 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             />
           )}
           <ProjectFavicon environmentId={project.environmentId} cwd={project.cwd} />
-          <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span
+            className="flex min-w-0 flex-1 items-center gap-2"
+            title={
+              project.groupedProjectCount > 1
+                ? `${project.displayName} (${project.groupedProjectCount} projects)`
+                : project.displayName
+            }
+          >
             <span className="truncate text-xs font-medium text-foreground/90">
               {project.displayName}
             </span>
-            {project.groupedProjectCount > 1 ? (
-              <span className="shrink-0 text-[10px] text-sidebar-foreground/60">
-                {project.groupedProjectCount} projects
-              </span>
-            ) : null}
           </span>
         </SidebarMenuButton>
         {/* Environment badge – visible by default, crossfades with the
