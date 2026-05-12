@@ -195,7 +195,7 @@ import {
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
 import { SidebarProviderUpdatePill } from "./sidebar/SidebarProviderUpdatePill";
-import { CodexGlyph } from "./CodexAppChrome";
+import { AppLogo } from "./AppBranding";
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
   updated_at: "Last user message",
   created_at: "Created at",
@@ -2446,9 +2446,9 @@ const SidebarChromeHeader = memo(function SidebarChromeHeader({
               className="ml-1 flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md outline-hidden ring-ring transition-colors hover:text-foreground focus-visible:ring-2"
               to="/"
             >
-              <CodexGlyph className="size-6" />
+              <AppLogo aria-hidden="true" className="size-6" />
               <span className="min-w-0 truncate text-sm font-semibold tracking-normal text-foreground">
-                {APP_BASE_NAME === "Androdex" ? "Codex" : APP_BASE_NAME}
+                {APP_BASE_NAME}
               </span>
               {APP_STAGE_LABEL ? (
                 <span className="rounded-full bg-white/60 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.16em] text-muted-foreground/70 shadow-sm ring-1 ring-black/5">

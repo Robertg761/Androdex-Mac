@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { PlusIcon } from "lucide-react";
 
-import { CodexNewThreadHero } from "./CodexAppChrome";
+import { AppNewThreadHero } from "./AppBranding";
 import { SidebarInset, SidebarTrigger } from "./ui/sidebar";
 import { getDesktopTitlebarStyle } from "../desktopShell";
 import { isElectron } from "../env";
@@ -74,7 +74,7 @@ export function NoActiveThreadState() {
 
         <div className="flex min-h-0 flex-1 items-center justify-center px-6 pb-24 pt-10">
           <div className="flex w-full max-w-208 flex-col items-center">
-            <CodexNewThreadHero projectName={null} />
+            <AppNewThreadHero projectName={null} />
             <Button className="mt-9 rounded-full px-5" size="lg" onClick={handleNewThreadClick}>
               <PlusIcon className="size-4" />
               New thread

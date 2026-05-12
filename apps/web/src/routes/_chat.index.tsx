@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 
-import { CodexGlyph } from "../components/CodexAppChrome";
+import { AppLogo } from "../components/AppBranding";
 import { NoActiveThreadState } from "../components/NoActiveThreadState";
 import { Button } from "../components/ui/button";
 import { SidebarInset, SidebarTrigger } from "../components/ui/sidebar";
@@ -40,7 +40,7 @@ function HostedStaticOnboardingState() {
 
         <main className="grid min-h-0 flex-1 place-items-center px-5 py-10">
           <section className="flex w-full max-w-[32rem] flex-col items-center text-center">
-            <CodexGlyph className="mb-6 size-15 text-foreground" />
+            <AppLogo aria-hidden="true" className="mb-6 size-15" />
             <h1 className="text-3xl font-semibold tracking-normal text-foreground sm:text-4xl">
               Connect an environment
             </h1>

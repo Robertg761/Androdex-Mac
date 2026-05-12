@@ -151,7 +151,7 @@ import { resolveEffectiveEnvMode, resolveEnvironmentOptionLabel } from "./Branch
 import { ProviderStatusBanner } from "./chat/ProviderStatusBanner";
 import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
-import { CodexNewThreadHero } from "./CodexAppChrome";
+import { AppNewThreadHero } from "./AppBranding";
 import {
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
   buildExpiredTerminalContextToastCopy,
@@ -3587,7 +3587,7 @@ export default function ChatView(props: ChatViewProps) {
               skills={activeProviderStatus?.skills ?? EMPTY_PROVIDER_SKILLS}
               emptyState={
                 showNewThreadHero ? (
-                  <CodexNewThreadHero
+                  <AppNewThreadHero
                     projectName={activeProject?.name ?? null}
                     className="-mt-10 sm:-mt-16"
                   />
