@@ -205,6 +205,10 @@ const EnvServerConfig = Config.all({
     "ANDRODEX_TAILSCALE_SERVE_PORT",
     "T3CODE_TAILSCALE_SERVE_PORT",
   ),
+  computerUseFeatureEnabled: Config.boolean("ANDRODEX_COMPUTER_USE").pipe(
+    Config.option,
+    Config.map((value) => Option.getOrElse(value, () => false)),
+  ),
 });
 
 export interface CliServerFlags {
@@ -443,6 +447,7 @@ export const resolveServerConfig = (
       logWebSocketEvents,
       tailscaleServeEnabled,
       tailscaleServePort,
+      computerUseFeatureEnabled: env.computerUseFeatureEnabled,
     };
 
     return config;

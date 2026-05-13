@@ -1,4 +1,15 @@
 import type {
+  CaptureComputerUseScreenshotInput,
+  ComputerUseScreenshot,
+  ComputerUseSession,
+  ComputerUseSnapshot,
+  ComputerUseStatus,
+  ExecuteComputerUseActionsInput,
+  RespondComputerUseApprovalInput,
+  StartComputerUseSessionInput,
+  StopComputerUseSessionInput,
+} from "./computerUse.ts";
+import type {
   VcsSwitchRefInput,
   VcsSwitchRefResult,
   VcsCreateRefInput,
@@ -521,6 +532,15 @@ export interface LocalApi {
     getTraceDiagnostics: () => Promise<ServerTraceDiagnosticsResult>;
     getProcessDiagnostics: () => Promise<ServerProcessDiagnosticsResult>;
     signalProcess: (input: ServerSignalProcessInput) => Promise<ServerSignalProcessResult>;
+  };
+  computerUse: {
+    getStatus: () => Promise<ComputerUseStatus>;
+    getSnapshot: () => Promise<ComputerUseSnapshot>;
+    startSession: (input: StartComputerUseSessionInput) => Promise<ComputerUseSession>;
+    stopSession: (input: StopComputerUseSessionInput) => Promise<void>;
+    captureScreenshot: (input: CaptureComputerUseScreenshotInput) => Promise<ComputerUseScreenshot>;
+    executeActions: (input: ExecuteComputerUseActionsInput) => Promise<ComputerUseSnapshot>;
+    respondToApproval: (input: RespondComputerUseApprovalInput) => Promise<ComputerUseSnapshot>;
   };
 }
 

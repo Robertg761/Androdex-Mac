@@ -12,6 +12,7 @@ import {
   DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
   type AuthAccessStreamEvent,
   AuthSessionId,
+  COMPUTER_USE_WS_METHODS,
   CommandId,
   EventId,
   type OrchestrationCommand,
@@ -69,6 +70,7 @@ import { ProjectSetupScriptRunner } from "./project/Services/ProjectSetupScriptR
 import { RepositoryIdentityResolver } from "./project/Services/RepositoryIdentityResolver.ts";
 import { ServerEnvironment } from "./environment/Services/ServerEnvironment.ts";
 import { ServerAuth } from "./auth/Services/ServerAuth.ts";
+import { ComputerUseManager } from "./computerUse/Services/ComputerUseManager.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as SourceControlDiscoveryLayer from "./sourceControl/SourceControlDiscovery.ts";
@@ -185,6 +187,7 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
       const repositoryIdentityResolver = yield* RepositoryIdentityResolver;
       const serverEnvironment = yield* ServerEnvironment;
       const serverAuth = yield* ServerAuth;
+      const computerUseManager = yield* ComputerUseManager;
       const sourceControlDiscovery = yield* SourceControlDiscoveryLayer.SourceControlDiscovery;
       const automaticGitFetchInterval = serverSettings.getSettings.pipe(
         Effect.map((settings) => settings.automaticGitFetchInterval),
@@ -1343,6 +1346,54 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
               );
             }),
             { "rpc.aggregate": "auth" },
+          ),
+        [COMPUTER_USE_WS_METHODS.getStatus]: (_input) =>
+          observeRpcEffect(COMPUTER_USE_WS_METHODS.getStatus, computerUseManager.getStatus, {
+            "rpc.aggregate": "computer-use",
+          }),
+        [COMPUTER_USE_WS_METHODS.getSnapshot]: (_input) =>
+          observeRpcEffect(COMPUTER_USE_WS_METHODS.getSnapshot, computerUseManager.getSnapshot, {
+            "rpc.aggregate": "computer-use",
+          }),
+        [COMPUTER_USE_WS_METHODS.listTargets]: (_input) =>
+          observeRpcEffect(COMPUTER_USE_WS_METHODS.listTargets, computerUseManager.listTargets, {
+            "rpc.aggregate": "computer-use",
+          }),
+        [COMPUTER_USE_WS_METHODS.startSession]: (input) =>
+          observeRpcEffect(
+            COMPUTER_USE_WS_METHODS.startSession,
+            computerUseManager.startSession(input),
+            { "rpc.aggregate": "computer-use" },
+          ),
+        [COMPUTER_USE_WS_METHODS.stopSession]: (input) =>
+          observeRpcEffect(
+            COMPUTER_USE_WS_METHODS.stopSession,
+            computerUseManager.stopSession(input).pipe(Effect.as({})),
+            { "rpc.aggregate": "computer-use" },
+          ),
+        [COMPUTER_USE_WS_METHODS.captureScreenshot]: (input) =>
+          observeRpcEffect(
+            COMPUTER_USE_WS_METHODS.captureScreenshot,
+            computerUseManager.captureScreenshot(input),
+            { "rpc.aggregate": "computer-use" },
+          ),
+        [COMPUTER_USE_WS_METHODS.executeActions]: (input) =>
+          observeRpcEffect(
+            COMPUTER_USE_WS_METHODS.executeActions,
+            computerUseManager.executeActions(input),
+            { "rpc.aggregate": "computer-use" },
+          ),
+        [COMPUTER_USE_WS_METHODS.respondToApproval]: (input) =>
+          observeRpcEffect(
+            COMPUTER_USE_WS_METHODS.respondToApproval,
+            computerUseManager.respondToApproval(input),
+            { "rpc.aggregate": "computer-use" },
+          ),
+        [COMPUTER_USE_WS_METHODS.subscribeEvents]: (_input) =>
+          observeRpcStream(
+            COMPUTER_USE_WS_METHODS.subscribeEvents,
+            computerUseManager.streamEvents,
+            { "rpc.aggregate": "computer-use" },
           ),
       });
     }),

@@ -4,6 +4,7 @@ import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
 import { OpenError, OpenInEditorInput } from "./editor.ts";
 import { AuthAccessStreamEvent } from "./auth.ts";
+import { COMPUTER_USE_WS_METHODS, ComputerUseError, ComputerUseRpcSchemas } from "./computerUse.ts";
 import {
   FilesystemBrowseInput,
   FilesystemBrowseResult,
@@ -511,6 +512,67 @@ export const WsSubscribeAuthAccessRpc = Rpc.make(WS_METHODS.subscribeAuthAccess,
   stream: true,
 });
 
+export const WsComputerUseGetStatusRpc = Rpc.make(COMPUTER_USE_WS_METHODS.getStatus, {
+  payload: ComputerUseRpcSchemas.getStatus.input,
+  success: ComputerUseRpcSchemas.getStatus.output,
+  error: ComputerUseError,
+});
+
+export const WsComputerUseGetSnapshotRpc = Rpc.make(COMPUTER_USE_WS_METHODS.getSnapshot, {
+  payload: ComputerUseRpcSchemas.getSnapshot.input,
+  success: ComputerUseRpcSchemas.getSnapshot.output,
+  error: ComputerUseError,
+});
+
+export const WsComputerUseListTargetsRpc = Rpc.make(COMPUTER_USE_WS_METHODS.listTargets, {
+  payload: ComputerUseRpcSchemas.listTargets.input,
+  success: ComputerUseRpcSchemas.listTargets.output,
+  error: ComputerUseError,
+});
+
+export const WsComputerUseStartSessionRpc = Rpc.make(COMPUTER_USE_WS_METHODS.startSession, {
+  payload: ComputerUseRpcSchemas.startSession.input,
+  success: ComputerUseRpcSchemas.startSession.output,
+  error: ComputerUseError,
+});
+
+export const WsComputerUseStopSessionRpc = Rpc.make(COMPUTER_USE_WS_METHODS.stopSession, {
+  payload: ComputerUseRpcSchemas.stopSession.input,
+  success: ComputerUseRpcSchemas.stopSession.output,
+  error: ComputerUseError,
+});
+
+export const WsComputerUseCaptureScreenshotRpc = Rpc.make(
+  COMPUTER_USE_WS_METHODS.captureScreenshot,
+  {
+    payload: ComputerUseRpcSchemas.captureScreenshot.input,
+    success: ComputerUseRpcSchemas.captureScreenshot.output,
+    error: ComputerUseError,
+  },
+);
+
+export const WsComputerUseExecuteActionsRpc = Rpc.make(COMPUTER_USE_WS_METHODS.executeActions, {
+  payload: ComputerUseRpcSchemas.executeActions.input,
+  success: ComputerUseRpcSchemas.executeActions.output,
+  error: ComputerUseError,
+});
+
+export const WsComputerUseRespondToApprovalRpc = Rpc.make(
+  COMPUTER_USE_WS_METHODS.respondToApproval,
+  {
+    payload: ComputerUseRpcSchemas.respondToApproval.input,
+    success: ComputerUseRpcSchemas.respondToApproval.output,
+    error: ComputerUseError,
+  },
+);
+
+export const WsComputerUseSubscribeEventsRpc = Rpc.make(COMPUTER_USE_WS_METHODS.subscribeEvents, {
+  payload: ComputerUseRpcSchemas.subscribeEvents.input,
+  success: ComputerUseRpcSchemas.subscribeEvents.output,
+  error: ComputerUseError,
+  stream: true,
+});
+
 export const WsRpcGroup = RpcGroup.make(
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
@@ -557,6 +619,15 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscribeServerConfigRpc,
   WsSubscribeServerLifecycleRpc,
   WsSubscribeAuthAccessRpc,
+  WsComputerUseGetStatusRpc,
+  WsComputerUseGetSnapshotRpc,
+  WsComputerUseListTargetsRpc,
+  WsComputerUseStartSessionRpc,
+  WsComputerUseStopSessionRpc,
+  WsComputerUseCaptureScreenshotRpc,
+  WsComputerUseExecuteActionsRpc,
+  WsComputerUseRespondToApprovalRpc,
+  WsComputerUseSubscribeEventsRpc,
   WsOrchestrationDispatchCommandRpc,
   WsOrchestrationGetTurnDiffRpc,
   WsOrchestrationGetFullThreadDiffRpc,

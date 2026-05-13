@@ -6,6 +6,7 @@ import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
 import { DEFAULT_GIT_TEXT_GENERATION_MODEL, ProviderOptionSelections } from "./model.ts";
 import { ModelSelection } from "./orchestration.ts";
 import { ProviderInstanceConfig, ProviderInstanceId } from "./providerInstance.ts";
+import { ComputerUseSettings, DEFAULT_COMPUTER_USE_SETTINGS } from "./computerUse.ts";
 
 // ── Client Settings (local-only) ───────────────────────────────
 
@@ -387,6 +388,9 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  computerUse: ComputerUseSettings.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_COMPUTER_USE_SETTINGS)),
+  ),
 });
 export type ServerSettings = typeof ServerSettings.Type;
 
@@ -463,6 +467,16 @@ export const ServerSettingsPatch = Schema.Struct({
     Schema.Struct({
       otlpTracesUrl: Schema.optionalKey(TrimmedString),
       otlpMetricsUrl: Schema.optionalKey(TrimmedString),
+    }),
+  ),
+  computerUse: Schema.optionalKey(
+    Schema.Struct({
+      enabled: Schema.optionalKey(Schema.Boolean),
+      defaultDriver: Schema.optionalKey(ComputerUseSettings.fields.defaultDriver),
+      askBeforeNewTarget: Schema.optionalKey(Schema.Boolean),
+      askBeforeSensitiveAction: Schema.optionalKey(Schema.Boolean),
+      clipboardEnabled: Schema.optionalKey(Schema.Boolean),
+      hostDesktopEnabled: Schema.optionalKey(Schema.Boolean),
     }),
   ),
   providers: Schema.optionalKey(

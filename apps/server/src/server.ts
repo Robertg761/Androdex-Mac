@@ -87,6 +87,18 @@ import {
   orchestrationDispatchRouteLayer,
   orchestrationSnapshotRouteLayer,
 } from "./orchestration/http.ts";
+import { ComputerUseManagerLive } from "./computerUse/index.ts";
+import {
+  computerUseCaptureScreenshotRouteLayer,
+  computerUseExecuteActionsRouteLayer,
+  computerUseGetSessionRouteLayer,
+  computerUseRespondApprovalRouteLayer,
+  computerUseSnapshotRouteLayer,
+  computerUseStartSessionRouteLayer,
+  computerUseStatusRouteLayer,
+  computerUseStopSessionRouteLayer,
+  computerUseTargetsRouteLayer,
+} from "./computerUse/http.ts";
 import * as NetService from "@t3tools/shared/Net";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
 
@@ -291,6 +303,19 @@ const RuntimeServicesLive = ServerRuntimeStartupLive.pipe(
   Layer.provideMerge(RuntimeDependenciesLive),
 );
 
+const ComputerUseTransportRouteLayer = Layer.mergeAll(
+  computerUseCaptureScreenshotRouteLayer,
+  computerUseExecuteActionsRouteLayer,
+  computerUseGetSessionRouteLayer,
+  computerUseRespondApprovalRouteLayer,
+  computerUseSnapshotRouteLayer,
+  computerUseStartSessionRouteLayer,
+  computerUseStatusRouteLayer,
+  computerUseStopSessionRouteLayer,
+  computerUseTargetsRouteLayer,
+  websocketRpcRouteLayer,
+).pipe(HttpRouter.provideRequest(ComputerUseManagerLive));
+
 export const makeRoutesLayer = Layer.mergeAll(
   authBearerBootstrapRouteLayer,
   authBootstrapRouteLayer,
@@ -303,13 +328,13 @@ export const makeRoutesLayer = Layer.mergeAll(
   authSessionRouteLayer,
   authWebSocketTokenRouteLayer,
   attachmentsRouteLayer,
+  ComputerUseTransportRouteLayer,
   orchestrationDispatchRouteLayer,
   orchestrationSnapshotRouteLayer,
   otlpTracesProxyRouteLayer,
   projectFaviconRouteLayer,
   serverEnvironmentRouteLayer,
   staticAndDevRouteLayer,
-  websocketRpcRouteLayer,
 ).pipe(Layer.provide(browserApiCorsLayer));
 
 export const makeServerLayer = Layer.unwrap(

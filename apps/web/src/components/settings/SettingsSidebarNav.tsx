@@ -6,6 +6,7 @@ import {
   GitBranchIcon,
   KeyboardIcon,
   Link2Icon,
+  MonitorDotIcon,
   PaletteIcon,
   Settings2Icon,
 } from "lucide-react";
@@ -27,6 +28,7 @@ export type SettingsSectionPath =
   | "/settings/appearance"
   | "/settings/keybindings"
   | "/settings/providers"
+  | "/settings/computer-use"
   | "/settings/source-control"
   | "/settings/connections"
   | "/settings/archived";
@@ -40,6 +42,7 @@ export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   { label: "Appearance", to: "/settings/appearance", icon: PaletteIcon },
   { label: "Keybindings", to: "/settings/keybindings", icon: KeyboardIcon },
   { label: "Providers", to: "/settings/providers", icon: BotIcon },
+  { label: "Computer Use", to: "/settings/computer-use", icon: MonitorDotIcon },
   { label: "Source Control", to: "/settings/source-control", icon: GitBranchIcon },
   { label: "Connections", to: "/settings/connections", icon: Link2Icon },
   { label: "Archive", to: "/settings/archived", icon: ArchiveIcon },

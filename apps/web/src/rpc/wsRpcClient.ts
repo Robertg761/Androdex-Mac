@@ -5,6 +5,7 @@ import {
   type VcsStatusResult,
   type VcsStatusStreamEvent,
   type LocalApi,
+  COMPUTER_USE_WS_METHODS,
   ORCHESTRATION_WS_METHODS,
   type ServerSettingsPatch,
   WS_METHODS,
@@ -147,6 +148,17 @@ export interface WsRpcClient {
     readonly subscribeConfig: RpcStreamMethod<typeof WS_METHODS.subscribeServerConfig>;
     readonly subscribeLifecycle: RpcStreamMethod<typeof WS_METHODS.subscribeServerLifecycle>;
     readonly subscribeAuthAccess: RpcStreamMethod<typeof WS_METHODS.subscribeAuthAccess>;
+  };
+  readonly computerUse: {
+    readonly getStatus: RpcUnaryNoArgMethod<typeof COMPUTER_USE_WS_METHODS.getStatus>;
+    readonly getSnapshot: RpcUnaryNoArgMethod<typeof COMPUTER_USE_WS_METHODS.getSnapshot>;
+    readonly listTargets: RpcUnaryNoArgMethod<typeof COMPUTER_USE_WS_METHODS.listTargets>;
+    readonly startSession: RpcUnaryMethod<typeof COMPUTER_USE_WS_METHODS.startSession>;
+    readonly stopSession: RpcUnaryMethod<typeof COMPUTER_USE_WS_METHODS.stopSession>;
+    readonly captureScreenshot: RpcUnaryMethod<typeof COMPUTER_USE_WS_METHODS.captureScreenshot>;
+    readonly executeActions: RpcUnaryMethod<typeof COMPUTER_USE_WS_METHODS.executeActions>;
+    readonly respondToApproval: RpcUnaryMethod<typeof COMPUTER_USE_WS_METHODS.respondToApproval>;
+    readonly subscribeEvents: RpcStreamMethod<typeof COMPUTER_USE_WS_METHODS.subscribeEvents>;
   };
   readonly orchestration: {
     readonly dispatchCommand: RpcUnaryMethod<typeof ORCHESTRATION_WS_METHODS.dispatchCommand>;
@@ -302,6 +314,29 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
           ...options,
           tag: WS_METHODS.subscribeAuthAccess,
         }),
+    },
+    computerUse: {
+      getStatus: () => transport.request((client) => client[COMPUTER_USE_WS_METHODS.getStatus]({})),
+      getSnapshot: () =>
+        transport.request((client) => client[COMPUTER_USE_WS_METHODS.getSnapshot]({})),
+      listTargets: () =>
+        transport.request((client) => client[COMPUTER_USE_WS_METHODS.listTargets]({})),
+      startSession: (input) =>
+        transport.request((client) => client[COMPUTER_USE_WS_METHODS.startSession](input)),
+      stopSession: (input) =>
+        transport.request((client) => client[COMPUTER_USE_WS_METHODS.stopSession](input)),
+      captureScreenshot: (input) =>
+        transport.request((client) => client[COMPUTER_USE_WS_METHODS.captureScreenshot](input)),
+      executeActions: (input) =>
+        transport.request((client) => client[COMPUTER_USE_WS_METHODS.executeActions](input)),
+      respondToApproval: (input) =>
+        transport.request((client) => client[COMPUTER_USE_WS_METHODS.respondToApproval](input)),
+      subscribeEvents: (listener, options) =>
+        transport.subscribe(
+          (client) => client[COMPUTER_USE_WS_METHODS.subscribeEvents]({}),
+          listener,
+          { ...options, tag: COMPUTER_USE_WS_METHODS.subscribeEvents },
+        ),
     },
     orchestration: {
       dispatchCommand: (input) =>
