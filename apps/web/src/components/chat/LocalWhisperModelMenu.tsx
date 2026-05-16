@@ -1,4 +1,5 @@
 import type {
+  LocalWhisperLanguageMode,
   LocalWhisperModel,
   LocalWhisperModelId,
   LocalWhisperRuntimeStatus,
@@ -7,6 +8,7 @@ import {
   CheckIcon,
   DownloadIcon,
   LoaderCircleIcon,
+  LanguagesIcon,
   MicIcon,
   TriangleAlertIcon,
 } from "lucide-react";
@@ -27,10 +29,13 @@ interface LocalWhisperModelMenuProps {
   readonly models: readonly LocalWhisperModel[];
   readonly loading: boolean;
   readonly selectedModelId: LocalWhisperModelId | null;
+  readonly languageMode: LocalWhisperLanguageMode;
   readonly downloadingModelId: LocalWhisperModelId | null;
   readonly downloadProgress: LocalWhisperDownloadProgress | null;
   readonly onClose: () => void;
   readonly onSelect: (model: LocalWhisperModel) => void;
+  readonly onLanguageModeChange: (mode: LocalWhisperLanguageMode) => void;
+  readonly onCancelDownload: () => void;
 }
 
 function formatProgress(progress: LocalWhisperDownloadProgress): string {
@@ -48,6 +53,9 @@ function modelStatusLabel(input: {
   if (input.model.installed) {
     return "Installed";
   }
+  if (input.model.path) {
+    return "Repair";
+  }
   return "Download";
 }
 
@@ -57,10 +65,13 @@ export function LocalWhisperModelMenu({
   models,
   loading,
   selectedModelId,
+  languageMode,
   downloadingModelId,
   downloadProgress,
   onClose,
   onSelect,
+  onLanguageModeChange,
+  onCancelDownload,
 }: LocalWhisperModelMenuProps) {
   if (!open) {
     return null;
@@ -80,9 +91,48 @@ export function LocalWhisperModelMenu({
             Choose the storage and accuracy tradeoff. Models are saved locally.
           </div>
         </div>
+        {downloadingModelId ? (
+          <Button
+            aria-label="Cancel model download"
+            size="xs"
+            variant="ghost"
+            onClick={onCancelDownload}
+          >
+            Cancel
+          </Button>
+        ) : null}
         <Button aria-label="Close model picker" size="xs" variant="ghost" onClick={onClose}>
           Close
         </Button>
+      </div>
+      <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
+        <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <LanguagesIcon className="size-3.5 shrink-0" />
+          Language
+        </span>
+        <span className="inline-flex shrink-0 overflow-hidden rounded-md border bg-background p-0.5">
+          {(
+            [
+              ["english", "English"],
+              ["auto", "Auto"],
+            ] satisfies ReadonlyArray<readonly [LocalWhisperLanguageMode, string]>
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={languageMode === mode}
+              className={cn(
+                "rounded px-2 py-1 text-xs transition-colors",
+                languageMode === mode
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+              onClick={() => onLanguageModeChange(mode)}
+            >
+              {label}
+            </button>
+          ))}
+        </span>
       </div>
       {runtime && !runtime.available ? (
         <div className="flex gap-2 border-b border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">

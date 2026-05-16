@@ -21,4 +21,10 @@ describe("settings pairing URL helpers", () => {
       "https://preview.androdex.xyz/pair?host=https%3A%2F%2Fhost.tailnet.example.ts.net%3A3773#token=PAIRCODE",
     );
   });
+
+  it("does not build hosted pairing URLs for raw Codex app-server WebSocket endpoints", () => {
+    vi.stubEnv("VITE_HOSTED_APP_URL", "https://preview.androdex.xyz");
+
+    expect(resolveHostedPairingUrl("wss://codex.example.com/app-server", "PAIRCODE")).toBeNull();
+  });
 });

@@ -111,6 +111,8 @@ function createBaseServerConfig(): ServerConfig {
         codex: {
           enabled: true,
           binaryPath: "",
+          appServerUrl: "",
+          appServerTokenEnvVar: "CODEX_APP_SERVER_TOKEN",
           homePath: "",
           shadowHomePath: "",
           customModels: [],

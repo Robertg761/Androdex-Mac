@@ -36,6 +36,7 @@ import * as CodexRpc from "effect-codex-app-server/rpc";
 import * as EffectCodexSchema from "effect-codex-app-server/schema";
 
 import { buildCodexInitializeParams } from "./CodexProvider.ts";
+import type { CodexAppServerRemoteConnection } from "./CodexAppServerConnection.ts";
 import { expandHomePath } from "../../pathExpansion.ts";
 import {
   CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS,
@@ -108,6 +109,7 @@ export interface CodexSessionRuntimeOptions {
   readonly threadId: ThreadId;
   readonly providerInstanceId?: ProviderInstanceId;
   readonly binaryPath: string;
+  readonly appServer?: CodexAppServerRemoteConnection;
   readonly homePath?: string;
   readonly environment?: NodeJS.ProcessEnv;
   readonly cwd: string;
@@ -727,7 +729,6 @@ export const makeCodexSessionRuntime = (
   ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
 > =>
   Effect.gen(function* () {
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const runtimeScope = yield* Scope.Scope;
     const events = yield* Queue.unbounded<ProviderEvent>();
     const pendingApprovalsRef = yield* Ref.make(new Map<ApprovalRequestId, PendingApproval>());
@@ -744,29 +745,45 @@ export const makeCodexSessionRuntime = (
       ...(options.environment ?? process.env),
       ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
     };
-    const child = yield* spawner
-      .spawn(
-        ChildProcess.make(options.binaryPath, ["app-server"], {
-          cwd: options.cwd,
-          env,
-          shell: process.platform === "win32",
-        }),
-      )
-      .pipe(
-        Effect.provideService(Scope.Scope, runtimeScope),
-        Effect.mapError(
-          (cause) =>
-            new CodexErrors.CodexAppServerSpawnError({
-              command: `${options.binaryPath} app-server`,
-              cause,
-            }),
-        ),
-      );
+    const child =
+      options.appServer === undefined
+        ? yield* Effect.gen(function* () {
+            const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+            return yield* spawner
+              .spawn(
+                ChildProcess.make(options.binaryPath, ["app-server"], {
+                  cwd: options.cwd,
+                  env,
+                  shell: process.platform === "win32",
+                }),
+              )
+              .pipe(
+                Effect.provideService(Scope.Scope, runtimeScope),
+                Effect.mapError(
+                  (cause) =>
+                    new CodexErrors.CodexAppServerSpawnError({
+                      command: `${options.binaryPath} app-server`,
+                      cause,
+                    }),
+                ),
+              );
+          })
+        : undefined;
 
-    const clientContext = yield* CodexClient.layerChildProcess(child).pipe(
-      Layer.build,
-      Effect.provideService(Scope.Scope, runtimeScope),
-    );
+    const clientContext = options.appServer
+      ? yield* CodexClient.layerWebSocket({
+          url: options.appServer.url,
+          ...(options.appServer.bearerToken ? { bearerToken: options.appServer.bearerToken } : {}),
+        }).pipe(Layer.build, Effect.provideService(Scope.Scope, runtimeScope))
+      : child
+        ? yield* CodexClient.layerChildProcess(child).pipe(
+            Layer.build,
+            Effect.provideService(Scope.Scope, runtimeScope),
+          )
+        : yield* new CodexErrors.CodexAppServerTransportError({
+            detail: "Codex session runtime has no app-server transport.",
+            cause: new Error("Codex session runtime has no app-server transport."),
+          });
     const client = yield* Effect.service(CodexClient.CodexAppServerClient).pipe(
       Effect.provide(clientContext),
     );
@@ -1160,68 +1177,75 @@ export const makeCodexSessionRuntime = (
       Effect.forkIn(runtimeScope),
     );
 
-    const stderrRemainderRef = yield* Ref.make("");
-    yield* child.stderr.pipe(
-      Stream.decodeText(),
-      Stream.runForEach((chunk) =>
-        Ref.modify(stderrRemainderRef, (current) => {
-          const combined = current + chunk;
-          const lines = combined.split("\n");
-          const remainder = lines.pop() ?? "";
-          return [lines.map((line) => line.replace(/\r$/, "")), remainder] as const;
-        }).pipe(
-          Effect.flatMap((lines) =>
-            Effect.forEach(
-              lines,
-              (line) => {
-                const classified = classifyCodexStderrLine(line);
-                if (!classified) {
-                  return Effect.void;
-                }
-                return emitEvent({
-                  kind: "notification",
-                  threadId: options.threadId,
-                  method: "process/stderr",
-                  message: classified.message,
-                });
-              },
-              { discard: true },
+    if (child) {
+      const stderrRemainderRef = yield* Ref.make("");
+      yield* child.stderr.pipe(
+        Stream.decodeText(),
+        Stream.runForEach((chunk) =>
+          Ref.modify(stderrRemainderRef, (current) => {
+            const combined = current + chunk;
+            const lines = combined.split("\n");
+            const remainder = lines.pop() ?? "";
+            return [lines.map((line) => line.replace(/\r$/, "")), remainder] as const;
+          }).pipe(
+            Effect.flatMap((lines) =>
+              Effect.forEach(
+                lines,
+                (line) => {
+                  const classified = classifyCodexStderrLine(line);
+                  if (!classified) {
+                    return Effect.void;
+                  }
+                  return emitEvent({
+                    kind: "notification",
+                    threadId: options.threadId,
+                    method: "process/stderr",
+                    message: classified.message,
+                  });
+                },
+                { discard: true },
+              ),
             ),
           ),
         ),
-      ),
-      Effect.forkIn(runtimeScope),
-    );
+        Effect.forkIn(runtimeScope),
+      );
 
-    yield* child.exitCode.pipe(
-      Effect.flatMap((exitCode) =>
-        Ref.get(closedRef).pipe(
-          Effect.flatMap((closed) => {
-            if (closed) {
-              return Effect.void;
-            }
-            const nextStatus = exitCode === 0 ? "closed" : "error";
-            return updateSession(sessionRef, {
-              status: nextStatus,
-              activeTurnId: undefined,
-            }).pipe(
-              Effect.andThen(
-                emitSessionEvent(
-                  "session/exited",
-                  exitCode === 0
-                    ? "Codex App Server exited."
-                    : `Codex App Server exited with code ${exitCode}.`,
+      yield* child.exitCode.pipe(
+        Effect.flatMap((exitCode) =>
+          Ref.get(closedRef).pipe(
+            Effect.flatMap((closed) => {
+              if (closed) {
+                return Effect.void;
+              }
+              const nextStatus = exitCode === 0 ? "closed" : "error";
+              return updateSession(sessionRef, {
+                status: nextStatus,
+                activeTurnId: undefined,
+              }).pipe(
+                Effect.andThen(
+                  emitSessionEvent(
+                    "session/exited",
+                    exitCode === 0
+                      ? "Codex App Server exited."
+                      : `Codex App Server exited with code ${exitCode}.`,
+                  ),
                 ),
-              ),
-            );
-          }),
+              );
+            }),
+          ),
         ),
-      ),
-      Effect.forkIn(runtimeScope),
-    );
+        Effect.forkIn(runtimeScope),
+      );
+    }
 
     const start = Effect.fn("CodexSessionRuntime.start")(function* () {
-      yield* emitSessionEvent("session/connecting", "Starting Codex App Server session.");
+      yield* emitSessionEvent(
+        "session/connecting",
+        options.appServer
+          ? "Connecting to remote Codex App Server session."
+          : "Starting Codex App Server session.",
+      );
       yield* client.request("initialize", buildCodexInitializeParams());
       yield* client.notify("initialized", undefined);
 

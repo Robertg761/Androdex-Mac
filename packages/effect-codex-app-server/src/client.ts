@@ -16,6 +16,10 @@ import {
   runHandler,
 } from "./_internal/shared.ts";
 import { makeChildStdio, makeTerminationError } from "./_internal/stdio.ts";
+import {
+  makeWebSocketStdio,
+  type CodexAppServerWebSocketOptions,
+} from "./_internal/webSocketStdio.ts";
 
 const DEFAULT_APP_SERVER_FORCE_KILL_AFTER = "2 seconds" as const;
 
@@ -296,5 +300,18 @@ export const layerCommand = (
       Effect.flatMap((handle) =>
         make(makeChildStdio(handle), options, makeTerminationError(handle)),
       ),
+    ),
+  );
+
+export interface CodexAppServerWebSocketLayerOptions
+  extends CodexAppServerClientOptions, CodexAppServerWebSocketOptions {}
+
+export const layerWebSocket = (
+  options: CodexAppServerWebSocketLayerOptions,
+): Layer.Layer<CodexAppServerClient, CodexError.CodexAppServerTransportError> =>
+  Layer.effect(
+    CodexAppServerClient,
+    makeWebSocketStdio(options).pipe(
+      Effect.flatMap(({ stdio, terminationError }) => make(stdio, options, terminationError)),
     ),
   );

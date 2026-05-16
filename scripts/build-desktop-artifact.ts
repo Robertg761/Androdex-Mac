@@ -502,14 +502,53 @@ function electronPlatformToNodePlatform(platform: typeof BuildPlatform.Type): No
   return "linux";
 }
 
-function resolveRequiredWhisperRuntimeResources(
+function whisperRuntimeDirectoryName(
+  platform: typeof BuildPlatform.Type,
+  arch: Exclude<typeof BuildArch.Type, "universal">,
+): string {
+  return `${electronPlatformToNodePlatform(platform)}-${arch}`;
+}
+
+function resolveWhisperRuntimeResourceNames(
+  nodePlatform: NodeJS.Platform,
+  arch: Exclude<typeof BuildArch.Type, "universal">,
+): readonly string[] {
+  const executableName = nodePlatform === "win32" ? "whisper-cli.exe" : "whisper-cli";
+  if (nodePlatform === "linux") {
+    if (arch === "arm64") {
+      return [executableName];
+    }
+    return [
+      executableName,
+      "libwhisper.so.1",
+      "libggml.so.0",
+      "libggml-base.so.0",
+      "libggml-cpu.so.0",
+      "libstdc++.so.6",
+      "libgcc_s.so.1",
+      "libgomp.so.1",
+    ];
+  }
+  if (nodePlatform === "win32") {
+    if (arch === "arm64") {
+      return [executableName];
+    }
+    return [executableName, "whisper.dll", "ggml.dll", "ggml-base.dll", "ggml-cpu.dll"];
+  }
+  return [executableName];
+}
+
+export function resolveRequiredWhisperRuntimeResources(
   platform: typeof BuildPlatform.Type,
   arch: typeof BuildArch.Type,
 ): readonly string[] {
   const nodePlatform = electronPlatformToNodePlatform(platform);
-  const executableName = nodePlatform === "win32" ? "whisper-cli.exe" : "whisper-cli";
   const arches = arch === "universal" ? (["arm64", "x64"] as const) : ([arch] as const);
-  return arches.map((entry) => `whisper/${nodePlatform}-${entry}/${executableName}`);
+  return arches.flatMap((entry) =>
+    resolveWhisperRuntimeResourceNames(nodePlatform, entry).map(
+      (resource) => `whisper/${whisperRuntimeDirectoryName(platform, entry)}/${resource}`,
+    ),
+  );
 }
 
 const findMissingWhisperRuntimeResources = Effect.fn("findMissingWhisperRuntimeResources")(
@@ -612,6 +651,84 @@ const assertWhisperRuntimeResources = Effect.fn("assertWhisperRuntimeResources")
     return;
   }
 
+  return yield* new BuildScriptError({ message });
+});
+
+function normalizeNodeArch(arch: string): Exclude<typeof BuildArch.Type, "universal"> | undefined {
+  if (arch === "x64" || arch === "amd64") return "x64";
+  if (arch === "arm64" || arch === "aarch64") return "arm64";
+  return undefined;
+}
+
+function whisperRuntimeProcessEnv(directory: string): NodeJS.ProcessEnv {
+  if (process.platform === "win32") {
+    return {
+      ...process.env,
+      PATH: `${directory}${pathDelimiter()}${process.env.PATH ?? ""}`,
+    };
+  }
+  if (process.platform === "darwin") {
+    return {
+      ...process.env,
+      DYLD_LIBRARY_PATH: `${directory}${pathDelimiter()}${process.env.DYLD_LIBRARY_PATH ?? ""}`,
+    };
+  }
+  return {
+    ...process.env,
+    LD_LIBRARY_PATH: `${directory}${pathDelimiter()}${process.env.LD_LIBRARY_PATH ?? ""}`,
+  };
+}
+
+function pathDelimiter(): string {
+  return process.platform === "win32" ? ";" : ":";
+}
+
+const smokeTestWhisperRuntimeResource = Effect.fn("smokeTestWhisperRuntimeResource")(function* (
+  platform: typeof BuildPlatform.Type,
+  arch: typeof BuildArch.Type,
+  stageVoiceResourcesDir: string,
+  allowMissing: boolean,
+) {
+  const nodePlatform = electronPlatformToNodePlatform(platform);
+  const hostArch = normalizeNodeArch(process.arch);
+  if (nodePlatform !== process.platform || !hostArch) {
+    return;
+  }
+
+  const targetArch = arch === "universal" ? hostArch : arch;
+  if (targetArch !== hostArch) {
+    return;
+  }
+
+  const path = yield* Path.Path;
+  const directory = path.join(stageVoiceResourcesDir, "whisper", `${nodePlatform}-${targetArch}`);
+  const executablePath = path.join(
+    directory,
+    nodePlatform === "win32" ? "whisper-cli.exe" : "whisper-cli",
+  );
+  const result = yield* spawnAndCollectOutput(
+    ChildProcess.make(executablePath, ["-h"], {
+      env: whisperRuntimeProcessEnv(directory),
+    }),
+  ).pipe(
+    Effect.catch((cause) =>
+      Effect.succeed({
+        stdout: "",
+        stderr: cause instanceof Error ? cause.message : String(cause),
+        exitCode: 1,
+      }),
+    ),
+  );
+  if (result.exitCode === 0) {
+    return;
+  }
+
+  const detail = [result.stderr.trim(), result.stdout.trim()].filter(Boolean).join("\n");
+  const message = `Packaged local voice engine did not start: ${executablePath}.${detail ? `\n${detail}` : ""}`;
+  if (allowMissing) {
+    yield* Effect.logWarning(`[desktop-artifact] ${message}`);
+    return;
+  }
   return yield* new BuildScriptError({ message });
 });
 
@@ -1014,6 +1131,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   );
 
   yield* assertWhisperRuntimeResources(
+    options.platform,
+    options.arch,
+    path.join(stageResourcesDir, "voice"),
+    options.allowMissingVoiceRuntime,
+  );
+  yield* smokeTestWhisperRuntimeResource(
     options.platform,
     options.arch,
     path.join(stageResourcesDir, "voice"),

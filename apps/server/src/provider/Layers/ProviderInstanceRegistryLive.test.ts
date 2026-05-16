@@ -56,6 +56,8 @@ const TestHttpClientLive = Layer.succeed(
 const makeCodexConfig = (overrides: Partial<CodexSettings>): CodexSettings => ({
   enabled: false,
   binaryPath: "codex",
+  appServerUrl: "",
+  appServerTokenEnvVar: "CODEX_APP_SERVER_TOKEN",
   homePath: "",
   shadowHomePath: "",
   customModels: [],

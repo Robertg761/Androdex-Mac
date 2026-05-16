@@ -19,7 +19,7 @@ import * as Stream from "effect/Stream";
 
 import { type WsRpcProtocolClient } from "./protocol";
 import { resetWsReconnectBackoff } from "./wsConnectionState";
-import { WsTransport } from "./wsTransport";
+import { type CancellableStreamRequest, WsTransport } from "./wsTransport";
 
 type RpcTag = keyof WsRpcProtocolClient & string;
 type RpcMethod<TTag extends RpcTag> = WsRpcProtocolClient[TTag];
@@ -134,7 +134,7 @@ export interface WsRpcClient {
     readonly downloadLocalWhisperModel: (
       input: { readonly modelId: LocalWhisperModelId },
       listener: (event: ServerLocalWhisperDownloadEvent) => void,
-    ) => Promise<void>;
+    ) => CancellableStreamRequest;
     readonly transcribeLocalWhisper: (
       input: ServerLocalWhisperTranscribeInput,
     ) => ReturnType<RpcUnaryMethod<typeof WS_METHODS.serverTranscribeLocalWhisper>>;
@@ -286,7 +286,7 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
       listLocalWhisperModels: () =>
         transport.request((client) => client[WS_METHODS.serverListLocalWhisperModels]({})),
       downloadLocalWhisperModel: (input, listener) =>
-        transport.requestStream(
+        transport.requestStreamCancellable(
           (client) => client[WS_METHODS.serverDownloadLocalWhisperModel](input),
           listener,
         ),

@@ -8,7 +8,8 @@ import * as NodePath from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_WHISPER_CPP_VERSION = "v1.8.4";
-const DEFAULT_LINUX_CONTAINER_IMAGE = "ghcr.io/ggml-org/whisper.cpp:main";
+const DEFAULT_LINUX_CONTAINER_IMAGE =
+  "ghcr.io/ggml-org/whisper.cpp@sha256:d0a05639e120245a91ff248f92582bbe0f35af8499c1cdb0a17931b3d86bf91a";
 const REPO_ROOT = NodePath.resolve(NodePath.dirname(fileURLToPath(import.meta.url)), "..");
 
 const SUPPORTED_PLATFORMS = ["darwin", "linux", "win32"] as const;
@@ -71,7 +72,7 @@ Options:
   --arch <x64|arm64|universal>      Target runtime arch. Defaults to this host.
   --output-dir <path>               Voice resource root. Defaults to apps/desktop/resources/voice.
   --version <tag>                   whisper.cpp release tag for source/Windows downloads. Defaults to ${DEFAULT_WHISPER_CPP_VERSION}.
-  --container-image <image>         Linux source image. Defaults to ${DEFAULT_LINUX_CONTAINER_IMAGE}.
+  --container-image <image>         Linux x64 runtime image. Defaults to ${DEFAULT_LINUX_CONTAINER_IMAGE}.
   --source-dir <path>               Existing whisper.cpp checkout for native CMake builds.
   --binary <path>                   Copy an already-built whisper-cli for a single platform/arch target.
   --force                           Replace an existing target runtime.
@@ -278,6 +279,37 @@ function debianLinuxLibraryArch(arch: ConcreteWhisperRuntimeArch): string {
   return arch === "x64" ? "x86_64-linux-gnu" : "aarch64-linux-gnu";
 }
 
+function requiredRuntimeFileNames(target: WhisperRuntimeTarget): readonly string[] {
+  if (target.platform === "linux") {
+    if (target.arch === "arm64") {
+      return [target.executableName];
+    }
+    return [
+      target.executableName,
+      "libwhisper.so.1",
+      "libggml.so.0",
+      "libggml-base.so.0",
+      "libggml-cpu.so.0",
+      "libstdc++.so.6",
+      "libgcc_s.so.1",
+      "libgomp.so.1",
+    ];
+  }
+  if (target.platform === "win32" && target.arch === "x64") {
+    return [target.executableName, "whisper.dll", "ggml.dll", "ggml-base.dll", "ggml-cpu.dll"];
+  }
+  return [target.executableName];
+}
+
+async function targetRuntimeExists(target: WhisperRuntimeTarget): Promise<boolean> {
+  for (const fileName of requiredRuntimeFileNames(target)) {
+    if (!(await fileExists(NodePath.join(target.directoryPath, fileName)))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function findContainerRuntime(): "podman" | "docker" | undefined {
   if (commandExists("podman")) return "podman";
   if (commandExists("docker")) return "docker";
@@ -456,20 +488,23 @@ async function prepareWindowsFromRelease(
     await extractZip(zipPath, extractDir, options.verbose);
 
     const files = await walkFiles(extractDir);
-    const executable = files.find((file) => NodePath.basename(file) === "whisper-cli.exe");
-    if (!executable) {
-      throw new PrepareWhisperRuntimeError(
-        `Downloaded ${url}, but it did not contain whisper-cli.exe.`,
-      );
-    }
-
     await NodeFs.rm(target.directoryPath, { force: true, recursive: true });
     await NodeFs.mkdir(target.directoryPath, { recursive: true });
-    await NodeFs.copyFile(executable, target.executablePath);
-
-    for (const file of files) {
-      if (NodePath.extname(file).toLowerCase() !== ".dll") continue;
-      await NodeFs.copyFile(file, NodePath.join(target.directoryPath, NodePath.basename(file)));
+    const requiredFiles = [
+      "whisper-cli.exe",
+      "whisper.dll",
+      "ggml.dll",
+      "ggml-base.dll",
+      "ggml-cpu.dll",
+    ];
+    for (const fileName of requiredFiles) {
+      const source = files.find((file) => NodePath.basename(file) === fileName);
+      if (!source) {
+        throw new PrepareWhisperRuntimeError(
+          `Downloaded ${url}, but it did not contain ${fileName}.`,
+        );
+      }
+      await NodeFs.copyFile(source, NodePath.join(target.directoryPath, fileName));
     }
   } finally {
     await NodeFs.rm(tempDir, { force: true, recursive: true });
@@ -600,7 +635,7 @@ async function prepareFromBinary(target: WhisperRuntimeTarget, binaryPath: strin
 }
 
 async function prepareTarget(target: WhisperRuntimeTarget, options: CliOptions): Promise<void> {
-  if (!options.force && (await fileExists(target.executablePath))) {
+  if (!options.force && (await targetRuntimeExists(target))) {
     writeLine(`[whisper-runtime] ${target.directoryName} already exists: ${target.executablePath}`);
     return;
   }
@@ -609,10 +644,16 @@ async function prepareTarget(target: WhisperRuntimeTarget, options: CliOptions):
 
   if (options.binaryPath) {
     await prepareFromBinary(target, options.binaryPath);
-  } else if (target.platform === "linux") {
+  } else if (target.platform === "linux" && target.arch === "x64") {
     await prepareLinuxFromContainer(target, options);
+  } else if (target.platform === "linux") {
+    await prepareFromSource(target, options);
   } else if (target.platform === "win32") {
-    await prepareWindowsFromRelease(target, options);
+    if (resolveWindowsReleaseAssetUrl(options.version, target.arch)) {
+      await prepareWindowsFromRelease(target, options);
+    } else {
+      await prepareFromSource(target, options);
+    }
   } else {
     await prepareFromSource(target, options);
   }

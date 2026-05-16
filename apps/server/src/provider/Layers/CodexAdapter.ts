@@ -60,6 +60,10 @@ import {
   type CodexSessionRuntimeOptions,
   type CodexSessionRuntimeShape,
 } from "./CodexSessionRuntime.ts";
+import {
+  isCodexAppServerRemoteConnection,
+  resolveCodexAppServerRemoteConnection,
+} from "./CodexAppServerConnection.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import {
   getComputerUseDynamicToolSpecs,
@@ -1432,11 +1436,18 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
         const dynamicTools = computerUseManager
           ? yield* getComputerUseDynamicToolSpecs(computerUseManager)
           : [];
+        const appServerResolution = resolveCodexAppServerRemoteConnection(
+          codexConfig,
+          options?.environment,
+        );
         const runtimeInput: CodexSessionRuntimeOptions = {
           threadId: input.threadId,
           providerInstanceId: boundInstanceId,
           cwd: input.cwd ?? process.cwd(),
           binaryPath: codexConfig.binaryPath,
+          ...(isCodexAppServerRemoteConnection(appServerResolution)
+            ? { appServer: appServerResolution }
+            : {}),
           ...(options?.environment ? { environment: options.environment } : {}),
           ...(codexConfig.homePath ? { homePath: codexConfig.homePath } : {}),
           ...(isCodexResumeCursorSchema(input.resumeCursor)

@@ -11,6 +11,9 @@ export type LocalWhisperModelLanguage = typeof LocalWhisperModelLanguage.Type;
 export const LocalWhisperModelQuantization = Schema.NullOr(Schema.Literals(["Q5", "Q8"]));
 export type LocalWhisperModelQuantization = typeof LocalWhisperModelQuantization.Type;
 
+export const LocalWhisperLanguageMode = Schema.Literals(["english", "auto"]);
+export type LocalWhisperLanguageMode = typeof LocalWhisperLanguageMode.Type;
+
 export const LocalWhisperRuntimeStatus = Schema.Struct({
   available: Schema.Boolean,
   binaryPath: Schema.NullOr(Schema.String),
@@ -92,6 +95,7 @@ export const ServerLocalWhisperTranscribeInput = Schema.Struct({
   modelId: LocalWhisperModelId,
   audioWavBase64: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64 * 1024 * 1024)),
   durationMs: Schema.optionalKey(PositiveInt),
+  languageMode: Schema.optionalKey(LocalWhisperLanguageMode),
 });
 export type ServerLocalWhisperTranscribeInput = typeof ServerLocalWhisperTranscribeInput.Type;
 

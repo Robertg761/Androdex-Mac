@@ -30,6 +30,11 @@ interface RequestOptions {
   readonly timeout?: Option.Option<Duration.Input>;
 }
 
+export interface CancellableStreamRequest {
+  readonly cancel: () => void;
+  readonly completed: Promise<void>;
+}
+
 const DEFAULT_SUBSCRIPTION_RETRY_DELAY_MS = Duration.millis(250);
 const NOOP: () => void = () => undefined;
 
@@ -91,23 +96,39 @@ export class WsTransport {
     connect: (client: WsRpcProtocolClient) => Stream.Stream<TValue, Error, never>,
     listener: (value: TValue) => void,
   ): Promise<void> {
+    await this.requestStreamCancellable(connect, listener).completed;
+  }
+
+  requestStreamCancellable<TValue>(
+    connect: (client: WsRpcProtocolClient) => Stream.Stream<TValue, Error, never>,
+    listener: (value: TValue) => void,
+  ): CancellableStreamRequest {
     if (this.disposed) {
-      throw new Error("Transport disposed");
+      return {
+        cancel: NOOP,
+        completed: Promise.reject(new Error("Transport disposed")),
+      };
     }
 
+    let active = true;
     const session = this.session;
-    const client = await session.clientPromise;
-    await session.runtime.runPromise(
-      Stream.runForEach(connect(client), (value) =>
-        Effect.sync(() => {
-          try {
-            listener(value);
-          } catch {
-            // Swallow listener errors so the stream can finish cleanly.
-          }
-        }),
-      ),
+    const runningStream = this.runStreamOnSession(
+      session,
+      connect,
+      listener,
+      {},
+      () => active && !this.disposed,
+      () => {
+        this.hasReportedTransportDisconnect = false;
+      },
     );
+    return {
+      cancel: () => {
+        active = false;
+        runningStream.cancel();
+      },
+      completed: runningStream.completed,
+    };
   }
 
   subscribe<TValue>(

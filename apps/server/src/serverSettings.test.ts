@@ -116,6 +116,8 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.deepEqual(next.providers.codex, {
         enabled: true,
         binaryPath: "/opt/homebrew/bin/codex",
+        appServerUrl: "",
+        appServerTokenEnvVar: "CODEX_APP_SERVER_TOKEN",
         homePath: "/Users/julius/.codex",
         shadowHomePath: "",
         customModels: [],
@@ -357,6 +359,8 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.deepEqual(next.providers.codex, {
         enabled: true,
         binaryPath: "/opt/homebrew/bin/codex",
+        appServerUrl: "",
+        appServerTokenEnvVar: "CODEX_APP_SERVER_TOKEN",
         homePath: "",
         shadowHomePath: "",
         customModels: [],

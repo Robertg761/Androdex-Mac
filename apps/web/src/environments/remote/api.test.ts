@@ -33,6 +33,7 @@ describe("remote environment api", () => {
       credential: "pairing-token",
       httpBaseUrl: "https://remote.example.com/",
       wsBaseUrl: "wss://remote.example.com/",
+      transport: "androdex-backend",
     });
   });
 
@@ -45,6 +46,7 @@ describe("remote environment api", () => {
       credential: "pairing-token",
       httpBaseUrl: "https://remote.example.com/",
       wsBaseUrl: "wss://remote.example.com/",
+      transport: "androdex-backend",
     });
   });
 
@@ -58,6 +60,21 @@ describe("remote environment api", () => {
       credential: "pairing-token",
       httpBaseUrl: "https://desktop.tailnet.ts.net:44342/",
       wsBaseUrl: "wss://desktop.tailnet.ts.net:44342/",
+      transport: "androdex-backend",
+    });
+  });
+
+  it("classifies public Codex app-server websocket endpoints from hosted pairing links", () => {
+    expect(
+      resolveRemotePairingTarget({
+        pairingUrl:
+          "https://app.androdex.xyz/pair?host=wss%3A%2F%2Fcodex.example.com%2Fapp-server#token=capability-token",
+      }),
+    ).toEqual({
+      credential: "capability-token",
+      httpBaseUrl: "https://codex.example.com/app-server",
+      wsBaseUrl: "wss://codex.example.com/app-server",
+      transport: "codex-app-server",
     });
   });
 
@@ -71,6 +88,7 @@ describe("remote environment api", () => {
       credential: "pairing-token",
       httpBaseUrl: "https://remote.example.com/",
       wsBaseUrl: "wss://remote.example.com/",
+      transport: "androdex-backend",
     });
   });
 
@@ -84,6 +102,7 @@ describe("remote environment api", () => {
       credential: "pairing-token",
       httpBaseUrl: "https://myserver.com:3000/",
       wsBaseUrl: "wss://myserver.com:3000/",
+      transport: "androdex-backend",
     });
   });
 

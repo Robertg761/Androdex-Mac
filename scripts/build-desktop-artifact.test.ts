@@ -12,6 +12,7 @@ import {
   resolveDesktopBuildIconAssets,
   resolveDesktopProductName,
   resolveDesktopUpdateChannel,
+  resolveRequiredWhisperRuntimeResources,
   resolveMockUpdateServerPort,
   resolveMockUpdateServerUrl,
 } from "./build-desktop-artifact.ts";
@@ -49,6 +50,32 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
       windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
     });
+  });
+
+  it("requires packaged local voice runtime sidecars", () => {
+    assert.deepStrictEqual(resolveRequiredWhisperRuntimeResources("linux", "x64"), [
+      "whisper/linux-x64/whisper-cli",
+      "whisper/linux-x64/libwhisper.so.1",
+      "whisper/linux-x64/libggml.so.0",
+      "whisper/linux-x64/libggml-base.so.0",
+      "whisper/linux-x64/libggml-cpu.so.0",
+      "whisper/linux-x64/libstdc++.so.6",
+      "whisper/linux-x64/libgcc_s.so.1",
+      "whisper/linux-x64/libgomp.so.1",
+    ]);
+    assert.deepStrictEqual(resolveRequiredWhisperRuntimeResources("linux", "arm64"), [
+      "whisper/linux-arm64/whisper-cli",
+    ]);
+    assert.deepStrictEqual(resolveRequiredWhisperRuntimeResources("win", "x64"), [
+      "whisper/win32-x64/whisper-cli.exe",
+      "whisper/win32-x64/whisper.dll",
+      "whisper/win32-x64/ggml.dll",
+      "whisper/win32-x64/ggml-base.dll",
+      "whisper/win32-x64/ggml-cpu.dll",
+    ]);
+    assert.deepStrictEqual(resolveRequiredWhisperRuntimeResources("win", "arm64"), [
+      "whisper/win32-arm64/whisper-cli.exe",
+    ]);
   });
 
   it("falls back to the default mock update port when the configured port is blank", () => {

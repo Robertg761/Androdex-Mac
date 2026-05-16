@@ -33,13 +33,15 @@
     "probe": "bun run test/examples/codex-app-server-probe.ts"
   },
   "dependencies": {
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",
     "@effect/openapi-generator": "catalog:",
     "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",
+    "@types/ws": "^8.18.1",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

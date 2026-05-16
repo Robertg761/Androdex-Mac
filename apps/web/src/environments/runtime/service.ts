@@ -39,6 +39,7 @@ import {
   resolveRemoteWebSocketConnectionUrl,
 } from "../remote/api";
 import { resolveRemotePairingTarget } from "../remote/target";
+import type { ResolvedRemotePairingTarget } from "../remote/target";
 import {
   getSavedEnvironmentRecord,
   hasSavedEnvironmentRegistryHydrated,
@@ -140,6 +141,8 @@ const THREAD_DETAIL_SUBSCRIPTION_IDLE_EVICTION_MS = 15 * 60 * 1000;
 const MAX_CACHED_THREAD_DETAIL_SUBSCRIPTIONS = 32;
 const BROWSER_RESUME_RECONNECT_COOLDOWN_MS = 2_000;
 const INITIAL_SERVER_CONFIG_SNAPSHOT_WAIT_MS = 150;
+const CODEX_APP_SERVER_REMOTE_UNSUPPORTED_MESSAGE =
+  "Raw Codex app-server WebSocket endpoints cannot be paired as remote environments yet. Use an Androdex backend endpoint, or expose Codex app-server through an authenticated Androdex bridge.";
 const NOOP = () => undefined;
 const SSH_HTTP_STATUS_RE = /^\[ssh_http:(\d+)\]\s/u;
 
@@ -715,6 +718,12 @@ function getDesktopSshBridge() {
 
 async function fetchDesktopSshEnvironmentDescriptor(httpBaseUrl: string) {
   return await getDesktopSshBridge().fetchSshEnvironmentDescriptor(httpBaseUrl);
+}
+
+function assertRemotePairingTargetSupported(target: ResolvedRemotePairingTarget): void {
+  if (target.transport === "codex-app-server") {
+    throw new Error(CODEX_APP_SERVER_REMOTE_UNSUPPORTED_MESSAGE);
+  }
 }
 
 async function bootstrapDesktopSshBearerSession(httpBaseUrl: string, credential: string) {
@@ -1648,6 +1657,7 @@ export async function addSavedEnvironment(input: {
     ...(input.host !== undefined ? { host: input.host } : {}),
     ...(input.pairingCode !== undefined ? { pairingCode: input.pairingCode } : {}),
   });
+  assertRemotePairingTargetSupported(resolvedTarget);
   const descriptor = input.desktopSsh
     ? await fetchDesktopSshEnvironmentDescriptor(resolvedTarget.httpBaseUrl)
     : await fetchRemoteEnvironmentDescriptor({

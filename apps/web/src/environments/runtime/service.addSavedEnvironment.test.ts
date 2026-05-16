@@ -156,6 +156,7 @@ describe("addSavedEnvironment", () => {
             : `${input.host.replace(/^http/u, "ws")}/`
           : "wss://remote.example.com/",
         credential: input.pairingCode ?? "pairing-code",
+        transport: "androdex-backend",
       }),
     );
     mockFetchRemoteEnvironmentDescriptor.mockResolvedValue({
@@ -220,6 +221,31 @@ describe("addSavedEnvironment", () => {
       pairingToken: "ssh-pairing-code",
     });
     mockDisconnectSshEnvironment.mockResolvedValue(undefined);
+  });
+
+  it("rejects raw Codex app-server endpoints before using backend auth APIs", async () => {
+    mockResolveRemotePairingTarget.mockReturnValue({
+      credential: "capability-token",
+      httpBaseUrl: "https://codex.example.com/app-server",
+      wsBaseUrl: "wss://codex.example.com/app-server",
+      transport: "codex-app-server",
+    });
+
+    const { addSavedEnvironment, resetEnvironmentServiceForTests } = await import("./service");
+
+    await expect(
+      addSavedEnvironment({
+        label: "Codex app-server",
+        pairingUrl:
+          "https://app.androdex.xyz/pair?host=wss%3A%2F%2Fcodex.example.com%2Fapp-server#token=capability-token",
+      }),
+    ).rejects.toThrow("Raw Codex app-server WebSocket endpoints cannot be paired");
+
+    expect(mockFetchRemoteEnvironmentDescriptor).not.toHaveBeenCalled();
+    expect(mockBootstrapRemoteBearerSession).not.toHaveBeenCalled();
+    expect(mockPersistSavedEnvironmentRecord).not.toHaveBeenCalled();
+
+    await resetEnvironmentServiceForTests();
   });
 
   it("rolls back persisted metadata when bearer token persistence fails", async () => {

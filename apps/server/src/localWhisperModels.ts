@@ -102,7 +102,6 @@ export const WHISPER_MODELS: readonly WhisperModelDefinition[] = [
     description: "Light multilingual model. Balanced for quick local prompt dictation.",
     diskBytes: 147_951_465,
     sha1: "465707469ff3a37a2b9b8d8f89f2f99de7299dac",
-    recommended: true,
   }),
   defineModel({
     id: "base.en",
@@ -275,7 +274,6 @@ export const WHISPER_MODELS: readonly WhisperModelDefinition[] = [
     description: "Quantized turbo model. Best high-quality storage tradeoff.",
     diskBytes: 574_041_195,
     sha1: "e050f7970618a659205450ad97eb95a18d69c9ee",
-    recommended: true,
   }),
   defineModel({
     id: "large-v3-turbo-q8_0",

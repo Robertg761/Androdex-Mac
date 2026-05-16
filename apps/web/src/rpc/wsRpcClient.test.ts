@@ -12,6 +12,7 @@ vi.mock("./wsTransport", () => ({
     reconnect = vi.fn(async () => undefined);
     request = vi.fn();
     requestStream = vi.fn();
+    requestStreamCancellable = vi.fn();
     subscribe = vi.fn(() => () => undefined);
   },
 }));
@@ -37,24 +38,36 @@ const baseRemoteStatus: VcsStatusRemoteResult = {
 
 describe("wsRpcClient", () => {
   it("uses a one-shot stream for local Whisper model downloads", async () => {
+    const streamRequest = {
+      cancel: vi.fn(),
+      completed: Promise.resolve(),
+    };
     const transport = {
       dispose: vi.fn(async () => undefined),
       reconnect: vi.fn(async () => undefined),
       request: vi.fn(),
       requestStream: vi.fn(async () => undefined),
+      requestStreamCancellable: vi.fn(() => streamRequest),
       subscribe: vi.fn(() => () => undefined),
     } satisfies Pick<
       WsTransport,
-      "dispose" | "reconnect" | "request" | "requestStream" | "subscribe"
+      | "dispose"
+      | "reconnect"
+      | "request"
+      | "requestStream"
+      | "requestStreamCancellable"
+      | "subscribe"
     >;
 
     const client = createWsRpcClient(transport as unknown as WsTransport);
-    await client.server.downloadLocalWhisperModel(
+    const request = client.server.downloadLocalWhisperModel(
       { modelId: "base.en" as LocalWhisperModelId },
       vi.fn(),
     );
 
-    expect(transport.requestStream).toHaveBeenCalledTimes(1);
+    expect(request).toBe(streamRequest);
+    expect(transport.requestStreamCancellable).toHaveBeenCalledTimes(1);
+    expect(transport.requestStream).not.toHaveBeenCalled();
     expect(transport.subscribe).not.toHaveBeenCalled();
   });
 
@@ -88,10 +101,16 @@ describe("wsRpcClient", () => {
       reconnect: vi.fn(async () => undefined),
       request: vi.fn(),
       requestStream: vi.fn(),
+      requestStreamCancellable: vi.fn(),
       subscribe,
     } satisfies Pick<
       WsTransport,
-      "dispose" | "reconnect" | "request" | "requestStream" | "subscribe"
+      | "dispose"
+      | "reconnect"
+      | "request"
+      | "requestStream"
+      | "requestStreamCancellable"
+      | "subscribe"
     >;
 
     const client = createWsRpcClient(transport as unknown as WsTransport);

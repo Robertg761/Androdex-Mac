@@ -172,8 +172,33 @@ export const CodexSettings = makeProviderSettingsSchema(
     binaryPath: makeBinaryPathSetting("codex").pipe(
       Schema.annotateKey({
         title: "Binary path",
-        description: "Path to the Codex binary used by this instance.",
+        description:
+          "Path to the Codex binary used by this instance when no remote app-server URL is set.",
         providerSettingsForm: { placeholder: "codex", clearWhenEmpty: "omit" },
+      }),
+    ),
+    appServerUrl: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Remote app-server URL",
+        description:
+          "Official Codex app-server WebSocket endpoint, for example ws://127.0.0.1:8765.",
+        providerSettingsForm: {
+          placeholder: "ws://127.0.0.1:8765",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    appServerTokenEnvVar: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("CODEX_APP_SERVER_TOKEN")),
+      Schema.annotateKey({
+        title: "Remote token env var",
+        description:
+          "Optional sensitive provider environment variable containing the bearer token for app-server websocket auth.",
+        providerSettingsForm: {
+          placeholder: "CODEX_APP_SERVER_TOKEN",
+          clearWhenEmpty: "omit",
+        },
       }),
     ),
     homePath: TrimmedString.pipe(
@@ -205,7 +230,7 @@ export const CodexSettings = makeProviderSettingsSchema(
     ),
   },
   {
-    order: ["binaryPath", "homePath", "shadowHomePath"],
+    order: ["appServerUrl", "appServerTokenEnvVar", "binaryPath", "homePath", "shadowHomePath"],
   },
 );
 export type CodexSettings = typeof CodexSettings.Type;

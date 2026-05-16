@@ -17,7 +17,7 @@
     },
     "apps/desktop": {
       "name": "@t3tools/desktop",
-      "version": "0.0.35",
+      "version": "0.0.46",
       "dependencies": {
         "@effect/platform-node": "catalog:",
         "effect": "catalog:",
@@ -52,7 +52,7 @@
     },
     "apps/server": {
       "name": "androdex",
-      "version": "0.0.35",
+      "version": "0.0.46",
       "bin": {
         "androdex": "./dist/bin.mjs",
       },
@@ -85,7 +85,7 @@
     },
     "apps/web": {
       "name": "@t3tools/web",
-      "version": "0.0.35",
+      "version": "0.0.46",
       "dependencies": {
         "@base-ui/react": "^1.4.1",
         "@dnd-kit/core": "^6.3.1",
@@ -167,7 +167,7 @@
     },
     "packages/contracts": {
       "name": "@t3tools/contracts",
-      "version": "0.0.35",
+      "version": "0.0.46",
       "dependencies": {
         "effect": "catalog:",
       },
@@ -198,12 +198,14 @@
       "name": "effect-codex-app-server",
       "dependencies": {
         "effect": "catalog:",
+        "ws": "^8.20.0",
       },
       "devDependencies": {
         "@effect/language-service": "catalog:",
         "@effect/openapi-generator": "catalog:",
         "@effect/platform-node": "catalog:",
         "@effect/vitest": "catalog:",
+        "@types/ws": "^8.18.1",
         "tsdown": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:",

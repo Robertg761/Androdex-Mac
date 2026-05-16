@@ -26,6 +26,11 @@ import { createModelCapabilities } from "@t3tools/shared/model";
 import { buildServerProvider, type ServerProviderDraft } from "../providerSnapshot.ts";
 import { expandHomePath } from "../../pathExpansion.ts";
 import { scopedSafeTeardown } from "./scopedSafeTeardown.ts";
+import {
+  isCodexAppServerRemoteConnection,
+  resolveCodexAppServerRemoteConnection,
+  type CodexAppServerRemoteConnection,
+} from "./CodexAppServerConnection.ts";
 import packageJson from "../../../package.json" with { type: "json" };
 const isCodexAppServerSpawnError = Schema.is(CodexErrors.CodexAppServerSpawnError);
 
@@ -41,6 +46,15 @@ export interface CodexAppServerProviderSnapshot {
   readonly models: ReadonlyArray<ServerProviderModel>;
   readonly slashCommands: ReadonlyArray<ServerProviderSlashCommand>;
   readonly skills: ReadonlyArray<ServerProviderSkill>;
+}
+
+interface CodexAppServerProviderProbeInput {
+  readonly binaryPath: string;
+  readonly appServer?: CodexAppServerRemoteConnection;
+  readonly homePath?: string;
+  readonly cwd: string;
+  readonly customModels?: ReadonlyArray<string>;
+  readonly environment?: NodeJS.ProcessEnv;
 }
 
 const REASONING_EFFORT_LABELS: Record<CodexSchema.V2ModelListResponse__ReasoningEffort, string> = {
@@ -288,29 +302,33 @@ export function buildCodexInitializeParams(): CodexSchema.V1InitializeParams {
 // early) cannot override a successful probe body. Without this guard the
 // defect bubbles past `Effect.result` in `checkCodexProviderStatus`, dies
 // `refreshOneSource`, and `providersRef` never receives the snapshot.
-const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(function* (input: {
-  readonly binaryPath: string;
-  readonly homePath?: string;
-  readonly cwd: string;
-  readonly customModels?: ReadonlyArray<string>;
-  readonly environment?: NodeJS.ProcessEnv;
-}) {
+const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(function* (
+  input: CodexAppServerProviderProbeInput,
+) {
   // `~` is not shell-expanded when env vars are set via `child_process.spawn`,
   // so `CODEX_HOME=~/.codex_work` would reach codex verbatim and trip
   // "CODEX_HOME points to '~/.codex_work', but that path does not exist".
   // Expand here for parity with `CodexTextGeneration`/`CodexSessionRuntime`.
   const resolvedHomePath = input.homePath ? expandHomePath(input.homePath) : undefined;
-  const clientContext = yield* Layer.build(
-    CodexClient.layerCommand({
-      command: input.binaryPath,
-      args: ["app-server"],
-      cwd: input.cwd,
-      env: {
-        ...(input.environment ?? process.env),
-        ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
-      },
-    }),
-  );
+  const clientLayer: Layer.Layer<
+    CodexClient.CodexAppServerClient,
+    CodexErrors.CodexAppServerError,
+    ChildProcessSpawner.ChildProcessSpawner
+  > = input.appServer
+    ? CodexClient.layerWebSocket({
+        url: input.appServer.url,
+        ...(input.appServer.bearerToken ? { bearerToken: input.appServer.bearerToken } : {}),
+      })
+    : CodexClient.layerCommand({
+        command: input.binaryPath,
+        args: ["app-server"],
+        cwd: input.cwd,
+        env: {
+          ...(input.environment ?? process.env),
+          ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
+        },
+      });
+  const clientContext = yield* Layer.build(clientLayer);
   const client = yield* Effect.service(CodexClient.CodexAppServerClient).pipe(
     Effect.provide(clientContext),
   );
@@ -366,6 +384,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
 
 export const writeCodexSkillConfig = Effect.fn("writeCodexSkillConfig")(function* (input: {
   readonly binaryPath: string;
+  readonly appServer?: CodexAppServerRemoteConnection;
   readonly homePath?: string;
   readonly cwd: string;
   readonly enabled: boolean;
@@ -374,17 +393,25 @@ export const writeCodexSkillConfig = Effect.fn("writeCodexSkillConfig")(function
   readonly environment?: NodeJS.ProcessEnv;
 }) {
   const resolvedHomePath = input.homePath ? expandHomePath(input.homePath) : undefined;
-  const clientContext = yield* Layer.build(
-    CodexClient.layerCommand({
-      command: input.binaryPath,
-      args: ["app-server"],
-      cwd: input.cwd,
-      env: {
-        ...(input.environment ?? process.env),
-        ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
-      },
-    }),
-  );
+  const clientLayer: Layer.Layer<
+    CodexClient.CodexAppServerClient,
+    CodexErrors.CodexAppServerError,
+    ChildProcessSpawner.ChildProcessSpawner
+  > = input.appServer
+    ? CodexClient.layerWebSocket({
+        url: input.appServer.url,
+        ...(input.appServer.bearerToken ? { bearerToken: input.appServer.bearerToken } : {}),
+      })
+    : CodexClient.layerCommand({
+        command: input.binaryPath,
+        args: ["app-server"],
+        cwd: input.cwd,
+        env: {
+          ...(input.environment ?? process.env),
+          ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
+        },
+      });
+  const clientContext = yield* Layer.build(clientLayer);
   const client = yield* Effect.service(CodexClient.CodexAppServerClient).pipe(
     Effect.provide(clientContext),
   );
@@ -483,13 +510,9 @@ function accountProbeStatus(account: CodexAppServerProviderSnapshot["account"]):
 
 export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(function* (
   codexSettings: CodexSettings,
-  probe: (input: {
-    readonly binaryPath: string;
-    readonly homePath?: string;
-    readonly cwd: string;
-    readonly customModels: ReadonlyArray<string>;
-    readonly environment?: NodeJS.ProcessEnv;
-  }) => Effect.Effect<
+  probe: (
+    input: CodexAppServerProviderProbeInput,
+  ) => Effect.Effect<
     CodexAppServerProviderSnapshot,
     CodexErrors.CodexAppServerError,
     ChildProcessSpawner.ChildProcessSpawner
@@ -521,8 +544,13 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     });
   }
 
+  const appServerResolution = resolveCodexAppServerRemoteConnection(codexSettings, environment);
+
   const probeResult = yield* probe({
     binaryPath: codexSettings.binaryPath,
+    ...(isCodexAppServerRemoteConnection(appServerResolution)
+      ? { appServer: appServerResolution }
+      : {}),
     homePath: codexSettings.homePath,
     cwd: process.cwd(),
     customModels: codexSettings.customModels,

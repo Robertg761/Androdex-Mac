@@ -10,6 +10,7 @@ import type {
   ScopedThreadRef,
   LocalWhisperModel,
   LocalWhisperModelId,
+  LocalWhisperLanguageMode,
   LocalWhisperRuntimeStatus,
   ServerProvider,
   ThreadId,
@@ -128,6 +129,7 @@ import { readEnvironmentConnection } from "../../environments/runtime";
 
 const IMAGE_SIZE_LIMIT_LABEL = `${Math.round(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES / (1024 * 1024))}MB`;
 const LOCAL_WHISPER_MODEL_STORAGE_KEY = "androdex.localWhisper.modelId";
+const LOCAL_WHISPER_LANGUAGE_MODE_STORAGE_KEY = "androdex.localWhisper.languageMode";
 
 interface ComposerDictationSession {
   readonly modelId: LocalWhisperModelId;
@@ -135,6 +137,18 @@ interface ComposerDictationSession {
 }
 
 type ComposerDictationState = "idle" | "recording" | "transcribing";
+
+function readStoredLocalWhisperLanguageMode(): LocalWhisperLanguageMode {
+  if (typeof window === "undefined") {
+    return "english";
+  }
+  const stored = window.localStorage.getItem(LOCAL_WHISPER_LANGUAGE_MODE_STORAGE_KEY);
+  return stored === "auto" || stored === "english" ? stored : "english";
+}
+
+function isNoSpeechError(error: unknown): boolean {
+  return error instanceof Error && error.message.toLowerCase().includes("no speech detected");
+}
 
 const runtimeModeConfig: Record<
   RuntimeMode,
@@ -1504,6 +1518,8 @@ export const ChatComposer = memo(
         const stored = window.localStorage.getItem(LOCAL_WHISPER_MODEL_STORAGE_KEY)?.trim();
         return stored ? (stored as LocalWhisperModelId) : null;
       });
+    const [localWhisperLanguageMode, setLocalWhisperLanguageMode] =
+      useState<LocalWhisperLanguageMode>(readStoredLocalWhisperLanguageMode);
     const [downloadingLocalWhisperModelId, setDownloadingLocalWhisperModelId] =
       useState<LocalWhisperModelId | null>(null);
     const [localWhisperDownloadProgress, setLocalWhisperDownloadProgress] =
@@ -1511,6 +1527,7 @@ export const ChatComposer = memo(
     const dictationSessionRef = useRef<ComposerDictationSession | null>(null);
     const dictationStateRef = useRef<ComposerDictationState>("idle");
     const localWhisperDownloadRunRef = useRef(0);
+    const localWhisperDownloadCancelRef = useRef<(() => void) | null>(null);
 
     useEffect(() => {
       dictationStateRef.current = dictationState;
@@ -1532,11 +1549,22 @@ export const ChatComposer = memo(
     }, [cleanupDictationSession, scheduleComposerFocus]);
 
     useEffect(() => () => cleanupDictationSession(), [cleanupDictationSession]);
-    useEffect(
-      () => () => {
+    const cancelLocalWhisperModelDownload = useCallback(
+      (options?: { readonly resetState?: boolean }) => {
         localWhisperDownloadRunRef.current += 1;
+        localWhisperDownloadCancelRef.current?.();
+        localWhisperDownloadCancelRef.current = null;
+        if (options?.resetState !== false) {
+          setDownloadingLocalWhisperModelId(null);
+          setLocalWhisperDownloadProgress(null);
+        }
       },
       [],
+    );
+
+    useEffect(
+      () => () => cancelLocalWhisperModelDownload({ resetState: false }),
+      [cancelLocalWhisperModelDownload],
     );
 
     const insertDictatedText = useCallback(
@@ -1605,6 +1633,11 @@ export const ChatComposer = memo(
       window.localStorage.setItem(LOCAL_WHISPER_MODEL_STORAGE_KEY, modelId);
     }, []);
 
+    const updateLocalWhisperLanguageMode = useCallback((mode: LocalWhisperLanguageMode) => {
+      setLocalWhisperLanguageMode(mode);
+      window.localStorage.setItem(LOCAL_WHISPER_LANGUAGE_MODE_STORAGE_KEY, mode);
+    }, []);
+
     const selectLocalWhisperModel = useCallback(
       (model: LocalWhisperModel) => {
         if (downloadingLocalWhisperModelId !== null) {
@@ -1631,8 +1664,9 @@ export const ChatComposer = memo(
         localWhisperDownloadRunRef.current = downloadRunId;
         setDownloadingLocalWhisperModelId(model.id);
         setLocalWhisperDownloadProgress(null);
-        void connection.client.server
-          .downloadLocalWhisperModel({ modelId: model.id }, (event) => {
+        const request = connection.client.server.downloadLocalWhisperModel(
+          { modelId: model.id },
+          (event) => {
             if (localWhisperDownloadRunRef.current !== downloadRunId) {
               return;
             }
@@ -1665,11 +1699,20 @@ export const ChatComposer = memo(
                 });
                 return;
             }
+          },
+        );
+        localWhisperDownloadCancelRef.current = request.cancel;
+        void request.completed
+          .then(() => {
+            if (localWhisperDownloadRunRef.current === downloadRunId) {
+              localWhisperDownloadCancelRef.current = null;
+            }
           })
           .catch((error) => {
             if (localWhisperDownloadRunRef.current !== downloadRunId) {
               return;
             }
+            localWhisperDownloadCancelRef.current = null;
             setDownloadingLocalWhisperModelId(null);
             setLocalWhisperDownloadProgress(null);
             toastManager.add({
@@ -1745,6 +1788,7 @@ export const ChatComposer = memo(
           modelId: session.modelId,
           audioWavBase64: recording.wavBase64,
           durationMs: Math.max(1, recording.durationMs),
+          languageMode: localWhisperLanguageMode,
         });
         if (result.text.trim()) {
           insertDictatedText(result.text);
@@ -1756,15 +1800,30 @@ export const ChatComposer = memo(
           });
         }
       } catch (error) {
-        toastManager.add({
-          type: "error",
-          title: "Dictation failed",
-          description: error instanceof Error ? error.message : "Local transcription failed.",
-        });
+        if (isNoSpeechError(error)) {
+          toastManager.add({
+            type: "info",
+            title: "No speech detected",
+            description: "Try speaking closer to the microphone.",
+          });
+        } else {
+          toastManager.add({
+            type: "error",
+            title: "Dictation failed",
+            description: error instanceof Error ? error.message : "Local transcription failed.",
+          });
+          void refreshLocalWhisperModels({ quiet: true });
+        }
       } finally {
         resetDictationState();
       }
-    }, [environmentId, insertDictatedText, resetDictationState]);
+    }, [
+      environmentId,
+      insertDictatedText,
+      localWhisperLanguageMode,
+      refreshLocalWhisperModels,
+      resetDictationState,
+    ]);
 
     const startLocalWhisperDictation = useCallback(async () => {
       if (dictationStateRef.current === "recording") {
@@ -2772,10 +2831,13 @@ export const ChatComposer = memo(
                     models={localWhisperModels}
                     loading={localWhisperModelsLoading}
                     selectedModelId={selectedLocalWhisperModelId}
+                    languageMode={localWhisperLanguageMode}
                     downloadingModelId={downloadingLocalWhisperModelId}
                     downloadProgress={localWhisperDownloadProgress}
                     onClose={() => setLocalWhisperModelMenuOpen(false)}
                     onSelect={selectLocalWhisperModel}
+                    onLanguageModeChange={updateLocalWhisperLanguageMode}
+                    onCancelDownload={cancelLocalWhisperModelDownload}
                   />
                   {dictationStatusText ? (
                     <div

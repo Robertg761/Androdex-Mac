@@ -1,10 +1,13 @@
 import { getPairingTokenFromUrl } from "../../pairingUrl";
 import { readHostedPairingRequest } from "../../hostedPairing";
 
+export type ResolvedRemotePairingTransport = "androdex-backend" | "codex-app-server";
+
 export interface ResolvedRemotePairingTarget {
   readonly credential: string;
   readonly httpBaseUrl: string;
   readonly wsBaseUrl: string;
+  readonly transport: ResolvedRemotePairingTransport;
 }
 
 function normalizeRemoteBaseUrl(rawValue: string): URL {
@@ -18,10 +21,23 @@ function normalizeRemoteBaseUrl(rawValue: string): URL {
       ? trimmed
       : `https://${trimmed}`;
   const url = new URL(normalizedInput, window.location.origin);
-  url.pathname = "/";
+  url.pathname = url.pathname.replace(/\/+$/, "") || "/";
   url.search = "";
   url.hash = "";
   return url;
+}
+
+function isCodexAppServerEndpoint(url: URL): boolean {
+  return url.protocol === "ws:" || url.protocol === "wss:";
+}
+
+function removePairPath(url: URL): URL {
+  const next = new URL(url.toString());
+  const normalizedPath = next.pathname.replace(/\/+$/, "");
+  if (normalizedPath.endsWith("/pair")) {
+    next.pathname = normalizedPath.slice(0, -"/pair".length) || "/";
+  }
+  return next;
 }
 
 function toHttpBaseUrl(url: URL): string {
@@ -31,7 +47,7 @@ function toHttpBaseUrl(url: URL): string {
   } else if (next.protocol === "wss:") {
     next.protocol = "https:";
   }
-  next.pathname = "/";
+  next.pathname = next.pathname.replace(/\/+$/, "") || "/";
   next.search = "";
   next.hash = "";
   return next.toString();
@@ -44,7 +60,7 @@ function toWsBaseUrl(url: URL): string {
   } else if (next.protocol === "https:") {
     next.protocol = "wss:";
   }
-  next.pathname = "/";
+  next.pathname = next.pathname.replace(/\/+$/, "") || "/";
   next.search = "";
   next.hash = "";
   return next.toString();
@@ -65,6 +81,9 @@ export function resolveRemotePairingTarget(input: {
         credential: hostedPairingRequest.token,
         httpBaseUrl: toHttpBaseUrl(hostedBackendUrl),
         wsBaseUrl: toWsBaseUrl(hostedBackendUrl),
+        transport: isCodexAppServerEndpoint(hostedBackendUrl)
+          ? "codex-app-server"
+          : "androdex-backend",
       };
     }
 
@@ -72,10 +91,12 @@ export function resolveRemotePairingTarget(input: {
     if (!credential) {
       throw new Error("Pairing URL is missing its token.");
     }
+    const connectionUrl = removePairPath(url);
     return {
       credential,
-      httpBaseUrl: toHttpBaseUrl(url),
-      wsBaseUrl: toWsBaseUrl(url),
+      httpBaseUrl: toHttpBaseUrl(connectionUrl),
+      wsBaseUrl: toWsBaseUrl(connectionUrl),
+      transport: isCodexAppServerEndpoint(connectionUrl) ? "codex-app-server" : "androdex-backend",
     };
   }
 
@@ -93,5 +114,6 @@ export function resolveRemotePairingTarget(input: {
     credential: pairingCode,
     httpBaseUrl: toHttpBaseUrl(normalizedHost),
     wsBaseUrl: toWsBaseUrl(normalizedHost),
+    transport: isCodexAppServerEndpoint(normalizedHost) ? "codex-app-server" : "androdex-backend",
   };
 }

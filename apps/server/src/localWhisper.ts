@@ -20,6 +20,7 @@ import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 
 import type { ServerConfigShape } from "./config.ts";
+import { analyzeWavPromptSpeech, assertPromptSpeechDetected } from "./localWhisperAudio.ts";
 import { WHISPER_MODELS, type WhisperModelDefinition } from "./localWhisperModels.ts";
 import { runProcess } from "./processRunner.ts";
 
@@ -28,7 +29,38 @@ const TRANSCRIBE_MAX_AUDIO_BYTES = 48 * 1024 * 1024;
 const TRANSCRIBE_MIN_TIMEOUT_MS = 90_000;
 const TRANSCRIBE_MAX_TIMEOUT_MS = 10 * 60_000;
 const TRANSCRIBE_MAX_THREADS = 8;
+const MODEL_INTEGRITY_VERSION = 1;
 const SERVER_MODULE_DIR = NodePath.dirname(fileURLToPath(import.meta.url));
+
+interface FileStatSummary {
+  readonly size: number;
+  readonly mtimeMs: number;
+}
+
+interface ModelIntegrityMetadata {
+  readonly version: 1;
+  readonly valid: boolean;
+  readonly size: number;
+  readonly mtimeMs: number;
+  readonly sha1: string | null;
+}
+
+type ModelFileInspection =
+  | {
+      readonly state: "missing";
+      readonly path: string;
+    }
+  | {
+      readonly state: "ready" | "unchecked";
+      readonly path: string;
+      readonly stat: FileStatSummary;
+    }
+  | {
+      readonly state: "invalid";
+      readonly path: string;
+      readonly stat: FileStatSummary;
+      readonly message: string;
+    };
 
 const event = <T extends Omit<ServerLocalWhisperDownloadEvent, "version">>(
   value: T,
@@ -71,6 +103,10 @@ function modelPath(config: ServerConfigShape, model: WhisperModelDefinition): st
   return NodePath.join(modelDirectory(config), `ggml-${model.id}.bin`);
 }
 
+function modelIntegrityMetadataPath(path: string): string {
+  return `${path}.androdex-integrity.json`;
+}
+
 function formatDiskLabel(bytes: number): string {
   const mib = bytes / 1024 / 1024;
   if (mib < 1024) {
@@ -87,9 +123,13 @@ function getModelDefinition(modelId: LocalWhisperModelId | string): WhisperModel
   return model;
 }
 
-async function fileSize(path: string): Promise<number | null> {
+async function fileStat(path: string): Promise<FileStatSummary | null> {
   try {
-    return (await NodeFs.stat(path)).size;
+    const stat = await NodeFs.stat(path);
+    return {
+      size: stat.size,
+      mtimeMs: stat.mtimeMs,
+    };
   } catch {
     return null;
   }
@@ -122,13 +162,134 @@ async function sha1File(path: string): Promise<string> {
   return hash.digest("hex");
 }
 
+function isModelIntegrityMetadata(value: unknown): value is ModelIntegrityMetadata {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.version === MODEL_INTEGRITY_VERSION &&
+    typeof candidate.valid === "boolean" &&
+    typeof candidate.size === "number" &&
+    typeof candidate.mtimeMs === "number" &&
+    (typeof candidate.sha1 === "string" || candidate.sha1 === null)
+  );
+}
+
+async function readModelIntegrityMetadata(
+  path: string,
+  stat: FileStatSummary,
+  definition: WhisperModelDefinition,
+): Promise<ModelIntegrityMetadata | null> {
+  try {
+    const parsed = JSON.parse(await NodeFs.readFile(modelIntegrityMetadataPath(path), "utf8"));
+    if (!isModelIntegrityMetadata(parsed)) {
+      return null;
+    }
+    if (parsed.size !== stat.size || parsed.mtimeMs !== stat.mtimeMs) {
+      return null;
+    }
+    if (definition.sha1 && parsed.sha1 !== definition.sha1 && parsed.valid) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function writeModelIntegrityMetadata(input: {
+  readonly path: string;
+  readonly stat: FileStatSummary;
+  readonly valid: boolean;
+  readonly sha1: string | null;
+}): Promise<void> {
+  const metadata: ModelIntegrityMetadata = {
+    version: MODEL_INTEGRITY_VERSION,
+    valid: input.valid,
+    size: input.stat.size,
+    mtimeMs: input.stat.mtimeMs,
+    sha1: input.sha1,
+  };
+  await NodeFs.writeFile(modelIntegrityMetadataPath(input.path), `${JSON.stringify(metadata)}\n`);
+}
+
+async function inspectModelFile(
+  config: ServerConfigShape,
+  definition: WhisperModelDefinition,
+  options?: { readonly verifyChecksum?: boolean },
+): Promise<ModelFileInspection> {
+  const path = modelPath(config, definition);
+  const stat = await fileStat(path);
+  if (!stat) {
+    return { state: "missing", path };
+  }
+
+  if (stat.size !== definition.diskBytes) {
+    return {
+      state: "invalid",
+      path,
+      stat,
+      message: `Local model file is incomplete. Expected ${definition.diskBytes} bytes, found ${stat.size}.`,
+    };
+  }
+
+  if (!definition.sha1) {
+    return { state: "ready", path, stat };
+  }
+
+  const metadata = await readModelIntegrityMetadata(path, stat, definition);
+  if (metadata?.valid) {
+    return { state: "ready", path, stat };
+  }
+  if (metadata && !metadata.valid) {
+    return {
+      state: "invalid",
+      path,
+      stat,
+      message: "Local model checksum did not match the expected file.",
+    };
+  }
+  if (!options?.verifyChecksum) {
+    return { state: "unchecked", path, stat };
+  }
+
+  const digest = await sha1File(path);
+  if (digest !== definition.sha1) {
+    await writeModelIntegrityMetadata({
+      path,
+      stat,
+      valid: false,
+      sha1: digest,
+    });
+    return {
+      state: "invalid",
+      path,
+      stat,
+      message: `Local model checksum mismatch. Expected ${definition.sha1}, got ${digest}.`,
+    };
+  }
+
+  await writeModelIntegrityMetadata({
+    path,
+    stat,
+    valid: true,
+    sha1: digest,
+  });
+  return { state: "ready", path, stat };
+}
+
+function isModelInstalled(inspection: ModelFileInspection): boolean {
+  return inspection.state === "ready" || inspection.state === "unchecked";
+}
+
 async function toLocalWhisperModel(
   config: ServerConfigShape,
   definition: WhisperModelDefinition,
+  inspection?: ModelFileInspection,
 ): Promise<LocalWhisperModel> {
-  const path = modelPath(config, definition);
-  const size = await fileSize(path);
-  const installed = size !== null && size > 0;
+  const inspected = inspection ?? (await inspectModelFile(config, definition));
+  const installed = isModelInstalled(inspected);
   return {
     id: definition.id as LocalWhisperModelId,
     name: definition.name,
@@ -141,7 +302,7 @@ async function toLocalWhisperModel(
     quantization: definition.quantization,
     recommended: definition.recommended,
     installed,
-    path: installed ? path : null,
+    path: inspected.state === "missing" ? null : inspected.path,
   };
 }
 
@@ -256,7 +417,10 @@ async function downloadModel(input: {
   readonly publish: (event: ServerLocalWhisperDownloadEvent) => Promise<void>;
 }): Promise<void> {
   const definition = getModelDefinition(input.modelId);
-  const existing = await toLocalWhisperModel(input.config, definition);
+  const existingInspection = await inspectModelFile(input.config, definition, {
+    verifyChecksum: true,
+  });
+  const existing = await toLocalWhisperModel(input.config, definition, existingInspection);
   await input.publish(event({ type: "started", model: existing }));
 
   if (existing.installed) {
@@ -270,79 +434,106 @@ async function downloadModel(input: {
   const targetPath = modelPath(input.config, definition);
   const partialPath = `${targetPath}.part`;
   await NodeFs.rm(partialPath, { force: true });
-
-  const response = await fetch(definition.url, { signal: input.signal });
-  if (!response.ok || !response.body) {
-    throw new Error(`Model download failed with HTTP ${response.status} ${response.statusText}.`);
-  }
-
-  const contentLength = Number(response.headers.get("content-length"));
-  const totalBytes =
-    Number.isFinite(contentLength) && contentLength > 0 ? contentLength : definition.diskBytes;
-  const reader = response.body.getReader();
-  const handle = await NodeFs.open(partialPath, "w");
-  let downloadedBytes = 0;
-  let lastProgressAt = 0;
+  await NodeFs.rm(modelIntegrityMetadataPath(targetPath), { force: true });
 
   try {
-    for (;;) {
-      const next = await reader.read();
-      if (next.done) {
-        break;
+    const response = await fetch(definition.url, { signal: input.signal });
+    if (!response.ok || !response.body) {
+      throw new Error(`Model download failed with HTTP ${response.status} ${response.statusText}.`);
+    }
+
+    const contentLength = Number(response.headers.get("content-length"));
+    const totalBytes =
+      Number.isFinite(contentLength) && contentLength > 0 ? contentLength : definition.diskBytes;
+    const reader = response.body.getReader();
+    const handle = await NodeFs.open(partialPath, "w");
+    let downloadedBytes = 0;
+    let lastProgressAt = 0;
+
+    try {
+      for (;;) {
+        const next = await reader.read();
+        if (next.done) {
+          break;
+        }
+        const chunk = Buffer.from(next.value);
+        await handle.write(chunk);
+        downloadedBytes += chunk.byteLength;
+        const now = performance.now();
+        if (now - lastProgressAt >= DOWNLOAD_PROGRESS_MIN_INTERVAL_MS) {
+          lastProgressAt = now;
+          await input.publish(
+            event({
+              type: "progress",
+              modelId: definition.id as LocalWhisperModelId,
+              downloadedBytes,
+              totalBytes,
+              percent: Math.max(0, Math.min(100, (downloadedBytes / totalBytes) * 100)),
+            }),
+          );
+        }
       }
-      const chunk = Buffer.from(next.value);
-      await handle.write(chunk);
-      downloadedBytes += chunk.byteLength;
-      const now = performance.now();
-      if (now - lastProgressAt >= DOWNLOAD_PROGRESS_MIN_INTERVAL_MS) {
-        lastProgressAt = now;
-        await input.publish(
-          event({
-            type: "progress",
-            modelId: definition.id as LocalWhisperModelId,
-            downloadedBytes,
-            totalBytes,
-            percent: Math.max(0, Math.min(100, (downloadedBytes / totalBytes) * 100)),
-          }),
+    } finally {
+      await handle.close();
+    }
+
+    await input.publish(
+      event({
+        type: "progress",
+        modelId: definition.id as LocalWhisperModelId,
+        downloadedBytes,
+        totalBytes,
+        percent: 100,
+      }),
+    );
+
+    if (contentLength > 0 && downloadedBytes !== contentLength) {
+      throw new Error(
+        `Downloaded model size mismatch for ${definition.id}. Expected ${contentLength} bytes, got ${downloadedBytes}.`,
+      );
+    }
+    if (downloadedBytes !== definition.diskBytes) {
+      throw new Error(
+        `Downloaded model size mismatch for ${definition.id}. Expected ${definition.diskBytes} bytes, got ${downloadedBytes}.`,
+      );
+    }
+
+    let digest: string | null = null;
+    if (definition.sha1) {
+      digest = await sha1File(partialPath);
+      if (digest !== definition.sha1) {
+        throw new Error(
+          `Downloaded model checksum mismatch for ${definition.id}. Expected ${definition.sha1}, got ${digest}.`,
         );
       }
     }
-  } finally {
-    await handle.close();
-  }
 
-  await input.publish(
-    event({
-      type: "progress",
-      modelId: definition.id as LocalWhisperModelId,
-      downloadedBytes,
-      totalBytes,
-      percent: 100,
-    }),
-  );
-
-  if (contentLength > 0 && downloadedBytes !== contentLength) {
-    await NodeFs.rm(partialPath, { force: true });
-    throw new Error(
-      `Downloaded model size mismatch for ${definition.id}. Expected ${contentLength} bytes, got ${downloadedBytes}.`,
-    );
-  }
-
-  if (definition.sha1) {
-    const digest = await sha1File(partialPath);
-    if (digest !== definition.sha1) {
-      await NodeFs.rm(partialPath, { force: true });
-      throw new Error(
-        `Downloaded model checksum mismatch for ${definition.id}. Expected ${definition.sha1}, got ${digest}.`,
-      );
+    await NodeFs.rename(partialPath, targetPath);
+    const stat = await fileStat(targetPath);
+    if (stat) {
+      await writeModelIntegrityMetadata({
+        path: targetPath,
+        stat,
+        valid: true,
+        sha1: digest,
+      });
     }
+  } catch (cause) {
+    await NodeFs.rm(partialPath, { force: true });
+    if (input.signal.aborted) {
+      throw new Error("Model download cancelled.", { cause });
+    }
+    throw cause;
   }
 
-  await NodeFs.rename(partialPath, targetPath);
   await input.publish(
     event({
       type: "complete",
-      model: await toLocalWhisperModel(input.config, definition),
+      model: await toLocalWhisperModel(
+        input.config,
+        definition,
+        await inspectModelFile(input.config, definition),
+      ),
     }),
   );
 }
@@ -409,16 +600,6 @@ async function transcribe(
   input: ServerLocalWhisperTranscribeInput,
 ): Promise<ServerLocalWhisperTranscribeResult> {
   const definition = getModelDefinition(input.modelId);
-  const model = await toLocalWhisperModel(config, definition);
-  if (!model.installed || !model.path) {
-    throw new Error(`Download the ${definition.name} model before dictating with it.`);
-  }
-
-  const binaryPath = await resolveWhisperBinary(config);
-  if (!binaryPath) {
-    throw new Error((await readRuntimeStatus(config)).installHint ?? "whisper-cli is unavailable.");
-  }
-
   const audio = Buffer.from(input.audioWavBase64, "base64");
   if (audio.byteLength === 0) {
     throw new Error("Recorded audio was empty.");
@@ -428,6 +609,24 @@ async function transcribe(
   }
   if (audio.subarray(0, 4).toString("ascii") !== "RIFF") {
     throw new Error("Recorded audio was not encoded as WAV.");
+  }
+  assertPromptSpeechDetected(analyzeWavPromptSpeech(audio));
+
+  const modelInspection = await inspectModelFile(config, definition, {
+    verifyChecksum: true,
+  });
+  const model = await toLocalWhisperModel(config, definition, modelInspection);
+  if (!model.installed || !model.path) {
+    const suffix =
+      modelInspection.state === "invalid"
+        ? ` ${modelInspection.message} Download it again from the voice model menu.`
+        : "";
+    throw new Error(`Download the ${definition.name} model before dictating with it.${suffix}`);
+  }
+
+  const binaryPath = await resolveWhisperBinary(config);
+  if (!binaryPath) {
+    throw new Error((await readRuntimeStatus(config)).installHint ?? "whisper-cli is unavailable.");
   }
 
   const tempDir = tempDirectory(config);
@@ -447,7 +646,7 @@ async function transcribe(
       audioPath,
       "-l",
       // Short coding prompts are too small for reliable language auto-detection.
-      "en",
+      input.languageMode === "auto" && definition.language === "multilingual" ? "auto" : "en",
       "-t",
       String(transcribeThreadCount()),
       "-bo",

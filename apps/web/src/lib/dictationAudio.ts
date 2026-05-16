@@ -4,6 +4,13 @@ const DICTATION_METER_INTERVAL_MS = 60;
 const DICTATION_METER_SYMBOLS = ["⠤", "⠴", "⠶", "⠷", "⡷", "⡿", "⣿"] as const;
 const TARGET_SAMPLE_RATE = 16_000;
 const SCRIPT_PROCESSOR_BUFFER_SIZE = 4096;
+const MIN_PROMPT_AUDIO_DURATION_MS = 300;
+const MIN_PROMPT_SPEECH_ACTIVE_MS = 120;
+const MIN_PROMPT_PEAK = 0.012;
+const MIN_PROMPT_RMS = 0.0018;
+const PROMPT_SPEECH_FRAME_MS = 20;
+const PROMPT_SPEECH_FRAME_PEAK = 0.025;
+const PROMPT_SPEECH_FRAME_RMS = 0.006;
 
 interface ComposerDictationMeterState {
   readonly history: string[];
@@ -126,6 +133,45 @@ function normalizePromptAudio(samples: Float32Array): Float32Array {
     normalized[index] = (samples[index] ?? 0) * gain;
   }
   return normalized;
+}
+
+function hasPromptSpeech(samples: Float32Array, sampleRate: number): boolean {
+  if (samples.length === 0 || sampleRate <= 0) {
+    return false;
+  }
+
+  let peak = 0;
+  let squareSum = 0;
+  let activeFrames = 0;
+  const frameSize = Math.max(1, Math.round((sampleRate * PROMPT_SPEECH_FRAME_MS) / 1000));
+  for (let offset = 0; offset < samples.length; offset += frameSize) {
+    let framePeak = 0;
+    let frameSquareSum = 0;
+    const frameEnd = Math.min(samples.length, offset + frameSize);
+    const frameLength = frameEnd - offset;
+    for (let index = offset; index < frameEnd; index += 1) {
+      const sample = Math.max(-1, Math.min(1, samples[index] ?? 0));
+      const abs = Math.abs(sample);
+      framePeak = Math.max(framePeak, abs);
+      frameSquareSum += sample * sample;
+    }
+    peak = Math.max(peak, framePeak);
+    squareSum += frameSquareSum;
+    const frameRms = frameLength > 0 ? Math.sqrt(frameSquareSum / frameLength) : 0;
+    if (framePeak >= PROMPT_SPEECH_FRAME_PEAK || frameRms >= PROMPT_SPEECH_FRAME_RMS) {
+      activeFrames += 1;
+    }
+  }
+
+  const durationMs = (samples.length / sampleRate) * 1000;
+  const rms = Math.sqrt(squareSum / samples.length);
+  const activeMs = activeFrames * PROMPT_SPEECH_FRAME_MS;
+  return (
+    durationMs >= MIN_PROMPT_AUDIO_DURATION_MS &&
+    peak >= MIN_PROMPT_PEAK &&
+    rms >= MIN_PROMPT_RMS &&
+    activeMs >= MIN_PROMPT_SPEECH_ACTIVE_MS
+  );
 }
 
 function writeAscii(view: DataView, offset: number, value: string): void {
@@ -271,6 +317,9 @@ export async function startWavDictationRecorder(input: {
 
       const merged = mergePcmChunks(chunks, totalSamples);
       const resampled = resampleLinear(merged, audioContext.sampleRate, TARGET_SAMPLE_RATE);
+      if (!hasPromptSpeech(resampled, TARGET_SAMPLE_RATE)) {
+        throw new Error("No speech detected. Try speaking closer to the microphone.");
+      }
       const normalized = normalizePromptAudio(resampled);
       return {
         wavBase64: bytesToBase64(encodePcm16Wav(normalized, TARGET_SAMPLE_RATE)),

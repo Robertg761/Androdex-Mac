@@ -40,6 +40,10 @@ import {
   makePendingCodexProvider,
   writeCodexSkillConfig,
 } from "../Layers/CodexProvider.ts";
+import {
+  isCodexAppServerRemoteConnection,
+  resolveCodexAppServerRemoteConnection,
+} from "../Layers/CodexAppServerConnection.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import type { ProviderDriver, ProviderInstance } from "../ProviderDriver.ts";
@@ -142,6 +146,10 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         enabled,
         homePath: homeLayout.effectiveHomePath ?? "",
       } satisfies CodexSettings;
+      const appServerResolution = resolveCodexAppServerRemoteConnection(
+        effectiveConfig,
+        processEnv,
+      );
       const maintenanceCapabilities = yield* resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
         binaryPath: effectiveConfig.binaryPath,
         env: processEnv,
@@ -195,9 +203,12 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
       );
 
       const skillControls = {
-        setEnabled: (input) =>
-          writeCodexSkillConfig({
+        setEnabled: (input) => {
+          return writeCodexSkillConfig({
             binaryPath: effectiveConfig.binaryPath,
+            ...(isCodexAppServerRemoteConnection(appServerResolution)
+              ? { appServer: appServerResolution }
+              : {}),
             homePath: effectiveConfig.homePath,
             cwd: process.cwd(),
             enabled: input.enabled,
@@ -215,7 +226,8 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
                 }),
             ),
             Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-          ),
+          );
+        },
       } satisfies ProviderInstance["skillControls"];
 
       return {
