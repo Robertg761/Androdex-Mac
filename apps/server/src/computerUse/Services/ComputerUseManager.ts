@@ -47,6 +47,19 @@ export interface ComputerUseManagerShape {
   >;
 }
 
+let registeredComputerUseManager: ComputerUseManagerShape | undefined;
+
+export function registerComputerUseManager(
+  manager: ComputerUseManagerShape,
+): ComputerUseManagerShape {
+  registeredComputerUseManager = manager;
+  return manager;
+}
+
+export function getRegisteredComputerUseManager(): ComputerUseManagerShape | undefined {
+  return registeredComputerUseManager;
+}
+
 export class ComputerUseManager extends Context.Service<
   ComputerUseManager,
   ComputerUseManagerShape

@@ -59,13 +59,35 @@ describe("ComputerUsePolicy", () => {
     ).toEqual({ type: "block", reason: "Host desktop control is disabled." });
   });
 
+  it("allows approved X11 and Wayland host-desktop targets when host control is enabled", () => {
+    for (const driver of ["linux-x11", "linux-wayland"] as const) {
+      expect(
+        evaluateTargetPolicy(
+          {
+            ...isolatedTarget,
+            id: `target:${driver}` as ComputerUseTarget["id"],
+            kind: "desktop-display",
+            title: "Desktop",
+            allowed: true,
+            trustLevel: "host-desktop",
+            driver,
+          },
+          {
+            ...settings,
+            hostDesktopEnabled: true,
+          },
+        ),
+      ).toEqual({ type: "allow" });
+    }
+  });
+
   it("requires approval for sensitive-looking typed text", () => {
     expect(
       evaluateActionPolicy({ type: "type", text: "api_key=sk-example" }, isolatedTarget, settings),
     ).toMatchObject({ type: "approval-required" });
   });
 
-  it("blocks clipboard paste and host-desktop typing under default settings", () => {
+  it("blocks clipboard paste and requires review for host-desktop typing by default", () => {
     expect(
       evaluateActionPolicy({ type: "keypress", keys: ["ctrl", "v"] }, isolatedTarget, settings),
     ).toEqual({ type: "block", reason: "Clipboard paste is disabled." });
@@ -85,6 +107,9 @@ describe("ComputerUsePolicy", () => {
           hostDesktopEnabled: true,
         },
       ),
-    ).toEqual({ type: "block", reason: "Typing into host desktop targets is blocked." });
+    ).toEqual({
+      type: "approval-required",
+      reason: "Typing into a host desktop target requires review.",
+    });
   });
 });

@@ -37,6 +37,14 @@ import {
 } from "./git.ts";
 import { KeybindingsConfigError } from "./keybindings.ts";
 import {
+  ServerLocalWhisperDownloadEvent,
+  ServerLocalWhisperDownloadInput,
+  ServerLocalWhisperError,
+  ServerLocalWhisperModelsResult,
+  ServerLocalWhisperTranscribeInput,
+  ServerLocalWhisperTranscribeResult,
+} from "./localWhisper.ts";
+import {
   ClientOrchestrationCommand,
   ORCHESTRATION_WS_METHODS,
   OrchestrationDispatchCommandError,
@@ -149,6 +157,9 @@ export const WS_METHODS = {
   serverRefreshProviders: "server.refreshProviders",
   serverUpdateProvider: "server.updateProvider",
   serverSetProviderSkillEnabled: "server.setProviderSkillEnabled",
+  serverListLocalWhisperModels: "server.localWhisper.listModels",
+  serverDownloadLocalWhisperModel: "server.localWhisper.downloadModel",
+  serverTranscribeLocalWhisper: "server.localWhisper.transcribe",
   serverListCodexAutomations: "server.listCodexAutomations",
   serverUpsertCodexAutomation: "server.upsertCodexAutomation",
   serverDeleteCodexAutomation: "server.deleteCodexAutomation",
@@ -220,6 +231,28 @@ export const WsServerSetProviderSkillEnabledRpc = Rpc.make(
     error: ServerProviderSkillError,
   },
 );
+
+export const WsServerListLocalWhisperModelsRpc = Rpc.make(WS_METHODS.serverListLocalWhisperModels, {
+  payload: Schema.Struct({}),
+  success: ServerLocalWhisperModelsResult,
+  error: ServerLocalWhisperError,
+});
+
+export const WsServerDownloadLocalWhisperModelRpc = Rpc.make(
+  WS_METHODS.serverDownloadLocalWhisperModel,
+  {
+    payload: ServerLocalWhisperDownloadInput,
+    success: ServerLocalWhisperDownloadEvent,
+    error: ServerLocalWhisperError,
+    stream: true,
+  },
+);
+
+export const WsServerTranscribeLocalWhisperRpc = Rpc.make(WS_METHODS.serverTranscribeLocalWhisper, {
+  payload: ServerLocalWhisperTranscribeInput,
+  success: ServerLocalWhisperTranscribeResult,
+  error: ServerLocalWhisperError,
+});
 
 export const WsServerListCodexAutomationsRpc = Rpc.make(WS_METHODS.serverListCodexAutomations, {
   payload: ServerCodexAutomationsListInput,
@@ -578,6 +611,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRefreshProvidersRpc,
   WsServerUpdateProviderRpc,
   WsServerSetProviderSkillEnabledRpc,
+  WsServerListLocalWhisperModelsRpc,
+  WsServerDownloadLocalWhisperModelRpc,
+  WsServerTranscribeLocalWhisperRpc,
   WsServerListCodexAutomationsRpc,
   WsServerUpsertCodexAutomationRpc,
   WsServerDeleteCodexAutomationRpc,

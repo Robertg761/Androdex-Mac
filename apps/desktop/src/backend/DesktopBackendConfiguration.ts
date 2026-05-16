@@ -42,6 +42,7 @@ const DESKTOP_BACKEND_ENV_NAMES = [
   "ANDRODEX_DESKTOP_HTTPS_ENDPOINTS",
   "ANDRODEX_TAILSCALE_SERVE",
   "ANDRODEX_TAILSCALE_SERVE_PORT",
+  "ANDRODEX_WHISPER_CPP_BINARY",
   "T3CODE_PORT",
   "T3CODE_MODE",
   "T3CODE_NO_BROWSER",
@@ -90,6 +91,40 @@ const readPersistedBackendObservabilitySettings: Effect.Effect<
   };
 });
 
+function resolveVoiceRuntimeResourceNames(environment: DesktopEnvironment.DesktopEnvironmentShape) {
+  const executableName = environment.platform === "win32" ? "whisper-cli.exe" : "whisper-cli";
+  const arch =
+    environment.runtimeInfo.appArch === "arm64" || environment.runtimeInfo.appArch === "x64"
+      ? environment.runtimeInfo.appArch
+      : environment.processArch;
+  const platform = environment.platform;
+
+  return [
+    `voice/whisper/${platform}-${arch}/${executableName}`,
+    `voice/whisper/${platform}/${arch}/${executableName}`,
+  ];
+}
+
+const resolveBundledWhisperBinary = Effect.fn("desktop.backendConfiguration.whisperBinary")(
+  function* (): Effect.fn.Return<
+    Option.Option<string>,
+    never,
+    FileSystem.FileSystem | DesktopEnvironment.DesktopEnvironment
+  > {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const environment = yield* DesktopEnvironment.DesktopEnvironment;
+    for (const resourceName of resolveVoiceRuntimeResourceNames(environment)) {
+      for (const candidate of environment.resolveResourcePathCandidates(resourceName)) {
+        const exists = yield* fileSystem.exists(candidate).pipe(Effect.orElseSucceed(() => false));
+        if (exists) {
+          return Option.some(candidate);
+        }
+      }
+    }
+    return Option.none();
+  },
+);
+
 const getOrCreateBootstrapToken = Effect.fn("desktop.backendConfiguration.bootstrapToken")(
   function* (tokenRef: Ref.Ref<Option.Option<string>>) {
     const existing = yield* Ref.get(tokenRef);
@@ -114,11 +149,14 @@ const resolveBackendStartConfig = Effect.fn("desktop.backendConfiguration.resolv
   }): Effect.fn.Return<
     DesktopBackendManager.DesktopBackendStartConfig,
     never,
-    DesktopEnvironment.DesktopEnvironment | DesktopServerExposure.DesktopServerExposure
+    | DesktopEnvironment.DesktopEnvironment
+    | DesktopServerExposure.DesktopServerExposure
+    | FileSystem.FileSystem
   > {
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
     const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
     const backendExposure = yield* serverExposure.backendConfig;
+    const bundledWhisperBinary = yield* resolveBundledWhisperBinary();
 
     return {
       executablePath: process.execPath,
@@ -127,6 +165,10 @@ const resolveBackendStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       env: {
         ...backendChildEnvPatch(),
         ELECTRON_RUN_AS_NODE: "1",
+        ...Option.match(bundledWhisperBinary, {
+          onNone: () => ({}),
+          onSome: (binaryPath) => ({ ANDRODEX_WHISPER_CPP_BINARY: binaryPath }),
+        }),
       },
       bootstrap: {
         mode: "desktop",
@@ -171,6 +213,7 @@ export const layer = Layer.effect(
           bootstrapToken,
           observabilitySettings,
         }).pipe(
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
           Effect.provideService(DesktopEnvironment.DesktopEnvironment, environment),
           Effect.provideService(DesktopServerExposure.DesktopServerExposure, serverExposure),
         );

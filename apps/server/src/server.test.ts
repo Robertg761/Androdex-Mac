@@ -4,6 +4,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 
 import {
   CommandId,
+  DEFAULT_COMPUTER_USE_SETTINGS,
   DEFAULT_SERVER_SETTINGS,
   EnvironmentId,
   EventId,
@@ -83,6 +84,10 @@ import {
   ProviderInstanceRegistry,
   type ProviderInstanceRegistryShape,
 } from "./provider/Services/ProviderInstanceRegistry.ts";
+import {
+  ComputerUseManager,
+  type ComputerUseManagerShape,
+} from "./computerUse/Services/ComputerUseManager.ts";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "./provider/providerMaintenance.ts";
 import { ServerLifecycleEvents, type ServerLifecycleEventsShape } from "./serverLifecycleEvents.ts";
 import { ServerRuntimeStartup, type ServerRuntimeStartupShape } from "./serverRuntimeStartup.ts";
@@ -341,6 +346,7 @@ const buildAppUnderTest = (options?: {
     serverRuntimeStartup?: Partial<ServerRuntimeStartupShape>;
     serverEnvironment?: Partial<ServerEnvironmentShape>;
     repositoryIdentityResolver?: Partial<RepositoryIdentityResolverShape>;
+    computerUseManager?: Partial<ComputerUseManagerShape>;
   };
 }) =>
   Effect.gen(function* () {
@@ -555,6 +561,36 @@ const buildAppUnderTest = (options?: {
           updateSettings: () => Effect.succeed(DEFAULT_SERVER_SETTINGS),
           streamChanges: Stream.empty,
           ...options?.layers?.serverSettings,
+        }),
+      ),
+      Layer.provide(
+        Layer.mock(ComputerUseManager)({
+          getStatus: Effect.succeed({
+            enabled: false,
+            featureFlagEnabled: false,
+            settings: DEFAULT_COMPUTER_USE_SETTINGS,
+            health: [],
+          }),
+          getSnapshot: Effect.succeed({
+            enabled: false,
+            featureFlagEnabled: false,
+            settings: DEFAULT_COMPUTER_USE_SETTINGS,
+            health: [],
+            targets: [],
+            sessions: [],
+            approvals: [],
+            screenshots: [],
+            auditLog: [],
+          }),
+          healthCheck: Effect.succeed([]),
+          listTargets: Effect.succeed([]),
+          startSession: () => Effect.die("ComputerUseManager.startSession not mocked"),
+          stopSession: () => Effect.void,
+          captureScreenshot: () => Effect.die("ComputerUseManager.captureScreenshot not mocked"),
+          executeActions: () => Effect.die("ComputerUseManager.executeActions not mocked"),
+          respondToApproval: () => Effect.die("ComputerUseManager.respondToApproval not mocked"),
+          streamEvents: Stream.empty,
+          ...options?.layers?.computerUseManager,
         }),
       ),
       Layer.provide(

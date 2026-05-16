@@ -197,6 +197,59 @@ describe("isRecoverableThreadResumeError", () => {
 });
 
 describe("openCodexThread", () => {
+  it("passes dynamic tools on fresh thread start", async () => {
+    const calls: Array<{ method: "thread/start" | "thread/resume"; payload: unknown }> = [];
+    const started = makeThreadOpenResponse("fresh-thread");
+    const dynamicTools = [
+      {
+        namespace: "androdex",
+        name: "computer_use",
+        description: "Use the visible computer.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            operation: { type: "string" },
+          },
+        },
+      },
+    ];
+    const client = {
+      request: <M extends "thread/start" | "thread/resume">(
+        method: M,
+        payload: CodexRpc.ClientRequestParamsByMethod[M],
+      ) => {
+        calls.push({ method, payload });
+        return Effect.succeed(started as CodexRpc.ClientRequestResponsesByMethod[M]);
+      },
+    };
+
+    await Effect.runPromise(
+      openCodexThread({
+        client,
+        threadId: ThreadId.make("thread-1"),
+        runtimeMode: "full-access",
+        cwd: "/tmp/project",
+        requestedModel: "gpt-5.3-codex",
+        serviceTier: undefined,
+        resumeThreadId: undefined,
+        dynamicTools,
+      }),
+    );
+
+    assert.deepStrictEqual(calls, [
+      {
+        method: "thread/start",
+        payload: {
+          cwd: "/tmp/project",
+          approvalPolicy: "never",
+          sandbox: "danger-full-access",
+          model: "gpt-5.3-codex",
+          dynamicTools,
+        },
+      },
+    ]);
+  });
+
   it("falls back to thread/start when resume fails recoverably", async () => {
     const calls: Array<{ method: "thread/start" | "thread/resume"; payload: unknown }> = [];
     const started = makeThreadOpenResponse("fresh-thread");

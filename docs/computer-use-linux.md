@@ -16,7 +16,7 @@ The canonical state lives in `apps/server/src/computerUse`. Web, desktop, and An
 - `apps/server/src/computerUse/Layers/ComputerUseManager.ts` owns in-memory sessions, approvals, screenshot retention, policy checks, event publishing, and the audit log.
 - `apps/server/src/computerUse/Drivers/VirtualDisplayDriver.ts` runs the default isolated Xvfb target for `container` and `browser` modes.
 - `apps/server/src/computerUse/Drivers/LinuxX11Driver.ts` supports opt-in host X11 window control with stricter policy gates.
-- `apps/server/src/computerUse/Drivers/LinuxWaylandDriver.ts` reports Wayland capability status and intentionally fails closed until compositor-specific support is implemented.
+- `apps/server/src/computerUse/Drivers/LinuxWaylandDriver.ts` supports opt-in host Wayland display control using KDE Spectacle or grim for screenshots and ydotool for visible pointer/keyboard input.
 - `apps/web/src/components/settings/ComputerUseSettings.tsx` exposes status, settings, session controls, screenshots, approvals, and audit visibility.
 
 The default loop is:
@@ -71,7 +71,7 @@ Computer Use is default-deny:
 - New targets require approval when `askBeforeNewTarget` is enabled.
 - Large or secret-looking text input requires approval.
 - Clipboard paste is blocked unless clipboard access is enabled.
-- Host desktop typing is blocked.
+- Host desktop typing requires explicit sensitive-action review when that safety gate is enabled.
 - X11 sessions verify the focused window before each action.
 
 The audit log is written to:
@@ -106,8 +106,8 @@ Wayland:
 
 ```text
 xdg-desktop-portal
-grim or spectacle
+spectacle or grim
 ydotool
 ```
 
-Wayland is reported as unsupported/experimental unless the needed compositor path is available. It must never silently fall back to unsafe host automation.
+Wayland support is enabled only when the session is Wayland and the screenshot and input dependencies are present. On KDE, Spectacle is preferred because it can capture the full desktop with the pointer visible. `ydotool` must be installed and usable by the current user, including any daemon/uinput permissions required by the distro. Wayland must never silently fall back to unsafe host automation.

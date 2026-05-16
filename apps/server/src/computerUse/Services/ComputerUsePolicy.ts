@@ -41,7 +41,8 @@ export function evaluateTargetPolicy(
 
   if (
     target.trustLevel === "host-desktop" &&
-    (!settings.hostDesktopEnabled || target.driver !== "linux-x11")
+    (!settings.hostDesktopEnabled ||
+      (target.driver !== "linux-x11" && target.driver !== "linux-wayland"))
   ) {
     return { type: "block", reason: "Host desktop control is disabled." };
   }
@@ -62,13 +63,6 @@ export function evaluateActionPolicy(
   target: ComputerUseTarget,
   settings: ComputerUseSettings,
 ): ComputerUsePolicyDecision {
-  if (target.trustLevel === "host-desktop" && action.type === "type") {
-    return {
-      type: "block",
-      reason: "Typing into host desktop targets is blocked.",
-    };
-  }
-
   if (action.type === "type") {
     if (SENSITIVE_TYPED_TEXT_PATTERNS.some((pattern) => pattern.test(action.text))) {
       return {
@@ -80,6 +74,12 @@ export function evaluateActionPolicy(
       return {
         type: "approval-required",
         reason: "Large text entry requires review.",
+      };
+    }
+    if (target.trustLevel === "host-desktop" && settings.askBeforeSensitiveAction) {
+      return {
+        type: "approval-required",
+        reason: "Typing into a host desktop target requires review.",
       };
     }
   }

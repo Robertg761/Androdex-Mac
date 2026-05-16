@@ -1,4 +1,5 @@
 import type {
+  LocalWhisperModelId,
   VcsStatusLocalResult,
   VcsStatusRemoteResult,
   VcsStatusStreamEvent,
@@ -35,6 +36,28 @@ const baseRemoteStatus: VcsStatusRemoteResult = {
 };
 
 describe("wsRpcClient", () => {
+  it("uses a one-shot stream for local Whisper model downloads", async () => {
+    const transport = {
+      dispose: vi.fn(async () => undefined),
+      reconnect: vi.fn(async () => undefined),
+      request: vi.fn(),
+      requestStream: vi.fn(async () => undefined),
+      subscribe: vi.fn(() => () => undefined),
+    } satisfies Pick<
+      WsTransport,
+      "dispose" | "reconnect" | "request" | "requestStream" | "subscribe"
+    >;
+
+    const client = createWsRpcClient(transport as unknown as WsTransport);
+    await client.server.downloadLocalWhisperModel(
+      { modelId: "base.en" as LocalWhisperModelId },
+      vi.fn(),
+    );
+
+    expect(transport.requestStream).toHaveBeenCalledTimes(1);
+    expect(transport.subscribe).not.toHaveBeenCalled();
+  });
+
   it("reduces vcs status stream events into flat status snapshots", () => {
     const subscribe = vi.fn(<TValue>(_connect: unknown, listener: (value: TValue) => void) => {
       for (const event of [

@@ -281,6 +281,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   // no longer transitively provides it. Exposing it at the runtime level
   // keeps a single Live for all opencode consumers.
   Layer.provideMerge(OpenCodeRuntimeLive),
+  Layer.provideMerge(ComputerUseManagerLive),
   Layer.provideMerge(ServerSettingsLive),
   Layer.provideMerge(WorkspaceLayerLive),
   Layer.provideMerge(ProjectFaviconResolverLive),
@@ -314,7 +315,7 @@ const ComputerUseTransportRouteLayer = Layer.mergeAll(
   computerUseStopSessionRouteLayer,
   computerUseTargetsRouteLayer,
   websocketRpcRouteLayer,
-).pipe(HttpRouter.provideRequest(ComputerUseManagerLive));
+);
 
 export const makeRoutesLayer = Layer.mergeAll(
   authBearerBootstrapRouteLayer,

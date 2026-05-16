@@ -8,6 +8,9 @@ import type {
   ResolvedKeybindingsConfig,
   RuntimeMode,
   ScopedThreadRef,
+  LocalWhisperModel,
+  LocalWhisperModelId,
+  LocalWhisperRuntimeStatus,
   ServerProvider,
   ThreadId,
   TurnId,
@@ -68,6 +71,7 @@ import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
+import { LocalWhisperModelMenu, type LocalWhisperDownloadProgress } from "./LocalWhisperModelMenu";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import { searchSlashCommandItems } from "./composerSlashCommandSearch";
@@ -87,8 +91,11 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import {
   BotIcon,
+  ChevronDownIcon,
   CircleAlertIcon,
+  LoaderCircleIcon,
   ListTodoIcon,
+  MicIcon,
   type LucideIcon,
   LockIcon,
   LockOpenIcon,
@@ -109,11 +116,25 @@ import type { SessionPhase, Thread } from "../../types";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingApproval, PendingUserInput } from "../../session-logic";
 import { deriveLatestContextWindowSnapshot } from "../../lib/contextWindow";
+import {
+  DICTATION_METER_IDLE_TEXT,
+  startWavDictationRecorder,
+  type WavDictationRecorder,
+} from "../../lib/dictationAudio";
 import { formatProviderSkillDisplayName } from "../../providerSkillPresentation";
 import { searchProviderSkills } from "../../providerSkillSearch";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { readEnvironmentConnection } from "../../environments/runtime";
 
 const IMAGE_SIZE_LIMIT_LABEL = `${Math.round(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES / (1024 * 1024))}MB`;
+const LOCAL_WHISPER_MODEL_STORAGE_KEY = "androdex.localWhisper.modelId";
+
+interface ComposerDictationSession {
+  readonly modelId: LocalWhisperModelId;
+  readonly recorder: WavDictationRecorder;
+}
+
+type ComposerDictationState = "idle" | "recording" | "transcribing";
 
 const runtimeModeConfig: Record<
   RuntimeMode,
@@ -1467,6 +1488,350 @@ export const ChatComposer = memo(
       };
     }, [composerCursor, composerTerminalContexts, promptRef]);
 
+    const [dictationState, setDictationState] = useState<ComposerDictationState>("idle");
+    const [dictationPreview, setDictationPreview] = useState("");
+    const [dictationMeterText, setDictationMeterText] = useState(DICTATION_METER_IDLE_TEXT);
+    const [localWhisperModels, setLocalWhisperModels] = useState<LocalWhisperModel[]>([]);
+    const [localWhisperRuntime, setLocalWhisperRuntime] =
+      useState<LocalWhisperRuntimeStatus | null>(null);
+    const [localWhisperModelsLoading, setLocalWhisperModelsLoading] = useState(false);
+    const [localWhisperModelMenuOpen, setLocalWhisperModelMenuOpen] = useState(false);
+    const [selectedLocalWhisperModelId, setSelectedLocalWhisperModelId] =
+      useState<LocalWhisperModelId | null>(() => {
+        if (typeof window === "undefined") {
+          return null;
+        }
+        const stored = window.localStorage.getItem(LOCAL_WHISPER_MODEL_STORAGE_KEY)?.trim();
+        return stored ? (stored as LocalWhisperModelId) : null;
+      });
+    const [downloadingLocalWhisperModelId, setDownloadingLocalWhisperModelId] =
+      useState<LocalWhisperModelId | null>(null);
+    const [localWhisperDownloadProgress, setLocalWhisperDownloadProgress] =
+      useState<LocalWhisperDownloadProgress | null>(null);
+    const dictationSessionRef = useRef<ComposerDictationSession | null>(null);
+    const dictationStateRef = useRef<ComposerDictationState>("idle");
+    const localWhisperDownloadRunRef = useRef(0);
+
+    useEffect(() => {
+      dictationStateRef.current = dictationState;
+    }, [dictationState]);
+
+    const cleanupDictationSession = useCallback(() => {
+      const session = dictationSessionRef.current;
+      if (!session) return;
+      dictationSessionRef.current = null;
+      session.recorder.cancel();
+    }, []);
+
+    const resetDictationState = useCallback(() => {
+      cleanupDictationSession();
+      setDictationState("idle");
+      setDictationPreview("");
+      setDictationMeterText(DICTATION_METER_IDLE_TEXT);
+      scheduleComposerFocus();
+    }, [cleanupDictationSession, scheduleComposerFocus]);
+
+    useEffect(() => () => cleanupDictationSession(), [cleanupDictationSession]);
+    useEffect(
+      () => () => {
+        localWhisperDownloadRunRef.current += 1;
+      },
+      [],
+    );
+
+    const insertDictatedText = useCallback(
+      (text: string) => {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+
+        const snapshot = readComposerSnapshot();
+        const cursor = snapshot.expandedCursor;
+        const before = snapshot.value.slice(0, cursor);
+        const after = snapshot.value.slice(cursor);
+        const leading = before.length > 0 && !/\s$/.test(before) ? " " : "";
+        const trailing = after.length > 0 && !/^\s/.test(after) ? " " : "";
+        applyPromptReplacement(cursor, cursor, `${leading}${trimmed}${trailing}`, {
+          focusEditorAfterReplace: true,
+        });
+      },
+      [applyPromptReplacement, readComposerSnapshot],
+    );
+
+    const refreshLocalWhisperModels = useCallback(
+      async (options?: { readonly quiet?: boolean }) => {
+        const connection = readEnvironmentConnection(environmentId);
+        if (!connection) {
+          return null;
+        }
+
+        setLocalWhisperModelsLoading(true);
+        try {
+          const result = await connection.client.server.listLocalWhisperModels();
+          setLocalWhisperRuntime(result.runtime);
+          setLocalWhisperModels([...result.models]);
+          return result;
+        } catch (error) {
+          if (!options?.quiet) {
+            toastManager.add({
+              type: "error",
+              title: "Unable to load voice models",
+              description:
+                error instanceof Error ? error.message : "Local Whisper models could not be read.",
+            });
+          }
+          return null;
+        } finally {
+          setLocalWhisperModelsLoading(false);
+        }
+      },
+      [environmentId],
+    );
+
+    useEffect(() => {
+      if (environmentUnavailable !== null) {
+        return;
+      }
+      void refreshLocalWhisperModels({ quiet: true });
+    }, [environmentUnavailable, refreshLocalWhisperModels]);
+
+    const applyLocalWhisperModel = useCallback((model: LocalWhisperModel) => {
+      setLocalWhisperModels((current) =>
+        current.map((entry) => (entry.id === model.id ? model : entry)),
+      );
+    }, []);
+
+    const rememberLocalWhisperModel = useCallback((modelId: LocalWhisperModelId) => {
+      setSelectedLocalWhisperModelId(modelId);
+      window.localStorage.setItem(LOCAL_WHISPER_MODEL_STORAGE_KEY, modelId);
+    }, []);
+
+    const selectLocalWhisperModel = useCallback(
+      (model: LocalWhisperModel) => {
+        if (downloadingLocalWhisperModelId !== null) {
+          return;
+        }
+
+        rememberLocalWhisperModel(model.id);
+        if (model.installed) {
+          setLocalWhisperModelMenuOpen(false);
+          return;
+        }
+
+        const connection = readEnvironmentConnection(environmentId);
+        if (!connection) {
+          toastManager.add({
+            type: "error",
+            title: "Voice model download unavailable",
+            description: "The selected environment is not connected.",
+          });
+          return;
+        }
+
+        const downloadRunId = localWhisperDownloadRunRef.current + 1;
+        localWhisperDownloadRunRef.current = downloadRunId;
+        setDownloadingLocalWhisperModelId(model.id);
+        setLocalWhisperDownloadProgress(null);
+        void connection.client.server
+          .downloadLocalWhisperModel({ modelId: model.id }, (event) => {
+            if (localWhisperDownloadRunRef.current !== downloadRunId) {
+              return;
+            }
+            switch (event.type) {
+              case "started":
+                applyLocalWhisperModel(event.model);
+                return;
+              case "progress":
+                setLocalWhisperDownloadProgress({
+                  modelId: event.modelId,
+                  downloadedBytes: event.downloadedBytes,
+                  totalBytes: event.totalBytes,
+                  percent: event.percent,
+                });
+                return;
+              case "complete":
+                applyLocalWhisperModel(event.model);
+                rememberLocalWhisperModel(event.model.id);
+                setDownloadingLocalWhisperModelId(null);
+                setLocalWhisperDownloadProgress(null);
+                setLocalWhisperModelMenuOpen(false);
+                return;
+              case "error":
+                setDownloadingLocalWhisperModelId(null);
+                setLocalWhisperDownloadProgress(null);
+                toastManager.add({
+                  type: "error",
+                  title: "Voice model download failed",
+                  description: event.message,
+                });
+                return;
+            }
+          })
+          .catch((error) => {
+            if (localWhisperDownloadRunRef.current !== downloadRunId) {
+              return;
+            }
+            setDownloadingLocalWhisperModelId(null);
+            setLocalWhisperDownloadProgress(null);
+            toastManager.add({
+              type: "error",
+              title: "Voice model download failed",
+              description: error instanceof Error ? error.message : "Local model download failed.",
+            });
+          });
+      },
+      [
+        applyLocalWhisperModel,
+        downloadingLocalWhisperModelId,
+        environmentId,
+        rememberLocalWhisperModel,
+      ],
+    );
+
+    const selectedLocalWhisperModel = useMemo(() => {
+      return (
+        localWhisperModels.find(
+          (model) => model.id === selectedLocalWhisperModelId && model.installed,
+        ) ??
+        localWhisperModels.find((model) => model.installed && model.recommended) ??
+        localWhisperModels.find((model) => model.installed) ??
+        null
+      );
+    }, [localWhisperModels, selectedLocalWhisperModelId]);
+
+    const canUseLocalDictation = environmentUnavailable === null;
+    const dictationTooltip = !canUseLocalDictation
+      ? "Dictation requires a connected environment"
+      : dictationState === "recording"
+        ? "Stop dictation"
+        : dictationState === "transcribing"
+          ? "Transcribing prompt"
+          : "Dictate prompt";
+    const dictationStatusText =
+      dictationState === "transcribing"
+        ? "Transcribing"
+        : dictationPreview || (dictationState !== "idle" ? dictationMeterText : "");
+
+    const resolveUsableLocalWhisperModel = useCallback(async () => {
+      if (selectedLocalWhisperModel) {
+        return selectedLocalWhisperModel;
+      }
+      const refreshed = await refreshLocalWhisperModels({ quiet: true });
+      return (
+        refreshed?.models.find(
+          (model) => model.id === selectedLocalWhisperModelId && model.installed,
+        ) ??
+        refreshed?.models.find((model) => model.installed && model.recommended) ??
+        refreshed?.models.find((model) => model.installed) ??
+        null
+      );
+    }, [refreshLocalWhisperModels, selectedLocalWhisperModel, selectedLocalWhisperModelId]);
+
+    const stopLocalWhisperDictation = useCallback(async () => {
+      const session = dictationSessionRef.current;
+      if (!session) {
+        return;
+      }
+
+      dictationSessionRef.current = null;
+      setDictationState("transcribing");
+      setDictationPreview("");
+      try {
+        const recording = await session.recorder.stop();
+        const connection = readEnvironmentConnection(environmentId);
+        if (!connection) {
+          throw new Error("The selected environment is not connected.");
+        }
+        const result = await connection.client.server.transcribeLocalWhisper({
+          modelId: session.modelId,
+          audioWavBase64: recording.wavBase64,
+          durationMs: Math.max(1, recording.durationMs),
+        });
+        if (result.text.trim()) {
+          insertDictatedText(result.text);
+        } else {
+          toastManager.add({
+            type: "info",
+            title: "No speech detected",
+            description: "The local transcription finished without text.",
+          });
+        }
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Dictation failed",
+          description: error instanceof Error ? error.message : "Local transcription failed.",
+        });
+      } finally {
+        resetDictationState();
+      }
+    }, [environmentId, insertDictatedText, resetDictationState]);
+
+    const startLocalWhisperDictation = useCallback(async () => {
+      if (dictationStateRef.current === "recording") {
+        await stopLocalWhisperDictation();
+        return;
+      }
+      if (dictationStateRef.current !== "idle") {
+        return;
+      }
+      if (!canUseLocalDictation) {
+        return;
+      }
+      const connection = readEnvironmentConnection(environmentId);
+      if (!connection) {
+        toastManager.add({
+          type: "error",
+          title: "Dictation is unavailable",
+          description: "The selected environment is not connected.",
+        });
+        return;
+      }
+
+      const model = await resolveUsableLocalWhisperModel();
+      if (!model) {
+        setLocalWhisperModelMenuOpen(true);
+        toastManager.add({
+          type: "info",
+          title: "Choose a voice model",
+          description: "Download a local Whisper model before dictating.",
+        });
+        return;
+      }
+      if (localWhisperRuntime && !localWhisperRuntime.available) {
+        setLocalWhisperModelMenuOpen(true);
+        toastManager.add({
+          type: "error",
+          title: "Local Whisper is unavailable",
+          description: localWhisperRuntime.installHint ?? "whisper-cli is not available.",
+        });
+        return;
+      }
+
+      setDictationState("recording");
+      setDictationPreview("");
+      setDictationMeterText(DICTATION_METER_IDLE_TEXT);
+      try {
+        const recorder = await startWavDictationRecorder({
+          onMeterText: setDictationMeterText,
+        });
+        dictationSessionRef.current = { modelId: model.id, recorder };
+      } catch (error) {
+        resetDictationState();
+        toastManager.add({
+          type: "error",
+          title: "Unable to start dictation",
+          description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        });
+      }
+    }, [
+      canUseLocalDictation,
+      environmentId,
+      localWhisperRuntime,
+      resetDictationState,
+      resolveUsableLocalWhisperModel,
+      stopLocalWhisperDictation,
+    ]);
+
     const resolveActiveComposerTrigger = useCallback((): {
       snapshot: { value: string; cursor: number; expandedCursor: number };
       trigger: ComposerTrigger | null;
@@ -2399,8 +2764,97 @@ export const ChatComposer = memo(
                   data-chat-composer-primary-actions-compact={
                     isComposerPrimaryActionsCompact ? "true" : "false"
                   }
-                  className="flex shrink-0 flex-nowrap items-center justify-end gap-2"
+                  className="relative flex shrink-0 flex-nowrap items-center justify-end gap-2"
                 >
+                  <LocalWhisperModelMenu
+                    open={localWhisperModelMenuOpen}
+                    runtime={localWhisperRuntime}
+                    models={localWhisperModels}
+                    loading={localWhisperModelsLoading}
+                    selectedModelId={selectedLocalWhisperModelId}
+                    downloadingModelId={downloadingLocalWhisperModelId}
+                    downloadProgress={localWhisperDownloadProgress}
+                    onClose={() => setLocalWhisperModelMenuOpen(false)}
+                    onSelect={selectLocalWhisperModel}
+                  />
+                  {dictationStatusText ? (
+                    <div
+                      aria-live="polite"
+                      className={cn(
+                        "max-w-28 truncate text-xs text-muted-foreground sm:max-w-44",
+                        dictationState === "recording"
+                          ? "font-mono tabular-nums tracking-normal"
+                          : "",
+                      )}
+                    >
+                      {dictationStatusText}
+                    </div>
+                  ) : null}
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          aria-label="Voice model"
+                          disabled={!canUseLocalDictation}
+                          size={isComposerPrimaryActionsCompact ? "icon-xs" : "icon-sm"}
+                          variant="outline"
+                          onClick={() => {
+                            setLocalWhisperModelMenuOpen((open) => !open);
+                            void refreshLocalWhisperModels({ quiet: true });
+                          }}
+                          onPointerDown={(event) => {
+                            if (isMobileViewport) {
+                              event.preventDefault();
+                            }
+                          }}
+                        >
+                          <ChevronDownIcon />
+                        </Button>
+                      }
+                    />
+                    <TooltipPopup side="top">
+                      {selectedLocalWhisperModel
+                        ? `Voice model: ${selectedLocalWhisperModel.name}`
+                        : "Voice model"}
+                    </TooltipPopup>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          aria-label={dictationTooltip}
+                          className={cn(
+                            dictationState !== "idle" && "ring-1 ring-destructive/20",
+                            dictationState === "recording" &&
+                              "border-destructive/40 bg-destructive/8 text-destructive hover:bg-destructive/12",
+                          )}
+                          disabled={
+                            !canUseLocalDictation ||
+                            isSendBusy ||
+                            dictationState === "transcribing" ||
+                            downloadingLocalWhisperModelId !== null
+                          }
+                          size={isComposerPrimaryActionsCompact ? "icon-sm" : "icon"}
+                          variant="outline"
+                          onClick={() => {
+                            void startLocalWhisperDictation();
+                          }}
+                          onPointerDown={(event) => {
+                            if (isMobileViewport) {
+                              event.preventDefault();
+                            }
+                          }}
+                        >
+                          {dictationState === "transcribing" ? (
+                            <LoaderCircleIcon className="animate-spin" />
+                          ) : (
+                            <MicIcon />
+                          )}
+                        </Button>
+                      }
+                    />
+                    <TooltipPopup side="top">{dictationTooltip}</TooltipPopup>
+                  </Tooltip>
                   <ComposerFooterPrimaryActions
                     compact={isComposerPrimaryActionsCompact}
                     activeContextWindow={activeContextWindow}

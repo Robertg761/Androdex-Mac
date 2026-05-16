@@ -100,6 +100,51 @@ function mouseButton(button: Extract<ComputerUseAction, { type: "click" }>["butt
   }
 }
 
+function normalizeKey(key: string): string {
+  const lowered = key.toLowerCase();
+  switch (lowered) {
+    case "ctrl":
+    case "control":
+      return "ctrl";
+    case "cmd":
+    case "command":
+    case "meta":
+      return "super";
+    case "option":
+    case "alt":
+      return "alt";
+    case "return":
+      return "Return";
+    case "escape":
+    case "esc":
+      return "Escape";
+    case "backspace":
+      return "BackSpace";
+    case "delete":
+      return "Delete";
+    case "tab":
+      return "Tab";
+    case "space":
+      return "space";
+    default:
+      return key.length === 1 ? key : lowered;
+  }
+}
+
+async function clickScroll(
+  runXdotool: (args: readonly string[]) => Promise<unknown>,
+  delta: number,
+  negativeButton: string,
+  positiveButton: string,
+): Promise<void> {
+  if (delta === 0) return;
+  const button = delta > 0 ? positiveButton : negativeButton;
+  const count = Math.max(1, Math.min(12, Math.ceil(Math.abs(delta) / 120)));
+  for (let index = 0; index < count; index += 1) {
+    await runXdotool(["click", button]);
+  }
+}
+
 export class LinuxX11Driver implements ComputerUseDriver {
   readonly kind = "linux-x11" as const;
 
@@ -223,18 +268,21 @@ export class LinuxX11Driver implements ComputerUseDriver {
         return;
       }
       case "scroll": {
-        await runXdotool(["mousemove", String(action.x), String(action.y)]);
-        const verticalButton = (action.scrollY ?? 0) > 0 ? "5" : "4";
-        const count = Math.max(1, Math.min(12, Math.ceil(Math.abs(action.scrollY ?? 0) / 120)));
-        for (let index = 0; index < count; index += 1) {
-          await runXdotool(["click", verticalButton]);
+        const scrollX = action.scrollX ?? 0;
+        const scrollY = action.scrollY ?? 0;
+        if (scrollX === 0 && scrollY === 0) {
+          return;
         }
+        await runXdotool(["mousemove", String(action.x), String(action.y)]);
+        await clickScroll(runXdotool, scrollY, "4", "5");
+        await clickScroll(runXdotool, scrollX, "6", "7");
         return;
       }
       case "type":
-        throw new Error("Typing into host desktop windows is blocked by policy.");
+        await runXdotool(["type", "--clearmodifiers", "--delay", "1", "--", action.text]);
+        return;
       case "keypress":
-        await runXdotool(["key", action.keys.join("+")]);
+        await runXdotool(["key", action.keys.map(normalizeKey).join("+")]);
         return;
       case "wait":
         await NodeTimers.setTimeout(action.ms ?? 1_000);

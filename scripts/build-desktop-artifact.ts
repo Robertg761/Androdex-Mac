@@ -75,6 +75,7 @@ interface BuildCliInput {
   readonly keepStage: Option.Option<boolean>;
   readonly signed: Option.Option<boolean>;
   readonly verbose: Option.Option<boolean>;
+  readonly allowMissingVoiceRuntime: Option.Option<boolean>;
   readonly mockUpdates: Option.Option<boolean>;
   readonly mockUpdateServerPort: Option.Option<number>;
 }
@@ -206,6 +207,7 @@ interface ResolvedBuildOptions {
   readonly keepStage: boolean;
   readonly signed: boolean;
   readonly verbose: boolean;
+  readonly allowMissingVoiceRuntime: boolean;
   readonly mockUpdates: boolean;
   readonly mockUpdateServerPort: number | undefined;
 }
@@ -264,6 +266,7 @@ const DESKTOP_ENV_ALIASES = [
   ["ANDRODEX_DESKTOP_KEEP_STAGE", "T3CODE_DESKTOP_KEEP_STAGE"],
   ["ANDRODEX_DESKTOP_SIGNED", "T3CODE_DESKTOP_SIGNED"],
   ["ANDRODEX_DESKTOP_VERBOSE", "T3CODE_DESKTOP_VERBOSE"],
+  ["ANDRODEX_DESKTOP_ALLOW_MISSING_VOICE_RUNTIME", "T3CODE_DESKTOP_ALLOW_MISSING_VOICE_RUNTIME"],
   ["ANDRODEX_DESKTOP_MOCK_UPDATES", "T3CODE_DESKTOP_MOCK_UPDATES"],
   ["ANDRODEX_DESKTOP_MOCK_UPDATE_SERVER_PORT", "T3CODE_DESKTOP_MOCK_UPDATE_SERVER_PORT"],
   ["ANDRODEX_DESKTOP_UPDATE_REPOSITORY", "T3CODE_DESKTOP_UPDATE_REPOSITORY"],
@@ -283,6 +286,9 @@ const BuildEnvConfig = Config.all({
   keepStage: Config.boolean("ANDRODEX_DESKTOP_KEEP_STAGE").pipe(Config.withDefault(false)),
   signed: Config.boolean("ANDRODEX_DESKTOP_SIGNED").pipe(Config.withDefault(false)),
   verbose: Config.boolean("ANDRODEX_DESKTOP_VERBOSE").pipe(Config.withDefault(false)),
+  allowMissingVoiceRuntime: Config.boolean("ANDRODEX_DESKTOP_ALLOW_MISSING_VOICE_RUNTIME").pipe(
+    Config.withDefault(false),
+  ),
   mockUpdates: Config.boolean("ANDRODEX_DESKTOP_MOCK_UPDATES").pipe(Config.withDefault(false)),
   mockUpdateServerPort: Config.string("ANDRODEX_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(
     Config.option,
@@ -345,6 +351,10 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
   const keepStage = resolveBooleanFlag(input.keepStage, env.keepStage);
   const signed = resolveBooleanFlag(input.signed, env.signed);
   const verbose = resolveBooleanFlag(input.verbose, env.verbose);
+  const allowMissingVoiceRuntime = resolveBooleanFlag(
+    input.allowMissingVoiceRuntime,
+    env.allowMissingVoiceRuntime,
+  );
 
   const mockUpdates = resolveBooleanFlag(input.mockUpdates, env.mockUpdates);
   const mockUpdateServerPort =
@@ -369,6 +379,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
     keepStage,
     signed,
     verbose,
+    allowMissingVoiceRuntime,
     mockUpdates,
     mockUpdateServerPort,
   } satisfies ResolvedBuildOptions;
@@ -484,6 +495,125 @@ function stageWindowsIcons(stageResourcesDir: string, sourceIco: string) {
     yield* fs.copyFile(sourceIco, iconPath);
   });
 }
+
+function electronPlatformToNodePlatform(platform: typeof BuildPlatform.Type): NodeJS.Platform {
+  if (platform === "mac") return "darwin";
+  if (platform === "win") return "win32";
+  return "linux";
+}
+
+function resolveRequiredWhisperRuntimeResources(
+  platform: typeof BuildPlatform.Type,
+  arch: typeof BuildArch.Type,
+): readonly string[] {
+  const nodePlatform = electronPlatformToNodePlatform(platform);
+  const executableName = nodePlatform === "win32" ? "whisper-cli.exe" : "whisper-cli";
+  const arches = arch === "universal" ? (["arm64", "x64"] as const) : ([arch] as const);
+  return arches.map((entry) => `whisper/${nodePlatform}-${entry}/${executableName}`);
+}
+
+const findMissingWhisperRuntimeResources = Effect.fn("findMissingWhisperRuntimeResources")(
+  function* (
+    platform: typeof BuildPlatform.Type,
+    arch: typeof BuildArch.Type,
+    stageVoiceResourcesDir: string,
+  ) {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const missing: string[] = [];
+    for (const resource of resolveRequiredWhisperRuntimeResources(platform, arch)) {
+      const candidate = path.join(stageVoiceResourcesDir, resource);
+      if (!(yield* fs.exists(candidate).pipe(Effect.orElseSucceed(() => false)))) {
+        missing.push(resource);
+      }
+    }
+    return missing;
+  },
+);
+
+const prepareWhisperRuntimeResources = Effect.fn("prepareWhisperRuntimeResources")(function* (
+  platform: typeof BuildPlatform.Type,
+  arch: typeof BuildArch.Type,
+  stageVoiceResourcesDir: string,
+  allowMissing: boolean,
+  verbose: boolean,
+) {
+  const repoRoot = yield* RepoRoot;
+  const nodePlatform = electronPlatformToNodePlatform(platform);
+  const missingBefore = yield* findMissingWhisperRuntimeResources(
+    platform,
+    arch,
+    stageVoiceResourcesDir,
+  );
+  if (missingBefore.length === 0) {
+    return;
+  }
+
+  yield* Effect.log(
+    `[desktop-artifact] Preparing bundled local voice runtime: ${missingBefore.join(", ")}`,
+  );
+  const result = yield* spawnAndCollectOutput(
+    ChildProcess.make(
+      "node",
+      [
+        "scripts/prepare-whisper-runtime.ts",
+        "--platform",
+        nodePlatform,
+        "--arch",
+        arch,
+        "--output-dir",
+        stageVoiceResourcesDir,
+        ...(verbose ? ["--verbose"] : []),
+      ],
+      {
+        cwd: repoRoot,
+        env: process.env,
+      },
+    ),
+  ).pipe(
+    Effect.catch((cause) =>
+      Effect.succeed({
+        stdout: "",
+        stderr: cause instanceof Error ? cause.message : String(cause),
+        exitCode: 1,
+      }),
+    ),
+  );
+
+  if (result.exitCode === 0) {
+    return;
+  }
+
+  const detail = [result.stderr.trim(), result.stdout.trim()].filter(Boolean).join("\n");
+  const message = `Could not prepare bundled local voice runtime for ${nodePlatform}/${arch}.${detail ? `\n${detail}` : ""}`;
+  if (allowMissing) {
+    yield* Effect.logWarning(`[desktop-artifact] ${message}`);
+    return;
+  }
+
+  return yield* new BuildScriptError({ message });
+});
+
+const assertWhisperRuntimeResources = Effect.fn("assertWhisperRuntimeResources")(function* (
+  platform: typeof BuildPlatform.Type,
+  arch: typeof BuildArch.Type,
+  stageVoiceResourcesDir: string,
+  allowMissing: boolean,
+) {
+  const missing = yield* findMissingWhisperRuntimeResources(platform, arch, stageVoiceResourcesDir);
+
+  if (missing.length === 0) {
+    return;
+  }
+
+  const message = `Missing packaged local voice engine runtime(s): ${missing.join(", ")}. Add whisper.cpp binaries under apps/desktop/resources/voice/whisper/<platform>-<arch>/ before shipping an app update.`;
+  if (allowMissing) {
+    yield* Effect.logWarning(`[desktop-artifact] ${message}`);
+    return;
+  }
+
+  return yield* new BuildScriptError({ message });
+});
 
 function validateBundledClientAssets(clientDir: string) {
   return Effect.gen(function* () {
@@ -664,6 +794,13 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     directories: {
       buildResources: "apps/desktop/resources",
     },
+    extraResources: [
+      {
+        from: "apps/desktop/resources/voice",
+        to: "voice",
+        filter: ["**/*"],
+      },
+    ],
   };
   const updateChannel = resolveDesktopUpdateChannel(version);
   const publishConfig = resolveGitHubPublishConfig(updateChannel);
@@ -868,6 +1005,21 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     options.verbose,
   );
 
+  yield* prepareWhisperRuntimeResources(
+    options.platform,
+    options.arch,
+    path.join(stageResourcesDir, "voice"),
+    options.allowMissingVoiceRuntime,
+    options.verbose,
+  );
+
+  yield* assertWhisperRuntimeResources(
+    options.platform,
+    options.arch,
+    path.join(stageResourcesDir, "voice"),
+    options.allowMissingVoiceRuntime,
+  );
+
   // electron-builder is filtering out stageResourcesDir directory in the AppImage for production
   yield* fs.copy(stageResourcesDir, path.join(stageAppDir, "apps/desktop/prod-resources"));
 
@@ -1048,6 +1200,12 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   verbose: Flag.boolean("verbose").pipe(
     Flag.withDescription(
       "Stream subprocess stdout (env: ANDRODEX_DESKTOP_VERBOSE, legacy: T3CODE_DESKTOP_VERBOSE).",
+    ),
+    Flag.optional,
+  ),
+  allowMissingVoiceRuntime: Flag.boolean("allow-missing-voice-runtime").pipe(
+    Flag.withDescription(
+      "Allow desktop artifacts without a bundled local voice engine runtime (env: ANDRODEX_DESKTOP_ALLOW_MISSING_VOICE_RUNTIME, legacy: T3CODE_DESKTOP_ALLOW_MISSING_VOICE_RUNTIME).",
     ),
     Flag.optional,
   ),

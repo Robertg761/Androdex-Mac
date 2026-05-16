@@ -93,6 +93,11 @@ import {
   type SessionCredentialChange,
 } from "./auth/Services/SessionCredentialService.ts";
 import { respondToAuthError } from "./auth/http.ts";
+import {
+  downloadLocalWhisperModelStream,
+  listLocalWhisperModels,
+  transcribeLocalWhisperAudio,
+} from "./localWhisper.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 const isWorkspacePathOutsideRootError = Schema.is(WorkspacePathOutsideRootError);
 
@@ -928,6 +933,24 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
                 providers,
               };
             }),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverListLocalWhisperModels]: () =>
+          observeRpcEffect(
+            WS_METHODS.serverListLocalWhisperModels,
+            listLocalWhisperModels(config),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverDownloadLocalWhisperModel]: (input) =>
+          observeRpcStream(
+            WS_METHODS.serverDownloadLocalWhisperModel,
+            downloadLocalWhisperModelStream(config, input),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverTranscribeLocalWhisper]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverTranscribeLocalWhisper,
+            transcribeLocalWhisperAudio(config, input),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.serverListCodexAutomations]: (input) =>

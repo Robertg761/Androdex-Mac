@@ -5,6 +5,9 @@ import {
   type VcsStatusResult,
   type VcsStatusStreamEvent,
   type LocalApi,
+  type LocalWhisperModelId,
+  type ServerLocalWhisperDownloadEvent,
+  type ServerLocalWhisperTranscribeInput,
   COMPUTER_USE_WS_METHODS,
   ORCHESTRATION_WS_METHODS,
   type ServerSettingsPatch,
@@ -125,6 +128,16 @@ export interface WsRpcClient {
     readonly setProviderSkillEnabled: RpcUnaryMethod<
       typeof WS_METHODS.serverSetProviderSkillEnabled
     >;
+    readonly listLocalWhisperModels: RpcUnaryNoArgMethod<
+      typeof WS_METHODS.serverListLocalWhisperModels
+    >;
+    readonly downloadLocalWhisperModel: (
+      input: { readonly modelId: LocalWhisperModelId },
+      listener: (event: ServerLocalWhisperDownloadEvent) => void,
+    ) => Promise<void>;
+    readonly transcribeLocalWhisper: (
+      input: ServerLocalWhisperTranscribeInput,
+    ) => ReturnType<RpcUnaryMethod<typeof WS_METHODS.serverTranscribeLocalWhisper>>;
     readonly listCodexAutomations: RpcUnaryMethod<typeof WS_METHODS.serverListCodexAutomations>;
     readonly upsertCodexAutomation: RpcUnaryMethod<typeof WS_METHODS.serverUpsertCodexAutomation>;
     readonly deleteCodexAutomation: RpcUnaryMethod<typeof WS_METHODS.serverDeleteCodexAutomation>;
@@ -270,6 +283,15 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
         transport.request((client) => client[WS_METHODS.serverUpdateProvider](input)),
       setProviderSkillEnabled: (input) =>
         transport.request((client) => client[WS_METHODS.serverSetProviderSkillEnabled](input)),
+      listLocalWhisperModels: () =>
+        transport.request((client) => client[WS_METHODS.serverListLocalWhisperModels]({})),
+      downloadLocalWhisperModel: (input, listener) =>
+        transport.requestStream(
+          (client) => client[WS_METHODS.serverDownloadLocalWhisperModel](input),
+          listener,
+        ),
+      transcribeLocalWhisper: (input) =>
+        transport.request((client) => client[WS_METHODS.serverTranscribeLocalWhisper](input)),
       listCodexAutomations: (input) =>
         transport.request((client) => client[WS_METHODS.serverListCodexAutomations](input)),
       upsertCodexAutomation: (input) =>

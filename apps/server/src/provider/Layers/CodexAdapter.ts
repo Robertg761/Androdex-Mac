@@ -61,6 +61,14 @@ import {
   type CodexSessionRuntimeShape,
 } from "./CodexSessionRuntime.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
+import {
+  getComputerUseDynamicToolSpecs,
+  makeComputerUseDynamicToolHandler,
+} from "../ComputerUseDynamicTools.ts";
+import {
+  getRegisteredComputerUseManager,
+  type ComputerUseManagerShape,
+} from "../../computerUse/Services/ComputerUseManager.ts";
 const isCodexAppServerProcessExitedError = Schema.is(CodexErrors.CodexAppServerProcessExitedError);
 const isCodexAppServerTransportError = Schema.is(CodexErrors.CodexAppServerTransportError);
 const isCodexSessionRuntimeThreadIdMissingError = Schema.is(
@@ -82,6 +90,7 @@ export interface CodexAdapterLiveOptions {
   >;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
+  readonly computerUseManager?: ComputerUseManagerShape;
 }
 
 interface CodexAdapterSessionContext {
@@ -1419,6 +1428,10 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           yield* Effect.suspend(() => stopSessionInternal(existing));
         }
 
+        const computerUseManager = options?.computerUseManager ?? getRegisteredComputerUseManager();
+        const dynamicTools = computerUseManager
+          ? yield* getComputerUseDynamicToolSpecs(computerUseManager)
+          : [];
         const runtimeInput: CodexSessionRuntimeOptions = {
           threadId: input.threadId,
           providerInstanceId: boundInstanceId,
@@ -1436,6 +1449,16 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           ...(input.modelSelection?.instanceId === boundInstanceId &&
           getModelSelectionBooleanOptionValue(input.modelSelection, "fastMode") === true
             ? { serviceTier: "fast" }
+            : {}),
+          ...(dynamicTools.length > 0 && computerUseManager
+            ? {
+                dynamicTools,
+                dynamicToolHandler: makeComputerUseDynamicToolHandler({
+                  manager: computerUseManager,
+                  threadId: input.threadId,
+                  providerInstanceId: boundInstanceId,
+                }),
+              }
             : {}),
         };
         const sessionScope = yield* Scope.make("sequential");

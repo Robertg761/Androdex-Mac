@@ -87,6 +87,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         keepStage: Option.some(false),
         signed: Option.some(false),
         verbose: Option.some(false),
+        allowMissingVoiceRuntime: Option.some(false),
         mockUpdates: Option.some(false),
         mockUpdateServerPort: Option.none(),
       }).pipe(

@@ -80,10 +80,23 @@ const CodexTurnStartParamsWithCollaborationMode = EffectCodexSchema.V2TurnStartP
 const decodeCodexTurnStartParamsWithCollaborationMode = Schema.decodeUnknownEffect(
   CodexTurnStartParamsWithCollaborationMode,
 );
+const CodexThreadStartParamsWithDynamicTools = EffectCodexSchema.V2ThreadStartParams.pipe(
+  Schema.fieldsAssign({
+    dynamicTools: Schema.optionalKey(
+      Schema.Array(EffectCodexSchema.V2ThreadStartParams__DynamicToolSpec),
+    ),
+  }),
+);
 
 export type CodexTurnStartParamsWithCollaborationMode =
   typeof CodexTurnStartParamsWithCollaborationMode.Type;
+export type CodexThreadStartParamsWithDynamicTools =
+  typeof CodexThreadStartParamsWithDynamicTools.Type;
 const formatSchemaIssue = SchemaIssue.makeFormatterDefault();
+
+export type CodexDynamicToolHandler = (
+  params: EffectCodexSchema.DynamicToolCallParams,
+) => Effect.Effect<EffectCodexSchema.DynamicToolCallResponse>;
 
 export type CodexResumeCursor = typeof CodexResumeCursorSchema.Type;
 type CodexServiceTier = NonNullable<EffectCodexSchema.V2ThreadStartParams["serviceTier"]>;
@@ -102,6 +115,8 @@ export interface CodexSessionRuntimeOptions {
   readonly model?: string;
   readonly serviceTier?: CodexServiceTier | undefined;
   readonly resumeCursor?: CodexResumeCursor;
+  readonly dynamicTools?: ReadonlyArray<EffectCodexSchema.V2ThreadStartParams__DynamicToolSpec>;
+  readonly dynamicToolHandler?: CodexDynamicToolHandler;
 }
 
 export interface CodexSessionRuntimeSendTurnInput {
@@ -286,7 +301,8 @@ function buildThreadStartParams(input: {
   readonly runtimeMode: RuntimeMode;
   readonly model: string | undefined;
   readonly serviceTier: CodexServiceTier | undefined;
-}): EffectCodexSchema.V2ThreadStartParams {
+  readonly dynamicTools?: ReadonlyArray<EffectCodexSchema.V2ThreadStartParams__DynamicToolSpec>;
+}): CodexThreadStartParamsWithDynamicTools {
   const config = runtimeModeToThreadConfig(input.runtimeMode);
   return {
     cwd: input.cwd,
@@ -294,6 +310,9 @@ function buildThreadStartParams(input: {
     sandbox: config.sandbox,
     ...(input.model ? { model: input.model } : {}),
     ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
+    ...(input.dynamicTools && input.dynamicTools.length > 0
+      ? { dynamicTools: input.dynamicTools }
+      : {}),
   };
 }
 
@@ -436,6 +455,7 @@ export const openCodexThread = (input: {
   readonly requestedModel: string | undefined;
   readonly serviceTier: CodexServiceTier | undefined;
   readonly resumeThreadId: string | undefined;
+  readonly dynamicTools?: ReadonlyArray<EffectCodexSchema.V2ThreadStartParams__DynamicToolSpec>;
 }): Effect.Effect<CodexThreadOpenResponse, CodexErrors.CodexAppServerError> => {
   const resumeThreadId = input.resumeThreadId;
   const startParams = buildThreadStartParams({
@@ -443,6 +463,7 @@ export const openCodexThread = (input: {
     runtimeMode: input.runtimeMode,
     model: input.requestedModel,
     serviceTier: input.serviceTier,
+    ...(input.dynamicTools ? { dynamicTools: input.dynamicTools } : {}),
   });
 
   if (resumeThreadId === undefined) {
@@ -1098,6 +1119,23 @@ export const makeCodexSessionRuntime = (
       }),
     );
 
+    yield* client.handleServerRequest("item/tool/call", (payload) =>
+      Effect.gen(function* () {
+        if (!options.dynamicToolHandler) {
+          return yield* CodexErrors.CodexAppServerRequestError.methodNotFound("item/tool/call");
+        }
+        const turnId = TurnId.make(payload.turnId);
+        yield* emitEvent({
+          kind: "request",
+          threadId: options.threadId,
+          method: "item/tool/call",
+          ...(turnId ? { turnId } : {}),
+          payload,
+        });
+        return yield* options.dynamicToolHandler(payload);
+      }),
+    );
+
     yield* client.handleUnknownServerRequest((method) =>
       Effect.fail(CodexErrors.CodexAppServerRequestError.methodNotFound(method)),
     );
@@ -1197,6 +1235,7 @@ export const makeCodexSessionRuntime = (
         requestedModel,
         serviceTier: options.serviceTier,
         resumeThreadId: readResumeCursorThreadId(options.resumeCursor),
+        ...(options.dynamicTools ? { dynamicTools: options.dynamicTools } : {}),
       });
 
       const providerThreadId = opened.thread.id;

@@ -36,7 +36,7 @@ import type { ComputerUseDriver, ComputerUseDriverSession } from "../Drivers/Com
 import { LinuxWaylandDriver } from "../Drivers/LinuxWaylandDriver.ts";
 import { LinuxX11Driver } from "../Drivers/LinuxX11Driver.ts";
 import { VirtualDisplayDriver } from "../Drivers/VirtualDisplayDriver.ts";
-import { ComputerUseManager } from "../Services/ComputerUseManager.ts";
+import { ComputerUseManager, registerComputerUseManager } from "../Services/ComputerUseManager.ts";
 import { evaluateActionPolicy, evaluateTargetPolicy } from "../Services/ComputerUsePolicy.ts";
 import {
   MAX_RETAINED_AUDIT_ENTRIES,
@@ -674,7 +674,7 @@ export const ComputerUseManagerLive = Layer.effect(
 
     yield* Effect.addFinalizer(() => stopAllSessions.pipe(Effect.ignore));
 
-    return {
+    return registerComputerUseManager({
       getStatus: makeStatus,
       getSnapshot,
       healthCheck,
@@ -694,6 +694,6 @@ export const ComputerUseManagerLive = Layer.effect(
           Stream.map((event) => ({ kind: "event", event }) as const),
         ),
       ),
-    };
+    });
   }),
 );
